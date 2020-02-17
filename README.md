@@ -10,3 +10,7 @@ The main code being developed is:
 1.  MPC_Casadi -- homemade clasess for creating CASADI optimizations for MPC
 2.  car_plotitng -- homemade plotting to create the animations/plots
 3.  jupyter_notebooks/ -- these are the scripts for obtaining the results
+
+
+If you use the code, please cite the paper:
+<Insert Title>
