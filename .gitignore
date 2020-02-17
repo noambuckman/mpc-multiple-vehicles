@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+
+trash/
+results/
+january_notebooks/
