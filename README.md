@@ -12,5 +12,10 @@ The main code being developed is:
 3.  jupyter_notebooks/ -- these are the scripts for obtaining the results
 
 
+Dependents:
+-  Numpy
+-  Matplotlib
+-  Casadi
+
 If you use the code, please cite the paper:
 <Insert Title>
