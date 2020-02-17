@@ -14,6 +14,8 @@ import io
 import base64
 from IPython.display import HTML
 
+PROJECT_PATH = '/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-multiple-vehicles/'
+
 def get_frame(x, ax=None, car_name="Car1", min_distance=-1, circle=False, L=1.0):
     '''Plots a car at a single state x.  Assumes red_car and ambulance.png'''
     if ax is None:
@@ -22,15 +24,15 @@ def get_frame(x, ax=None, car_name="Car1", min_distance=-1, circle=False, L=1.0)
         fig = ax.get_figure()
     X, Y, Phi, Delta, V, S = x.flatten()
     if car_name == "Car1":
-        arr_img = plt.imread('red_car.png', format='png')
+        arr_img = plt.imread(PROJECT_PATH + 'images/red_car.png', format='png')
         car_width_px = 599
         car_height_px = 310        
     elif car_name == "Amb":
-        arr_img = plt.imread('ambulance.png', format='png')
+        arr_img = plt.imread(PROJECT_PATH + 'images/ambulance.png', format='png')
         car_width_px = 1280
         car_height_px = 640       
     elif car_name == "Car2": 
-        arr_img = plt.imread('green_car.png', format='png')
+        arr_img = plt.imread(PROJECT_PATH + 'images/green_car.png', format='png')
         car_width_px = 599
         car_height_px = 310               
     degree = np.rad2deg(Phi)
