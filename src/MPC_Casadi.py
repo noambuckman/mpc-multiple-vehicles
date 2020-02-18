@@ -184,13 +184,10 @@ class OptimizationMPC():
         self.ambMPC.generate_costs(self.xamb_opt, self.uamb_opt, self.xamb_desired)
         amb_costs = self.ambMPC.total_cost()
 
-        theta_1 = np.pi/4
-        theta_2 = np.pi/4
-        theta_amb = 0
         ######## optimization  ##################################
-        self.opti.minimize(np.cos(theta_amb)*amb_costs + np.sin(theta_amb)*(car1_costs + car2_costs) + 
-                    (np.cos(theta_1)*car1_costs + np.sin(theta_1)*amb_costs) + 
-                    (np.cos(theta_2)*car2_costs + np.sin(theta_2)*amb_costs)
+        self.opti.minimize(np.cos(self.ambMPC.theta_iamb)*amb_costs + np.sin(self.ambMPC.theta_iamb)*(car1_costs + car2_costs) + 
+                    (np.cos(self.car1MPC.theta_iamb)*car1_costs + np.sin(self.car1MPC.theta_iamb)*amb_costs) + 
+                    (np.cos(self.car2MPC.theta_iamb)*car2_costs + np.sin(self.car2MPC.theta_iamb)*amb_costs)
                     )    
         ##########################################################
 
@@ -245,7 +242,7 @@ class OptimizationMPC():
 
 
 
-    def get_solution(self):
+    def get_solution(self, file_name=None):
         self.solution = self.opti.solve()
         x1 = self.solution.value(self.x_opt)
         u1 = self.solution.value(self.u_opt)
@@ -262,6 +259,32 @@ class OptimizationMPC():
 
         return x1, u1, x1_des, x2, u2, x2_des, xamb, uamb, xamb_des
 
+    def save_state(self, file_name, x1, u1, x1_des, x2, u2, x2_des, xamb, uamb, xamb_des):
+
+        np.save(file_name + "x1", x1,allow_pickle=False)
+        np.save(file_name + "u1", u1,allow_pickle=False)
+        np.save(file_name + "x1_des", x1_des, allow_pickle=False)
+        np.save(file_name + "x2", x2,allow_pickle=False)
+        np.save(file_name + "u2", u2,allow_pickle=False)
+        np.save(file_name + "x2_des", x2_des, allow_pickle=False)
+        np.save(file_name + "xamb", xamb,allow_pickle=False)
+        np.save(file_name + "uamb", uamb,allow_pickle=False)
+        np.save(file_name + "xamb_des", xamb_des, allow_pickle=False)
+        return file_name
+    
+    def load_state(self, file_name):
+
+        x1 = np.load(file_name + "x1.npy",allow_pickle=False)
+        u1 = np.load(file_name + "u1.npy",allow_pickle=False)
+        x1_des = np.load(file_name + "x1_des.npy", allow_pickle=False)
+        x2 = np.load(file_name + "x2.npy",allow_pickle=False)
+        u2 = np.load(file_name + "u2.npy",allow_pickle=False)
+        x2_des = np.load(file_name + "x2_des.npy",allow_pickle=False)
+        xamb = np.load(file_name + "xamb.npy",allow_pickle=False)
+        uamb = np.load(file_name + "uamb.npy",allow_pickle=False)
+        xamb_des = np.load(file_name + "xamb_des.npy",allow_pickle=False)
+
+        return x1, u1, x1_des, x2, u2, x2_des, xamb, uamb, xamb_des
 
 
 class IterativeBestResponseMPC(OptimizationMPC):

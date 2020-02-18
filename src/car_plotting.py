@@ -64,7 +64,7 @@ def plot_cars(x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=N
     xmin, xmax = -1, max_xplots
     ymax = max_yplots + 0.5
     ymin = -1 # Based on ymin that we give to MPC
-    width = 6 * (ymax-ymin)
+    width = max_xplots/2.0
     axlim_minx = xmin
     axlim_maxx = xmin + width
     SLIDING_WINDOW = True
