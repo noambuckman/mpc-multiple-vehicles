@@ -35,17 +35,20 @@ def get_frame(x, ax=None, car_name="Car1", min_distance=-1, circle=False, L=1.0)
         arr_img = plt.imread(PROJECT_PATH + 'images/green_car.png', format='png')
         car_width_px = 599
         car_height_px = 310               
-    degree = np.rad2deg(Phi)
-    xy = (X, Y)
-    rotated_img = ndimage.rotate(arr_img, degree)
-    window_width = ax.get_xlim()[1] - ax.get_xlim()[0]
-    window_height = ax.get_ylim()[1] - ax.get_ylim()[0]
-    figwidth_in = fig.get_size_inches()[0]
-    dpi = fig.get_dpi()
-    if circle:
-        circle_patch = patches.Circle(xy, radius=min_distance/2)
+    
+    if circle:        
+        circle_patch = patches.Circle((X, Y), radius=min_distance/2)
         ax.add_patch(circle_patch)
+        plt.annotate(car_name, (X-min_distance/2,Y), fontsize='xx-large', color='orange')
     else:
+        degree = np.rad2deg(Phi)
+        xy = (X, Y)
+        rotated_img = ndimage.rotate(arr_img, degree)
+        window_width = ax.get_xlim()[1] - ax.get_xlim()[0]
+        window_height = ax.get_ylim()[1] - ax.get_ylim()[0]
+        figwidth_in = fig.get_size_inches()[0]
+        dpi = fig.get_dpi()
+
         if car_name == "Amb":
             zoom_ratio = L/car_width_px * (dpi*figwidth_in)/window_width  * 0.75 #0.8 is a hard coded correction            
         else:
@@ -86,14 +89,10 @@ def plot_cars(x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=N
             axlim_minx = current_xmin - 5
             axlim_maxx = axlim_minx + width
         ax.set_xlim((axlim_minx , axlim_maxx))
-        if CIRCLES:
-            fig, ax = get_frame(x1_plot[:,k], ax, False,min_dist,True)
-            fig, ax = get_frame(x2_plot[:,k], ax, False,min_dist,True)
-            fig, ax = get_frame(xamb_plot[:,k], ax, False,min_dist,True)
-        else:
-            fig, ax = get_frame(x1_plot[:,k], ax,"Car1",min_dist,False)
-            fig, ax = get_frame(x2_plot[:,k], ax,"Car2",min_dist,False)
-            fig, ax = get_frame(xamb_plot[:,k], ax, "Amb",min_dist,False)
+
+        fig, ax = get_frame(x1_plot[:,k], ax,"Car1",min_dist,CIRCLES)
+        fig, ax = get_frame(x2_plot[:,k], ax,"Car2",min_dist,CIRCLES)
+        fig, ax = get_frame(xamb_plot[:,k], ax, "Amb",min_dist,CIRCLES)
         
         if x1_desired is not None:
             ax.plot(x1_desired[0,:], x1_desired[1,:], '--',c='red')
