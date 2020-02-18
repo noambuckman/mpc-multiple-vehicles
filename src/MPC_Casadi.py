@@ -239,11 +239,10 @@ class OptimizationMPC():
 
         return x_warm, x2_warm, xamb_warm
 
-
-
+    def solve(self):
+        self.solution = self.opti.solve()
 
     def get_solution(self, file_name=None):
-        self.solution = self.opti.solve()
         x1 = self.solution.value(self.x_opt)
         u1 = self.solution.value(self.u_opt)
 
@@ -300,12 +299,13 @@ class IterativeBestResponseMPC(OptimizationMPC):
         self.x_opt = self.opti.variable(n_state, N+1)
         self.u_opt  = self.opti.variable(n_ctrl, N)
         self.x_desired  = self.opti.variable(3, N+1)
+        
         p = self.opti.parameter(n_state, 1)
 
         # Presume to be given...and we will initialize soon
-        self.x2_opt, self.xamb_opt = self.opti.parameter(n_state, N+1), self.opti.parameter(n_state, N+1)
+        self.x2_opt, self.xamb_opt = self.opti.variable(n_state, N+1), self.opti.variable(n_state, N+1)
         self.u2_opt, self.uamb_opt = self.opti.parameter(n_ctrl, N), self.opti.parameter(n_ctrl, N)
-        self.x2_desired, self.xamb_desired = self.opti.parameter(3, N+1), self.opti.parameter(3, N+1)
+        self.x2_desired, self.xamb_desired = self.opti.variable(3, N+1), self.opti.variable(3, N+1)
         p2, pamb = self.opti.parameter(n_state, 1), self.opti.parameter(n_state, 1)
 
         #### Costs
@@ -315,18 +315,25 @@ class IterativeBestResponseMPC(OptimizationMPC):
         self.ambMPC.generate_costs(self.xamb_opt, self.uamb_opt, self.xamb_desired)
         amb_costs = self.ambMPC.total_cost()
 
+        self.car2MPC.generate_costs(self.x2_opt, self.u2_opt, self.x2_desired)
+        car2_costs = self.car2MPC.total_cost()
         # theta_1 = np.pi/4
         # theta_2 = np.pi/4
         # theta_amb = 0
         ######## optimization  ##################################
         self.opti.minimize(
                     (np.cos(self.car1MPC.theta_iamb)*car1_costs + np.sin(self.car1MPC.theta_iamb)*amb_costs) 
+                    + 0 * car2_costs
                     )    
         ##########################################################
 
         #constraints
         self.car1MPC.add_dynamics_constraints(self.opti, self.x_opt, self.u_opt, self.x_desired, p)
         self.car1MPC.add_state_constraints(self.opti, self.x_opt, self.u_opt, self.x_desired, T)
+
+        self.car2MPC.add_dynamics_constraints(self.opti, self.x2_opt, self.u2_opt, self.x2_desired, p2)
+        self.ambMPC.add_dynamics_constraints(self.opti, self.xamb_opt, self.uamb_opt, self.xamb_desired, pamb)
+
 
         # Collision Avoidance
         for k in range(N+1):
@@ -338,23 +345,27 @@ class IterativeBestResponseMPC(OptimizationMPC):
         self.opti.set_value(pamb, x0_amb) 
         self.opti.solver('ipopt',{'warn_initial_bounds':True},{'print_level':print_level})
 
-
-    def get_solution(self, x2, u2, x2_desired, xamb, uamb, xamb_desired):
-
-        self.opti.set_value(self.x2_opt, x2)
-        self.opti.set_value(self.xamb_opt, xamb)
+    def solve(self, u2, uamb):
         self.opti.set_value(self.u2_opt, u2) 
-        self.opti.set_value(self.uamb_opt, uamb) 
-        self.opti.set_value(self.x2_desired, x2_desired)
-        self.opti.set_value(self.xamb_desired, xamb_desired)
+        self.opti.set_value(self.uamb_opt, uamb)
+        self.solution = self.opti.solve()         
 
-        self.solution = self.opti.solve()
-        x1 = self.solution.value(self.x_opt)
-        u1 = self.solution.value(self.u_opt)
-        x1_des = self.solution.value(self.x_desired)
-
-
+    def get_bestresponse_solution(self):
+        x1, u1, x1_des, *_, = self.get_solution()
         return x1, u1, x1_des
 
+    # def get_solution(self, x2, u2, x2_desired, xamb, uamb, xamb_desired):
+    #     self.opti.set_value(self.x2_opt, x2)
+    #     self.opti.set_value(self.xamb_opt, xamb)
+    #     self.opti.set_value(self.u2_opt, u2) 
+    #     self.opti.set_value(self.uamb_opt, uamb) 
+    #     self.opti.set_value(self.x2_desired, x2_desired)
+    #     self.opti.set_value(self.xamb_desired, xamb_desired)
+
+    #     self.solution = self.opti.solve()
+    #     x1 = self.solution.value(self.x_opt)
+    #     u1 = self.solution.value(self.u_opt)
+    #     x1_des = self.solution.value(self.x_desired)
 
 
+    #     return 
