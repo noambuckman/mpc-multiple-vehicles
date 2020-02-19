@@ -16,7 +16,7 @@ from IPython.display import HTML
 
 PROJECT_PATH = '/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-multiple-vehicles/'
 
-def get_frame(x, ax=None, car_name="Car1", min_distance=-1, circle=False, L=1.0):
+def get_frame(x, ax=None, car_name="Car1", min_distance=-1, circle=False, alpha = 1.0, L=1.0):
     '''Plots a car at a single state x.  Assumes red_car and ambulance.png'''
     if ax is None:
         fig, ax = plt.subplots(figsize=(12,12))
@@ -35,7 +35,8 @@ def get_frame(x, ax=None, car_name="Car1", min_distance=-1, circle=False, L=1.0)
         arr_img = plt.imread(PROJECT_PATH + 'images/green_car.png', format='png')
         car_width_px = 599
         car_height_px = 310               
-    
+    arr_img[:,:,3] = alpha * arr_img[:,:,3]
+
     if circle:        
         circle_patch = patches.Circle((X, Y), radius=min_distance/2)
         ax.add_patch(circle_patch)
@@ -46,13 +47,16 @@ def get_frame(x, ax=None, car_name="Car1", min_distance=-1, circle=False, L=1.0)
         rotated_img = ndimage.rotate(arr_img, degree)
         window_width = ax.get_xlim()[1] - ax.get_xlim()[0]
         window_height = ax.get_ylim()[1] - ax.get_ylim()[0]
-        figwidth_in = fig.get_size_inches()[0]
+        figwidth_in, figheight_in = fig.get_size_inches()
         dpi = fig.get_dpi()
-
-        if car_name == "Amb":
-            zoom_ratio = L/car_width_px * (dpi*figwidth_in)/window_width  * 0.75 #0.8 is a hard coded correction            
+        if dpi > 100:
+            hard_coded_correction = 0.35
         else:
-            zoom_ratio = L/car_width_px * (dpi*figwidth_in)/window_width  * 0.75 #0.8 is a hard coded correction             
+            hard_coded_correction = 0.75
+        if car_name == "Amb":
+            zoom_ratio = L/car_width_px * (dpi*figwidth_in)/window_width  * hard_coded_correction #0.8 is a hard coded correction  
+        else:
+            zoom_ratio = L/car_width_px * (dpi*figwidth_in)/window_width  * hard_coded_correction #0.8 is a hard coded correction             
         imagebox = OffsetImage(rotated_img, zoom=zoom_ratio) #this zoom is to scale L=1            
         
         imagebox.image.axes = ax
@@ -60,27 +64,28 @@ def get_frame(x, ax=None, car_name="Car1", min_distance=-1, circle=False, L=1.0)
         ax.add_artist(ab)        
     return fig, ax    
 
-def plot_cars(x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=None, xamb_desired=None, CIRCLES=False, min_dist=-1):
+def plot_cars(x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=None, xamb_desired=None, CIRCLES=False, min_dist=-1, SLIDING_WINDOW=True):
     N = x1_plot.shape[1]
-    max_xplots =     max(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) + 1
-    max_yplots = max(np.hstack((x1_plot[1,:],x2_plot[1,:],xamb_plot[1,:],-x1_plot[1,:],-x2_plot[1,:],-xamb_plot[1,:])))
-    xmin, xmax = -1, max_xplots
+    max_xplots =     max(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) + 2
+    min_xplots = min(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) - 2
+    max_yplots = max(np.hstack((x1_plot[1,:],x2_plot[1,:],xamb_plot[1,:])))
+    xmin, xmax = min_xplots, max_xplots
     ymax = max_yplots + 0.5
-    ymin = -1 # Based on ymin that we give to MPC
+    ymin = min(np.hstack((x1_plot[1,:],x2_plot[1,:],xamb_plot[1,:]))) - .5 # Based on ymin that we give to MPC
     width = max_xplots/2.0
-    axlim_minx = xmin
-    axlim_maxx = xmin + width
-    SLIDING_WINDOW = True
+    axlim_minx = min_xplots
+    axlim_maxx = max_xplots
     if not SLIDING_WINDOW:
         axlim_minx = xmin
         axlim_maxx = xmax
     for k in range(N):
         figsize="LARGE"
         if figsize == "LARGE":
-            figwidth_in=24.0
+            figwidth_in=12.0
         else:
             figwidth_in=6.0
-        fig, ax = plt.subplots(figsize=(figwidth_in,figwidth_in/2))
+        fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx ))
+        fig, ax = plt.subplots(figsize=(figwidth_in, fig_height), dpi=144)
         ax.axis('square')
         ax.set_ylim((ymin, ymax))
         current_xmin, current_xmax = min([x1_plot[0,k], x2_plot[0,k], xamb_plot[0,k]]), max([x1_plot[0,k], x2_plot[0,k], xamb_plot[0,k]])
@@ -89,9 +94,9 @@ def plot_cars(x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=N
             axlim_minx = current_xmin - 5
             axlim_maxx = axlim_minx + width
         ax.set_xlim((axlim_minx , axlim_maxx))
-
-        fig, ax = get_frame(x1_plot[:,k], ax,"Car1",min_dist,CIRCLES)
-        fig, ax = get_frame(x2_plot[:,k], ax,"Car2",min_dist,CIRCLES)
+        # ax.set_xticks(np.arange(0, 20, 1))
+        fig, ax = get_frame(x1_plot[:,k], ax, "Car1",min_dist,CIRCLES)
+        fig, ax = get_frame(x2_plot[:,k], ax, "Car2",min_dist,CIRCLES)
         fig, ax = get_frame(xamb_plot[:,k], ax, "Amb",min_dist,CIRCLES)
         
         if x1_desired is not None:
@@ -104,3 +109,45 @@ def plot_cars(x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=N
         fig.savefig(folder + 'imgs/' '{:03d}.png'.format(k))
         plt.close(fig)     
 
+
+def plot_cars_singleframe(x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=None, xamb_desired=None, CIRCLES=False, min_dist=-1, SLIDING_WINDOW=True):
+    N = x1_plot.shape[1]
+    max_xplots =     max(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) + 1
+    min_xplots = min(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) - 1
+    max_yplots = max(np.hstack((x1_plot[1,:],x2_plot[1,:],xamb_plot[1,:])))
+    xmin, xmax = min_xplots, max_xplots
+    ymax = max_yplots + 0.5
+    ymin = min(np.hstack((x1_plot[1,:],x2_plot[1,:],xamb_plot[1,:]))) - .5 # Based on ymin that we give to MPC
+    width = max_xplots/2.0
+    axlim_minx = min_xplots
+    axlim_maxx = max_xplots
+    if not SLIDING_WINDOW:
+        axlim_minx = xmin
+        axlim_maxx = xmax
+    figsize="LARGE"
+    if figsize == "LARGE":
+        figwidth_in=12.0
+    else:
+        figwidth_in=6.0
+    fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx ))
+    fig, ax = plt.subplots(figsize=(figwidth_in, fig_height), dpi=144)     
+    ax.axis('square')
+    ax.set_ylim((ymin, ymax))       
+    ax.set_xlim((axlim_minx , axlim_maxx))
+    alpha_start = 0.25
+    alpha = alpha_start
+    for k in range(N):
+        fig, ax = get_frame(x1_plot[:,k], ax, "Car1",min_dist, CIRCLES, alpha)
+        fig, ax = get_frame(x2_plot[:,k], ax, "Car2",min_dist,CIRCLES, alpha)
+        fig, ax = get_frame(xamb_plot[:,k], ax, "Amb",min_dist,CIRCLES, alpha)
+        alpha += (1.0 - alpha_start) / N
+        
+    if x1_desired is not None:
+        ax.plot(x1_desired[0,:], x1_desired[1,:], '--',c='red')
+    if x2_desired is not None:
+        ax.plot(x2_desired[0,:], x2_desired[1,:], '--',c="green")
+    if xamb_desired is not None:
+        ax.plot(xamb_desired[0,:], xamb_desired[1,:], '--',c="red")
+    ax.set_xticks(np.arange(np.ceil(min_xplots), np.ceil(min_xplots)+5, 1))
+    fig.savefig(folder + 'mult' + '{:03d}.png'.format(k))
+    plt.close(fig)     

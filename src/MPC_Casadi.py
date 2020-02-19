@@ -12,6 +12,7 @@ class MPC:
         self.k_y = 0
         self.k_phi = 0
         self.k_delta = 0
+        
         self.k_v = 0
         self.k_s = -0.1
     
@@ -76,6 +77,7 @@ class MPC:
         else:
             self.lat_cost = self.generate_lateral_cost(X, X_desired)
             self.s_cost = cas.sumsqr(X[5,-1])   
+        self.v_cost = cas.sumsqr(X[4, :])
         self.phidot_cost = self.generate_phidot_cost(X)
         N = U.shape[1] 
         self.change_u = cas.sumsqr(U[:,1:N-1] - U[:,0:N-2])
@@ -89,6 +91,7 @@ class MPC:
             self.k_phi_error * self.phi_error_cost + 
             self.k_phi_dot * self.phidot_cost +
             self.k_s * self.s_cost + 
+            self.k_v * self.v_cost +
             self.k_change_u * self.change_u
             )
         return total_cost 
@@ -162,7 +165,9 @@ class OptimizationMPC():
         self.ambMPC = ambMPC
         self.opti = cas.Opti()
 
-    def generate_optimization(self, N, min_dist, fd, T, x0, x0_2, x0_amb, print_level=5):
+        self.k_slack = 99999
+
+    def generate_optimization(self, N, min_dist, fd, T, x0, x0_2, x0_amb, print_level=5, slack = True):
 
         t_amb_goal = self.opti.variable()
         n_state, n_ctrl = 6, 2
@@ -285,13 +290,27 @@ class OptimizationMPC():
 
         return x1, u1, x1_des, x2, u2, x2_des, xamb, uamb, xamb_des
 
+    def generate_slack_variables(self, slack, N):
+        if slack == True:
+            slack1 = self.opti.variable(1, N+1)
+            slack2 = self.opti.variable(1, N+1)
+            slack3 = self.opti.variable(1, N+1)
+        else:
+            slack1 = self.opti.parameter(1, N+1)
+            slack2 = self.opti.parameter(1, N+1)
+            slack3 = self.opti.parameter(1, N+1)
+            self.opti.set_value(slack1, np.zeros((1,N+1)))
+            self.opti.set_value(slack2, np.zeros((1,N+1)))
+            self.opti.set_value(slack3, np.zeros((1,N+1)))
+        return slack1, slack2, slack3
+
 
 class IterativeBestResponseMPC(OptimizationMPC):
     ### We always assume that car1 is the one being optimized
     def __init__(self, car1MPC, car2MPC, ambMPC):
         OptimizationMPC.__init__(self, car1MPC, car2MPC, ambMPC)            
 
-    def generate_optimization(self, N, min_dist, fd, T, x0, x0_2, x0_amb, print_level=5):
+    def generate_optimization(self, N, min_dist, fd, T, x0, x0_2, x0_amb, print_level=5, slack=True):
 
         t_amb_goal = self.opti.variable()
         n_state, n_ctrl = 6, 2
@@ -308,6 +327,8 @@ class IterativeBestResponseMPC(OptimizationMPC):
         self.x2_desired, self.xamb_desired = self.opti.variable(3, N+1), self.opti.variable(3, N+1)
         p2, pamb = self.opti.parameter(n_state, 1), self.opti.parameter(n_state, 1)
 
+        self.slack1, self.slack2, self.slack3 = self.generate_slack_variables(slack, N)
+
         #### Costs
         self.car1MPC.generate_costs(self.x_opt, self.u_opt, self.x_desired)
         car1_costs = self.car1MPC.total_cost()
@@ -317,13 +338,15 @@ class IterativeBestResponseMPC(OptimizationMPC):
 
         self.car2MPC.generate_costs(self.x2_opt, self.u2_opt, self.x2_desired)
         car2_costs = self.car2MPC.total_cost()
+
+        self.slack_cost = cas.sumsqr(self.slack1) + cas.sumsqr(self.slack2) + cas.sumsqr(self.slack3)
         # theta_1 = np.pi/4
         # theta_2 = np.pi/4
         # theta_amb = 0
         ######## optimization  ##################################
         self.opti.minimize(
                     (np.cos(self.car1MPC.theta_iamb)*car1_costs + np.sin(self.car1MPC.theta_iamb)*amb_costs) 
-                    + 0 * car2_costs
+                    + 0 * car2_costs + self.k_slack * self.slack_cost
                     )    
         ##########################################################
 
@@ -337,13 +360,15 @@ class IterativeBestResponseMPC(OptimizationMPC):
 
         # Collision Avoidance
         for k in range(N+1):
-            self.opti.subject_to( cas.sumsqr(self.x_opt[0:2,k] - self.x2_opt[0:2,k]) > min_dist**2 )
-            self.opti.subject_to( cas.sumsqr(self.x_opt[0:2,k] - self.xamb_opt[0:2,k]) > min_dist**2 )
+            self.opti.subject_to( cas.sumsqr(self.x_opt[0:2,k] - self.x2_opt[0:2,k]) > min_dist**2 - self.slack1[0,k])
+            self.opti.subject_to( cas.sumsqr(self.x_opt[0:2,k] - self.xamb_opt[0:2,k]) > min_dist**2 - self.slack2[0,k])
 
         self.opti.set_value(p, x0)
         self.opti.set_value(p2, x0_2)
         self.opti.set_value(pamb, x0_amb) 
         self.opti.solver('ipopt',{'warn_initial_bounds':True},{'print_level':print_level})
+
+
 
     def solve(self, u2, uamb):
         self.opti.set_value(self.u2_opt, u2) 
