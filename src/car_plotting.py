@@ -14,6 +14,9 @@ import io
 import base64
 from IPython.display import HTML
 
+import multiprocessing
+import functools
+
 PROJECT_PATH = '/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-multiple-vehicles/'
 
 def get_frame(x, ax=None, car_name="Car1", min_distance=-1, circle=False, alpha = 1.0, L=1.0):
@@ -62,9 +65,9 @@ def get_frame(x, ax=None, car_name="Car1", min_distance=-1, circle=False, alpha 
         imagebox.image.axes = ax
         ab = AnnotationBbox(imagebox, (X, Y),frameon=False)
         ax.add_artist(ab)        
-    return fig, ax    
+    return ax    
 
-import multiprocessing
+
 
 def plot_cars(x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=None, xamb_desired=None, CIRCLES=False, min_dist=-1, SLIDING_WINDOW=True):
     N = x1_plot.shape[1]
@@ -82,8 +85,7 @@ def plot_cars(x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=N
         axlim_maxx = xmax
     for k in range(N):
         # This can be parallelized
-        
-        newmethod939(ymax, ymin, axlim_maxx, axlim_minx, x1_plot, k, x2_plot, xamb_plot, SLIDING_WINDOW, width, min_dist, CIRCLES, x1_desired, x2_desired, xamb_desired, folder)     
+        plot_three_cars( k, ymax, ymin, axlim_maxx, axlim_minx, x1_plot,x2_plot, xamb_plot, SLIDING_WINDOW, width, min_dist, CIRCLES, x1_desired, x2_desired, xamb_desired, folder)     
 
 
 def plot_cars_singleframe(x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=None, xamb_desired=None, CIRCLES=False, min_dist=-1, SLIDING_WINDOW=True):
@@ -113,9 +115,9 @@ def plot_cars_singleframe(x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, 
     alpha_start = 0.25
     alpha = alpha_start
     for k in range(N):
-        fig, ax = get_frame(x1_plot[:,k], ax, "Car1",min_dist, CIRCLES, alpha)
-        fig, ax = get_frame(x2_plot[:,k], ax, "Car2",min_dist,CIRCLES, alpha)
-        fig, ax = get_frame(xamb_plot[:,k], ax, "Amb",min_dist,CIRCLES, alpha)
+        ax = get_frame(x1_plot[:,k], ax, "Car1",min_dist, CIRCLES, alpha)
+        ax = get_frame(x2_plot[:,k], ax, "Car2",min_dist,CIRCLES, alpha)
+        ax = get_frame(xamb_plot[:,k], ax, "Amb",min_dist,CIRCLES, alpha)
         alpha += (1.0 - alpha_start) / N
         
     if x1_desired is not None:
@@ -125,7 +127,8 @@ def plot_cars_singleframe(x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, 
     if xamb_desired is not None:
         ax.plot(xamb_desired[0,:], xamb_desired[1,:], '--',c="red")
     ax.set_xticks(np.arange(np.ceil(min_xplots), np.ceil(min_xplots)+5, 1))
-    fig.savefig(folder + 'mult' + '{:03d}.png'.format(k))
+    fig = ax.gcf()
+    fig.savefig(folder + 'mult' + '{:03d}.png'.format(k), transparent=True, bbox_inches="tight", dpi=96)
     plt.close(fig)     
 
 import multiprocessing
@@ -147,9 +150,9 @@ def plot_three_cars(k, ymax, ymin, axlim_maxx, axlim_minx, x1_plot, x2_plot, xam
         axlim_maxx = axlim_minx + width
     ax.set_xlim((axlim_minx , axlim_maxx))
     # ax.set_xticks(np.arange(0, 20, 1))
-    fig, ax = get_frame(x1_plot[:,k], ax, "Car1", min_dist,CIRCLES)
-    fig, ax = get_frame(x2_plot[:,k], ax, "Car2", min_dist,CIRCLES)
-    fig, ax = get_frame(xamb_plot[:,k], ax, "Amb", min_dist,CIRCLES)
+    ax = get_frame(x1_plot[:,k], ax, "Car1", min_dist,CIRCLES)
+    ax = get_frame(x2_plot[:,k], ax, "Car2", min_dist,CIRCLES)
+    ax = get_frame(xamb_plot[:,k], ax, "Amb", min_dist,CIRCLES)
 
     if x1_desired is not None:
         ax.plot(x1_desired[0,:], x1_desired[1,:], '--',c='red')
@@ -157,12 +160,12 @@ def plot_three_cars(k, ymax, ymin, axlim_maxx, axlim_minx, x1_plot, x2_plot, xam
         ax.plot(x2_desired[0,:], x2_desired[1,:], '--',c="green")
     if xamb_desired is not None:
         ax.plot(xamb_desired[0,:], xamb_desired[1,:], '--',c="red")
-
+    fig = plt.gcf()
     fig.savefig(folder + 'imgs/' '{:03d}.png'.format(k))
     plt.clf()
+    # ax.remove()
     plt.close(fig)     
 
-import functools
 def plot_cars_multiproc(x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=None, xamb_desired=None, CIRCLES=False, min_dist=-1, SLIDING_WINDOW=True):
     N = x1_plot.shape[1]
     max_xplots =     max(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) + 2
