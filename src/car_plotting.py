@@ -159,6 +159,7 @@ def plot_three_cars(k, ymax, ymin, axlim_maxx, axlim_minx, x1_plot, x2_plot, xam
         ax.plot(xamb_desired[0,:], xamb_desired[1,:], '--',c="red")
 
     fig.savefig(folder + 'imgs/' '{:03d}.png'.format(k))
+    plt.clf()
     plt.close(fig)     
 
 import functools
