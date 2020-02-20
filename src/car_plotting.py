@@ -79,6 +79,8 @@ def plot_cars(x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=N
         axlim_minx = xmin
         axlim_maxx = xmax
     for k in range(N):
+        # This can be parallelized
+        
         figsize="LARGE"
         if figsize == "LARGE":
             figwidth_in=12.0

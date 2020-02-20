@@ -27,6 +27,7 @@ class MPC:
         self.k_phi_dot = 5.0
 
         self.k_change_u = 0.0
+        self.k_final = 0
         
         # Constraints
         self.max_delta_u = 5 * np.pi/180
@@ -77,6 +78,7 @@ class MPC:
         else:
             self.lat_cost = self.generate_lateral_cost(X, X_desired)
             self.s_cost = cas.sumsqr(X[5,-1])   
+        self.final_costs = self.generate_lateral_cost(X[:,-5:],X_desired[:,-5:]) + cas.sumsqr(X_desired[2,-5:]-X[2,-5:])
         self.v_cost = cas.sumsqr(X[4, :])
         self.phidot_cost = self.generate_phidot_cost(X)
         N = U.shape[1] 
@@ -92,7 +94,8 @@ class MPC:
             self.k_phi_dot * self.phidot_cost +
             self.k_s * self.s_cost + 
             self.k_v * self.v_cost +
-            self.k_change_u * self.change_u
+            self.k_change_u * self.change_u + 
+            self.k_final * self.final_costs
             )
         return total_cost 
 
