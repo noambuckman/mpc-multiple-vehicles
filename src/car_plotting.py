@@ -16,6 +16,8 @@ from IPython.display import HTML
 
 import multiprocessing
 import functools
+import src.TrafficWorld as tw
+
 
 PROJECT_PATH = '/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-multiple-vehicles/'
 
@@ -69,7 +71,7 @@ def get_frame(x, ax=None, car_name="Car1", min_distance=-1, circle=False, alpha 
 
 
 
-def plot_cars(x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=None, xamb_desired=None, CIRCLES=False, min_dist=-1, SLIDING_WINDOW=True):
+def plot_cars(world, x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=None, xamb_desired=None, CIRCLES=False, min_dist=-1, SLIDING_WINDOW=False):
     N = x1_plot.shape[1]
     max_xplots =     max(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) + 2
     min_xplots = min(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) - 2
@@ -83,76 +85,52 @@ def plot_cars(x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=N
     if not SLIDING_WINDOW:
         axlim_minx = xmin
         axlim_maxx = xmax
+
     for k in range(N):
-        # This can be parallelized
-        plot_three_cars( k, ymax, ymin, axlim_maxx, axlim_minx, x1_plot,x2_plot, xamb_plot, SLIDING_WINDOW, width, min_dist, CIRCLES, x1_desired, x2_desired, xamb_desired, folder)     
+        plot_three_cars( k, ymax, ymin, axlim_maxx, axlim_minx, x1_plot,x2_plot, xamb_plot, SLIDING_WINDOW, width, min_dist, CIRCLES, x1_desired, x2_desired, xamb_desired, folder, world)     
+    return None
 
 
-def plot_cars_singleframe(x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=None, xamb_desired=None, CIRCLES=False, min_dist=-1, SLIDING_WINDOW=True):
-    N = x1_plot.shape[1]
-    max_xplots =     max(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) + 1
-    min_xplots = min(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) - 1
-    max_yplots = max(np.hstack((x1_plot[1,:],x2_plot[1,:],xamb_plot[1,:])))
-    xmin, xmax = min_xplots, max_xplots
-    ymax = max_yplots + 0.5
-    ymin = min(np.hstack((x1_plot[1,:],x2_plot[1,:],xamb_plot[1,:]))) - .5 # Based on ymin that we give to MPC
-    width = max_xplots/2.0
-    axlim_minx = min_xplots
-    axlim_maxx = max_xplots
-    if not SLIDING_WINDOW:
-        axlim_minx = xmin
-        axlim_maxx = xmax
+
+
+def plot_three_cars(k, ymax, ymin, axlim_maxx, axlim_minx, x1_plot, x2_plot, xamb_plot, SLIDING_WINDOW, width, min_dist, CIRCLES, x1_desired, x2_desired, xamb_desired, folder, world):
     figsize="LARGE"
     if figsize == "LARGE":
         figwidth_in=12.0
     else:
         figwidth_in=6.0
-    fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx ))
-    fig, ax = plt.subplots(figsize=(figwidth_in, fig_height), dpi=144)     
-    ax.axis('square')
-    ax.set_ylim((ymin, ymax))       
-    ax.set_xlim((axlim_minx , axlim_maxx))
-    alpha_start = 0.25
-    alpha = alpha_start
-    for k in range(N):
-        ax = get_frame(x1_plot[:,k], ax, "Car1",min_dist, CIRCLES, alpha)
-        ax = get_frame(x2_plot[:,k], ax, "Car2",min_dist,CIRCLES, alpha)
-        ax = get_frame(xamb_plot[:,k], ax, "Amb",min_dist,CIRCLES, alpha)
-        alpha += (1.0 - alpha_start) / N
-        
-    if x1_desired is not None:
-        ax.plot(x1_desired[0,:], x1_desired[1,:], '--',c='red')
-    if x2_desired is not None:
-        ax.plot(x2_desired[0,:], x2_desired[1,:], '--',c="green")
-    if xamb_desired is not None:
-        ax.plot(xamb_desired[0,:], xamb_desired[1,:], '--',c="red")
-    ax.set_xticks(np.arange(np.ceil(min_xplots), np.ceil(min_xplots)+5, 1))
-    fig = ax.gcf()
-    fig.savefig(folder + 'mult' + '{:03d}.png'.format(k), transparent=True, bbox_inches="tight", dpi=96)
-    plt.close(fig)     
 
-import multiprocessing
-import os
-def plot_three_cars(k, ymax, ymin, axlim_maxx, axlim_minx, x1_plot, x2_plot, xamb_plot, SLIDING_WINDOW, width, min_dist, CIRCLES, x1_desired, x2_desired, xamb_desired, folder):
-    figsize="LARGE"
-    if figsize == "LARGE":
-        figwidth_in=12.0
-    else:
-        figwidth_in=6.0
+    axlim_minx, axlim_maxx = xamb_plot[0,k] - 10, xamb_plot[0,k] + 10,    
     fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx ))
     fig, ax = plt.subplots(figsize=(figwidth_in, fig_height), dpi=144)
     ax.axis('square')
     ax.set_ylim((ymin, ymax))
-    current_xmin, current_xmax = min([x1_plot[0,k], x2_plot[0,k], xamb_plot[0,k]]), max([x1_plot[0,k], x2_plot[0,k], xamb_plot[0,k]])
-    if current_xmax > (axlim_maxx - 1) and SLIDING_WINDOW:
-        # print("cmax", current_xmax, "axlim", axlim_maxx)
-        axlim_minx = current_xmin - 5
-        axlim_maxx = axlim_minx + width
+    # current_xmin, current_xmax = min([x1_plot[0,k], x2_plot[0,k], xamb_plot[0,k]]), max([x1_plot[0,k], x2_plot[0,k], xamb_plot[0,k]])
+    # if current_xmax > (axlim_maxx - 1) and SLIDING_WINDOW:
+    #     # print("cmax", current_xmax, "axlim", axlim_maxx)
+    #     axlim_minx = current_xmin - 5
+    #     axlim_maxx = axlim_minx + width
     ax.set_xlim((axlim_minx , axlim_maxx))
     # ax.set_xticks(np.arange(0, 20, 1))
     ax = get_frame(x1_plot[:,k], ax, "Car1", min_dist,CIRCLES)
     ax = get_frame(x2_plot[:,k], ax, "Car2", min_dist,CIRCLES)
     ax = get_frame(xamb_plot[:,k], ax, "Amb", min_dist,CIRCLES)
+
+    GRASS = True
+    if GRASS:
+        
+        y_bottom_b, y_center_b, y_top_b = world.get_bottom_grass_y()
+        print(world.get_bottom_grass_y())
+        left_x_grass = axlim_minx
+        bottom_y_grass = y_bottom_b 
+        bottom_grass = patches.Rectangle((left_x_grass,bottom_y_grass), axlim_maxx - axlim_minx, y_top_b-y_bottom_b, facecolor='g', hatch='/') 
+        ax.add_patch(bottom_grass)
+
+        y_bottom_t, y_center_t, y_top_t = world.get_top_grass_y()
+        left_x_grass = axlim_minx
+        bottom_y_grass = y_bottom_t 
+        top_grass = patches.Rectangle((left_x_grass,bottom_y_grass), axlim_maxx - axlim_minx, y_top_t-y_bottom_t, facecolor='g', hatch='/') 
+        ax.add_patch(top_grass)        
 
     if x1_desired is not None:
         ax.plot(x1_desired[0,:], x1_desired[1,:], '--',c='red')
@@ -162,11 +140,12 @@ def plot_three_cars(k, ymax, ymin, axlim_maxx, axlim_minx, x1_plot, x2_plot, xam
         ax.plot(xamb_desired[0,:], xamb_desired[1,:], '--',c="red")
     fig = plt.gcf()
     fig.savefig(folder + 'imgs/' '{:03d}.png'.format(k))
-    plt.clf()
+    # plt.cla()
+    # fig.clf()
     # ax.remove()
     plt.close(fig)     
 
-def plot_cars_multiproc(x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=None, xamb_desired=None, CIRCLES=False, min_dist=-1, SLIDING_WINDOW=True):
+def plot_cars_multiproc(world, x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=None, xamb_desired=None, CIRCLES=False, min_dist=-1, SLIDING_WINDOW=True):
     N = x1_plot.shape[1]
     max_xplots =     max(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) + 2
     min_xplots = min(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) - 2
@@ -182,7 +161,7 @@ def plot_cars_multiproc(x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2
         axlim_maxx = xmax
     pool = multiprocessing.Pool(processes=8)
 
-    plot_partial = functools.partial(plot_three_cars, ymax=ymax, ymin=ymin, axlim_maxx=axlim_maxx, axlim_minx=axlim_minx, x1_plot=x1_plot, x2_plot=x2_plot, xamb_plot=xamb_plot, SLIDING_WINDOW=False, width=width, min_dist=min_dist, CIRCLES=CIRCLES, 
+    plot_partial = functools.partial(plot_three_cars, world=world, ymax=ymax, ymin=ymin, axlim_maxx=axlim_maxx, axlim_minx=axlim_minx, x1_plot=x1_plot, x2_plot=x2_plot, xamb_plot=xamb_plot, SLIDING_WINDOW=False, width=width, min_dist=min_dist, CIRCLES=CIRCLES, 
                                     x1_desired=x1_desired, x2_desired=x2_desired, xamb_desired=xamb_desired, folder=folder)
         
     pool.map(plot_partial, range(N)) #will apply k=1...N to plot_partial
