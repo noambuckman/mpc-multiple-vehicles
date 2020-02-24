@@ -93,12 +93,12 @@ def plot_cars(world, x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_de
 
 def plot_cars_circles(world, x1_plot, x2_plot, xamb_plot, folder, x1_mpc, x2_mpc, xamb_mpc, ibr):
     N = x1_plot.shape[1]
-    max_xplots =     max(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) + 2
-    min_xplots = min(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) - 2
+    max_xplots =     max(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) + 10
+    min_xplots = min(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) - 10
     max_yplots = max(np.hstack((x1_plot[1,:],x2_plot[1,:],xamb_plot[1,:])))
     xmin, xmax = min_xplots, max_xplots
-    ymax = max_yplots + 0.5
-    ymin = min(np.hstack((x1_plot[1,:],x2_plot[1,:],xamb_plot[1,:]))) - .5 # Based on ymin that we give to MPC
+    ymax = max_yplots + 5
+    ymin = min(np.hstack((x1_plot[1,:],x2_plot[1,:],xamb_plot[1,:]))) - 5 # Based on ymin that we give to MPC
     width = max_xplots/2.0
     axlim_minx = min_xplots
     axlim_maxx = max_xplots

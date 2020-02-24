@@ -36,8 +36,8 @@ class MPC:
         self.max_v_u = self.max_acceleration * self.dt
 
         self.max_v =  25 * 0.447 # m/s
-        self.max_y = 10
-        self.min_y = -1
+        self.max_y = np.infty
+        self.min_y = -np.infty
 
         self.max_X_dev = np.infty
         self.max_Y_dev = 10.0        
@@ -79,7 +79,7 @@ class MPC:
         else:
             self.lat_cost = self.generate_lateral_cost(X, X_desired)
             self.s_cost = cas.sumsqr(X[5,-1])   
-        # self.final_costs = self.generate_lateral_cost(X[:,-5:],X_desired[:,-5:]) + cas.sumsqr(X_desired[2,-5:]-X[2,-5:])
+        self.final_costs = self.generate_lateral_cost(X[:,-5:],X_desired[:,-5:]) + cas.sumsqr(X_desired[2,-5:]-X[2,-5:])
         self.v_cost = cas.sumsqr(X[4, :])
         self.phidot_cost = self.generate_phidot_cost(X)
         N = U.shape[1] 
@@ -96,7 +96,7 @@ class MPC:
             self.k_s * self.s_cost + 
             self.k_v * self.v_cost +
             self.k_change_u * self.change_u 
-            # + self.k_final * self.final_costs
+            + self.k_final * self.final_costs
             )
         return total_cost 
 
@@ -402,7 +402,7 @@ class IterativeBestResponseMPC(OptimizationMPC):
         self.opti.set_value(p, x0)
         self.opti.set_value(p2, x0_2)
         self.opti.set_value(pamb, x0_amb) 
-        self.opti.solver('ipopt',{'warn_initial_bounds':True},{'print_level':print_level})
+        self.opti.solver('ipopt',{'warn_initial_bounds':True},{'print_level':print_level, 'max_iter':5000})
 
 
 
