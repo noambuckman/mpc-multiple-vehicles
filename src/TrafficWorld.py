@@ -2,9 +2,9 @@
 import numpy as np
 
 class TrafficWorld():
-    def __init__(self, lane_width, n_lanes_right, n_lanes_left, x_max):
+    def __init__(self, n_lanes_right, n_lanes_left, x_max):
         
-        self.lane_width = lane_width
+        self.lane_width = 3.7 #m avg lane width
         self.n_lanes_right = n_lanes_right
         self.n_lanes_left = n_lanes_left
         self.n_lanes = self.n_lanes_left + self.n_lanes_right
@@ -24,6 +24,7 @@ class TrafficWorld():
         return total_height    
 
     def get_lane_centerline_y(self, lane_number, right_direction=True):
+        # count starts at 0
         if right_direction:
             centerline_y = lane_number*self.lane_width
         else:
