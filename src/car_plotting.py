@@ -21,8 +21,9 @@ import src.TrafficWorld as tw
 
 PROJECT_PATH = '/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-multiple-vehicles/'
 
-def get_frame(x, ax=None, car_name="Car1", min_distance=-1, circle=False, alpha = 1.0, L=4.572):
+def get_frame(x, x_MPC, ax=None, car_name="Car1", min_distance=-1, circle=False, alpha = 1.0):
     '''Plots a car at a single state x.  Assumes red_car and ambulance.png'''
+    L = x_MPC.L
     if ax is None:
         fig, ax = plt.subplots(figsize=(12,12))
     else:
@@ -71,7 +72,7 @@ def get_frame(x, ax=None, car_name="Car1", min_distance=-1, circle=False, alpha 
 
 
 
-def plot_cars(world, x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=None, xamb_desired=None, CIRCLES=False, min_dist=-1, SLIDING_WINDOW=False):
+def plot_cars(world, x_mpc, x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=None, xamb_desired=None, CIRCLES=False, min_dist=-1, SLIDING_WINDOW=False):
     N = x1_plot.shape[1]
     max_xplots =     max(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) + 2
     min_xplots = min(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) - 2
@@ -87,7 +88,7 @@ def plot_cars(world, x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_de
         axlim_maxx = xmax
 
     for k in range(N):
-        plot_three_cars( k, ymax, ymin, axlim_maxx, axlim_minx, x1_plot,x2_plot, xamb_plot, SLIDING_WINDOW, width, min_dist, CIRCLES, x1_desired, x2_desired, xamb_desired, folder, world)     
+        plot_three_cars( k, x_mpc, ymax, ymin, axlim_maxx, axlim_minx, x1_plot,x2_plot, xamb_plot, SLIDING_WINDOW, width, min_dist, CIRCLES, x1_desired, x2_desired, xamb_desired, folder, world)     
     return None
             
 
@@ -181,20 +182,7 @@ def plot_three_circles(k, ymax, ymin, axlim_maxx, axlim_minx, x1_plot, x2_plot, 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-def plot_three_cars(k, ymax, ymin, axlim_maxx, axlim_minx, x1_plot, x2_plot, xamb_plot, SLIDING_WINDOW, width, min_dist, CIRCLES, x1_desired, x2_desired, xamb_desired, folder, world):
+def plot_three_cars(k, x_mpc, ymax, ymin, axlim_maxx, axlim_minx, x1_plot, x2_plot, xamb_plot, SLIDING_WINDOW, width, min_dist, CIRCLES, x1_desired, x2_desired, xamb_desired, folder, world):
     figsize="LARGE"
     if figsize == "LARGE":
         figwidth_in=12.0
@@ -214,9 +202,9 @@ def plot_three_cars(k, ymax, ymin, axlim_maxx, axlim_minx, x1_plot, x2_plot, xam
     ax.set_xlim((axlim_minx , axlim_maxx))
     print("axlim", axlim_minx , axlim_maxx)
     # ax.set_xticks(np.arange(0, 20, 1))
-    ax = get_frame(x1_plot[:,k], ax, "Car1", min_dist,CIRCLES)
-    ax = get_frame(x2_plot[:,k], ax, "Car2", min_dist,CIRCLES)
-    ax = get_frame(xamb_plot[:,k], ax, "Amb", min_dist,CIRCLES)
+    ax = get_frame(x1_plot[:,k], x_mpc, ax, "Car1", min_dist,CIRCLES)
+    ax = get_frame(x2_plot[:,k], x_mpc, ax, "Car2", min_dist,CIRCLES)
+    ax = get_frame(xamb_plot[:,k], x_mpc, ax, "Amb", min_dist,CIRCLES)
 
     add_lanes(ax, world)
 
@@ -279,7 +267,7 @@ def add_lanes(ax, world):
     
 
 
-def plot_cars_multiproc(world, x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=None, xamb_desired=None, CIRCLES=False, min_dist=-1, SLIDING_WINDOW=True):
+def plot_cars_multiproc(world, x_mpc, x1_plot, x2_plot, xamb_plot, folder, x1_desired=None, x2_desired=None, xamb_desired=None, CIRCLES=False, min_dist=-1, SLIDING_WINDOW=True):
     N = x1_plot.shape[1]
     max_xplots =     max(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) + 2
     min_xplots = min(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) - 2
@@ -295,7 +283,7 @@ def plot_cars_multiproc(world, x1_plot, x2_plot, xamb_plot, folder, x1_desired=N
         axlim_maxx = xmax
     pool = multiprocessing.Pool(processes=8)
 
-    plot_partial = functools.partial(plot_three_cars, world=world, ymax=ymax, ymin=ymin, axlim_maxx=axlim_maxx, axlim_minx=axlim_minx, x1_plot=x1_plot, x2_plot=x2_plot, xamb_plot=xamb_plot, SLIDING_WINDOW=False, width=width, min_dist=min_dist, CIRCLES=CIRCLES, 
+    plot_partial = functools.partial(plot_three_cars, x_mpc=x_mpc, world=world, ymax=ymax, ymin=ymin, axlim_maxx=axlim_maxx, axlim_minx=axlim_minx, x1_plot=x1_plot, x2_plot=x2_plot, xamb_plot=xamb_plot, SLIDING_WINDOW=False, width=width, min_dist=min_dist, CIRCLES=CIRCLES, 
                                     x1_desired=x1_desired, x2_desired=x2_desired, xamb_desired=xamb_desired, folder=folder)
         
     pool.map(plot_partial, range(N)) #will apply k=1...N to plot_partial
