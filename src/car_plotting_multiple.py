@@ -93,7 +93,11 @@ def plot_multiple_cars(k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desir
 
     ymax = world.y_max
     ymin = world.y_min     
-    axlim_minx, axlim_maxx = xamb_plot[0,k] - 20, xamb_plot[0,k] + 20,    
+    initial_speed = x_mpc.max_v
+    # center_frame = xamb_plot[0,k]
+    center_frame = xamb_plot[0,0] + k*initial_speed*x_mpc.dt
+    # center_frame = xamb_plot[0,0]
+    axlim_minx, axlim_maxx = center_frame - 5, center_frame + 100,    
 
     fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx ))
     fig, ax = plt.subplots(figsize=(figwidth_in, fig_height), dpi=144)

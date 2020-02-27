@@ -20,7 +20,7 @@ np.set_printoptions(precision=2)
 
 NEW = True
 if NEW:
-    optional_suffix = "allsame_pullover"
+    optional_suffix = "pi_5dnograss"
     subdir_name = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + optional_suffix
     folder = "results/" + subdir_name + "/"
     os.makedirs(folder)
@@ -49,11 +49,11 @@ next_x0 = 0
 for i in range(n_other):
     x1_MPC = mpc.MPC(dt)
     x1_MPC.n_circles = 3
-    x1_MPC.theta_iamb = np.pi/4.0
+    x1_MPC.theta_iamb = 5/180 * np.pi
     x1_MPC.k_final = 1.0
     x1_MPC.k_s = 0
     x1_MPC.k_x = 0
-    x1_MPC.k_x_dot = -1.0 / 1000.0    
+    x1_MPC.k_x_dot = -1.0 / 100.0    
     
     # x1_MPC.k_u_v = 1.0
     # x1_MPC.k_u_delta = 1.00
@@ -63,13 +63,16 @@ for i in range(n_other):
 
     x1_MPC.k_u_v = .10
     x1_MPC.k_u_delta = .01
-    # x1_MPC.k_lat = .25
+    x1_MPC.k_lat = 5.0
+    x1_MPC.k_lon = 0.01
+    x1_MPC.k_phi_error = 0.05 
     x1_MPC.k_change_u_v = .01
     x1_MPC.k_change_u_delta = .01        
     
-    
-    x1_MPC.min_y = world.y_min
-    x1_MPC.max_y = world.y_max
+    NO_GRASS = True
+    if NO_GRASS:
+        x1_MPC.min_y = world.y_min + world.grass_width
+        x1_MPC.max_y = world.y_max - world.grass_width
     # x1_MPC.k_phi_error = 25
 
     if i%2 == 0:
@@ -85,13 +88,15 @@ for i in range(n_other):
     x0 = np.array([next_x0, world.get_lane_centerline_y(lane_number), 0, 0, initial_speed, 0]).T
     u1 = np.zeros((2,N))
     # u1[0,:] = np.clip(np.pi/180 *np.random.normal(size=(1,N)), -2 * np.pi/180, 2 * np.pi/180)
-    if lane_number == 0:
-        u1[0,0] = -2 * np.pi/180
-    else:
+    SAME_SIDE = False
+    if lane_number == 1 or SAME_SIDE:
         u1[0,0] = 2 * np.pi/180
+    else:
+        u1[0,0] = -2 * np.pi/180
     all_other_MPC += [x1_MPC]
     all_other_x0 += [x0]
     all_other_u += [u1]    
+pickle.dump(x1_MPC, open(folder + "data/"+"mpc%d"%i + ".p",'wb'))
 
 
 amb_MPC = cp.deepcopy(x1_MPC)
@@ -104,13 +109,13 @@ amb_MPC.k_change_u_delta = 0.01
 
 amb_MPC.k_s = 0
 amb_MPC.k_x = 0
-amb_MPC.k_x_dot = -1.0 / 1000.0
+amb_MPC.k_x_dot = -1.0 / 100.0
 
 amb_MPC.min_v = 0.8*initial_speed
 amb_MPC.max_v = 30 * 0.447 # m/s
 
 amb_MPC.fd = amb_MPC.gen_f_desired_lane(world, 0, True)
-
+pickle.dump(amb_MPC, open(folder + "data/"+"mpcamb" + ".p",'wb'))
 x0_amb = np.array([0, 0, 0, 0, amb_MPC.max_v , 0]).T
 uamb = np.zeros((2,N))
 uamb[0,:] = np.clip(np.pi/180 * np.random.normal(size=(1,N)), -2 * np.pi/180, 2 * np.pi/180)
@@ -149,7 +154,7 @@ for n_round in range(n_total_round):
         uothers = other_u
         
         print("n_round %d i %02d Cost %.02f Slack %.02f "%(n_round, i, bri.solution.value(bri.total_svo_cost), bri.solution.value(bri.slack_cost)))
-        print("Dir:", folder)
+        print("Dir:", subdir_name)
         if bri.solution.value(bri.slack_cost) <= min_slack:
             uamb = u1
             xamb = x1
@@ -187,7 +192,7 @@ for n_round in range(n_total_round):
             bri.solve(uamb, nonresponse_u_list)
             x1, u1, x1_des, xamb, uamb, xamb_des, other_x, other_u, other_des = bri.get_solution()
             print("n_round %d  i %02d Cost %.02f Slack %.02f "%(n_round, i, bri.solution.value(bri.total_svo_cost), bri.solution.value(bri.slack_cost)))
-            print("Dir:", folder)
+            print("Dir:", subdir_name)
 
             if bri.solution.value(bri.slack_cost) <= min_slack:
                 # Update the responder

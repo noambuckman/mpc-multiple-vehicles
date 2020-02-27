@@ -40,7 +40,7 @@ class MPC:
         # Constraints
         self.max_delta_u = 5 * np.pi/180
         self.max_acceleration = 4
-        self.max_v_u = self.max_acceleration * self.dt
+        self.max_v_u = self.max_acceleration
         self.min_v_u = -self.max_v_u        
 
         self.max_v =  25 * 0.447 # m/s

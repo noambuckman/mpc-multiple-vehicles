@@ -76,94 +76,80 @@ def plot_cars(world, x_mpc, x1_plot, x2_plot, xamb_plot, folder, x1_desired=None
     N = x1_plot.shape[1]
     max_xplots =     max(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) + 2
     min_xplots = min(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) - 2
-    max_yplots = max(np.hstack((x1_plot[1,:],x2_plot[1,:],xamb_plot[1,:])))
     xmin, xmax = min_xplots, max_xplots
-    ymax = max_yplots + 0.5
-    ymin = min(np.hstack((x1_plot[1,:],x2_plot[1,:],xamb_plot[1,:]))) - .5 # Based on ymin that we give to MPC
+
     width = max_xplots/2.0
     axlim_minx = min_xplots
     axlim_maxx = max_xplots
-    if not SLIDING_WINDOW:
-        axlim_minx = xmin
-        axlim_maxx = xmax
+
 
     for k in range(N):
-        plot_three_cars( k, x_mpc, ymax, ymin, axlim_maxx, axlim_minx, x1_plot,x2_plot, xamb_plot, SLIDING_WINDOW, width, min_dist, CIRCLES, x1_desired, x2_desired, xamb_desired, folder, world)     
+        plot_three_cars( k, x_mpc, axlim_maxx, axlim_minx, x1_plot,x2_plot, xamb_plot, SLIDING_WINDOW, width, min_dist, CIRCLES, x1_desired, x2_desired, xamb_desired, folder, world)     
     return None
             
 
-def plot_cars_circles(world, x1_plot, x2_plot, xamb_plot, folder, x1_mpc, x2_mpc, xamb_mpc, ibr):
+def plot_cars_circles(world, x1_plot, x2_plot, xamb_plot, folder, x1_mpc, x2_mpc, xamb_mpc):
     N = x1_plot.shape[1]
     max_xplots =     max(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) + 10
     min_xplots = min(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) - 10
-    max_yplots = max(np.hstack((x1_plot[1,:],x2_plot[1,:],xamb_plot[1,:])))
     xmin, xmax = min_xplots, max_xplots
-    ymax = max_yplots + 5
-    ymin = min(np.hstack((x1_plot[1,:],x2_plot[1,:],xamb_plot[1,:]))) - 5 # Based on ymin that we give to MPC
+    
     width = max_xplots/2.0
     axlim_minx = min_xplots
     axlim_maxx = max_xplots
 
 
+
     for k in range(N):
-        plot_three_circles( k, ymax, ymin, axlim_maxx, axlim_minx, x1_plot,x2_plot, xamb_plot, width, x1_mpc, x2_mpc, xamb_mpc, ibr, folder, world)
+        plot_three_circles( k, axlim_maxx, axlim_minx, x1_plot,x2_plot, xamb_plot, width, x1_mpc, x2_mpc, xamb_mpc, folder, world)
 
     return None
 
 
-def plot_three_circles(k, ymax, ymin, axlim_maxx, axlim_minx, x1_plot, x2_plot, xamb_plot, width, x1_mpc, x2_mpc, xamb_mpc, ibr, folder, world):
+def plot_three_circles(k, axlim_maxx, axlim_minx, x1_plot, x2_plot, xamb_plot, width, x1_mpc, x2_mpc, xamb_mpc, folder, world):
     figsize="LARGE"
     if figsize == "LARGE":
         figwidth_in=12.0
     else:
         figwidth_in=6.0
+    ymax = world.y_max
+    ymin = world.y_min        
 
     axlim_minx, axlim_maxx = xamb_plot[0,k] - 10, xamb_plot[0,k] + 10,    
     fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx ))
     fig, ax = plt.subplots(figsize=(figwidth_in, fig_height), dpi=144)
     ax.axis('square')
     ax.set_ylim((ymin, ymax))
-    # current_xmin, current_xmax = min([x1_plot[0,k], x2_plot[0,k], xamb_plot[0,k]]), max([x1_plot[0,k], x2_plot[0,k], xamb_plot[0,k]])
-    # if current_xmax > (axlim_maxx - 1) and SLIDING_WINDOW:
-    #     # print("cmax", current_xmax, "axlim", axlim_maxx)
-    #     axlim_minx = current_xmin - 5
-    #     axlim_maxx = axlim_minx + width
     ax.set_xlim((axlim_minx , axlim_maxx))
-    # ax.set_xticks(np.arange(0, 20, 1))
  
-    xy_f = ibr.opti.debug.value(ibr.c1_f[:,k])
-    circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=ibr.min_dist/2)
+    add_lanes(ax, world)
+    GRASS = True
+    if GRASS:
+        add_grass(ax, world, k)            
+
+
+    xy_r, xy_f = x1_mpc.get_car_circles_np(x1_plot[:,k:k+1])
+    circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=x1_mpc.min_dist/2)
     ax.add_patch(circle_patch_f)
-        
-    xy_r = ibr.opti.debug.value(ibr.c1_r[:,k])
-    circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=ibr.min_dist/2)
+    circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x1_mpc.min_dist/2)
+    ax.add_patch(circle_patch_r)
+
+    xy_r, xy_f = x2_mpc.get_car_circles_np(x2_plot[:,k:k+1])
+    circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=x1_mpc.min_dist/2)
+    ax.add_patch(circle_patch_f)
+    circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x1_mpc.min_dist/2)
     ax.add_patch(circle_patch_r)
 
 
-    xy_f = ibr.opti.debug.value(ibr.c2_f[:,k])
-    circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=ibr.min_dist/2)
+    xy_r, xy_f = xamb_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
+    circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=x1_mpc.min_dist/2)
     ax.add_patch(circle_patch_f)
-        
-    xy_r = ibr.opti.debug.value(ibr.c2_r[:,k])
-    circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=ibr.min_dist/2)
-    ax.add_patch(circle_patch_r)
-
-
-    xy_f = ibr.opti.debug.value(ibr.ca_f[:,k])
-    circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=ibr.min_dist/2)
-    ax.add_patch(circle_patch_f)
-        
-    xy_r = ibr.opti.debug.value(ibr.ca_r[:,k])
-    circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=ibr.min_dist/2)
+    circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x1_mpc.min_dist/2)
     ax.add_patch(circle_patch_r)    
 
 
 
-    add_lanes(ax, world)
-
-    GRASS = True
-    if GRASS:
-        add_grass(ax, world, k)                
+        
     # x1_desired, x2_desired, xamb_desired = None, None, None
     # if x1_desired is not None:
     #     ax.plot(x1_desired[0,:], x1_desired[1,:], '--',c='red')
@@ -182,14 +168,15 @@ def plot_three_circles(k, ymax, ymin, axlim_maxx, axlim_minx, x1_plot, x2_plot, 
 
 
 
-def plot_three_cars(k, x_mpc, ymax, ymin, axlim_maxx, axlim_minx, x1_plot, x2_plot, xamb_plot, SLIDING_WINDOW, width, min_dist, CIRCLES, x1_desired, x2_desired, xamb_desired, folder, world):
+def plot_three_cars(k, x_mpc, axlim_maxx, axlim_minx, x1_plot, x2_plot, xamb_plot, SLIDING_WINDOW, width, min_dist, CIRCLES, x1_desired, x2_desired, xamb_desired, folder, world):
     figsize="LARGE"
     if figsize == "LARGE":
         figwidth_in=12.0
     else:
         figwidth_in=6.0
-
-    axlim_minx, axlim_maxx = xamb_plot[0,k] - 10, xamb_plot[0,k] + 10,    
+    ymax = world.y_max
+    ymin = world.y_min     
+    axlim_minx, axlim_maxx = xamb_plot[0,k] - 20, xamb_plot[0,k] + 20,    
     fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx ))
     fig, ax = plt.subplots(figsize=(figwidth_in, fig_height), dpi=144)
     ax.axis('square')
@@ -200,11 +187,7 @@ def plot_three_cars(k, x_mpc, ymax, ymin, axlim_maxx, axlim_minx, x1_plot, x2_pl
     #     axlim_minx = current_xmin - 5
     #     axlim_maxx = axlim_minx + width
     ax.set_xlim((axlim_minx , axlim_maxx))
-    print("axlim", axlim_minx , axlim_maxx)
     # ax.set_xticks(np.arange(0, 20, 1))
-    ax = get_frame(x1_plot[:,k], x_mpc, ax, "Car1", min_dist,CIRCLES)
-    ax = get_frame(x2_plot[:,k], x_mpc, ax, "Car2", min_dist,CIRCLES)
-    ax = get_frame(xamb_plot[:,k], x_mpc, ax, "Amb", min_dist,CIRCLES)
 
     add_lanes(ax, world)
 
@@ -218,6 +201,12 @@ def plot_three_cars(k, x_mpc, ymax, ymin, axlim_maxx, axlim_minx, x1_plot, x2_pl
         ax.plot(x2_desired[0,:], x2_desired[1,:], '--',c="green")
     if xamb_desired is not None:
         ax.plot(xamb_desired[0,:], xamb_desired[1,:], '--',c="red")
+
+    ax = get_frame(x1_plot[:,k], x_mpc, ax, "Car1", min_dist,CIRCLES)
+    ax = get_frame(x2_plot[:,k], x_mpc, ax, "Car2", min_dist,CIRCLES)
+    ax = get_frame(xamb_plot[:,k], x_mpc, ax, "Amb", min_dist,CIRCLES)
+
+
     fig = plt.gcf()
     fig.savefig(folder + 'imgs/' '{:03d}.png'.format(k))
     # plt.cla()
@@ -273,17 +262,20 @@ def plot_cars_multiproc(world, x_mpc, x1_plot, x2_plot, xamb_plot, folder, x1_de
     min_xplots = min(np.hstack((x1_plot[0,:],x2_plot[0,:],xamb_plot[0,:]))) - 2
     max_yplots = max(np.hstack((x1_plot[1,:],x2_plot[1,:],xamb_plot[1,:])))
     xmin, xmax = min_xplots, max_xplots
-    ymax = max_yplots + 0.5
-    ymin = min(np.hstack((x1_plot[1,:],x2_plot[1,:],xamb_plot[1,:]))) - .5 # Based on ymin that we give to MPC
+    ymax = max_yplots + 3.5
+    ymin = min(np.hstack((x1_plot[1,:],x2_plot[1,:],xamb_plot[1,:]))) - 2.5 # Based on ymin that we give to MPC
     width = max_xplots/2.0
     axlim_minx = min_xplots
     axlim_maxx = max_xplots
     if not SLIDING_WINDOW:
         axlim_minx = xmin
         axlim_maxx = xmax
+    y_max = world.y_max
+    y_min = world.y_min
+
     pool = multiprocessing.Pool(processes=8)
 
-    plot_partial = functools.partial(plot_three_cars, x_mpc=x_mpc, world=world, ymax=ymax, ymin=ymin, axlim_maxx=axlim_maxx, axlim_minx=axlim_minx, x1_plot=x1_plot, x2_plot=x2_plot, xamb_plot=xamb_plot, SLIDING_WINDOW=False, width=width, min_dist=min_dist, CIRCLES=CIRCLES, 
+    plot_partial = functools.partial(plot_three_cars, x_mpc=x_mpc, world=world, axlim_maxx=axlim_maxx, axlim_minx=axlim_minx, x1_plot=x1_plot, x2_plot=x2_plot, xamb_plot=xamb_plot, SLIDING_WINDOW=False, width=width, min_dist=min_dist, CIRCLES=CIRCLES, 
                                     x1_desired=x1_desired, x2_desired=x2_desired, xamb_desired=xamb_desired, folder=folder)
         
     pool.map(plot_partial, range(N)) #will apply k=1...N to plot_partial

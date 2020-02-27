@@ -24,9 +24,9 @@ import src.IterativeBestResponseMPCMultiple as mibr
 import gc
 
 if __name__ == "__main__":
-    subdir_name = "20200227_121344allsame_pullover"
+    subdir_name = "20200227_133704less_kxdotlarger"
     folder = "results/" + subdir_name + "/"
-    PLOT_ALL = True
+    PLOT_ALL = False
     CIRCLES = True
     dt = 0.1
     x_MPC = mpc.MPC(dt)
