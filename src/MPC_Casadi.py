@@ -6,7 +6,9 @@ class MPC:
         self.dt = dt
         self.k_total = 1.0 # the overall weighting of the total costs
         self.theta_iamb = np.pi/4 # my theta wrt to ambulance
-        self.L = 4.572
+        self.L = 4.5
+        self.W = 1.8
+        self.n_circles = 2
         ## State Costs Constants
         
         self.k_x = 0
@@ -24,18 +26,25 @@ class MPC:
         ## Derived State Costs Constants
         self.k_lat = 10.0
         self.k_lon = 1.0
-        self.k_phi_error = 10.0
-        self.k_phi_dot = 5.0
+        self.k_phi_error = 1.0
+        self.k_phi_dot = 1.0
 
-        self.k_change_u = 0.0
+        self.k_x_dot = 0.0
+
+        self.k_change_u_v = 1.0
+        self.k_change_u_delta = 1.0
+
         self.k_final = 0
+
         
         # Constraints
         self.max_delta_u = 5 * np.pi/180
         self.max_acceleration = 4
         self.max_v_u = self.max_acceleration * self.dt
+        self.min_v_u = -self.max_v_u        
 
         self.max_v =  25 * 0.447 # m/s
+        self.min_v = 0.0
         self.max_y = np.infty
         self.min_y = -np.infty
 
@@ -44,6 +53,10 @@ class MPC:
 
         self.f = self.gen_f_vehicle_dynamics()
         self.fd = None
+
+        # Distance used for collision avoidance
+        self.circle_radius = np.sqrt(2) * self.W/2.0
+        self.min_dist = 2 * self.circle_radius   # 2 times the radius of 1.5
 
     def generate_lateral_cost(self, X, X_desired):
         lateral_cost = np.sum([(-cas.sin(X_desired[2,k]) * (X[0,k]-X_desired[0,k]) + 
@@ -66,7 +79,7 @@ class MPC:
         return phid_cost
     
     def generate_costs(self, X, U, X_desired):
-        self.u_delta_cost = self.k_u_delta * cas.sumsqr(U[0,:])
+        self.u_delta_cost = cas.sumsqr(U[0,:])
         self.u_v_cost = cas.sumsqr(U[1,:])
 
         self.lon_cost = self.generate_longitudinal_cost(X, X_desired)
@@ -83,32 +96,44 @@ class MPC:
         self.v_cost = cas.sumsqr(X[4, :])
         self.phidot_cost = self.generate_phidot_cost(X)
         N = U.shape[1] 
-        self.change_u = cas.sumsqr(U[:,1:N-1] - U[:,0:N-2])
+        self.change_u_delta = cas.sumsqr(U[0,1:N-1] - U[0,0:N-2])
+        self.change_u_v = cas.sumsqr(U[1,1:N-1] - U[1,0:N-2])
+        self.x_cost = cas.sumsqr(X[0,:])
+        self.x_dot_cost = cas.sumsqr(self.dt * X[4, :] * cas.cos(X[2]))
 
     def total_cost(self):
-        total_cost = (
-            self.k_u_delta * self.u_delta_cost + 
-            self.k_u_v * self.u_v_cost + 
-            self.k_lat * self.lat_cost + 
-            self.k_lon * self.lon_cost + 
-            self.k_phi_error * self.phi_error_cost + 
-            self.k_phi_dot * self.phidot_cost +
-            self.k_s * self.s_cost + 
-            self.k_v * self.v_cost +
-            self.k_change_u * self.change_u 
-            + self.k_final * self.final_costs
-            )
-        return total_cost 
+        all_costs = [
+            self.k_u_delta * self.u_delta_cost,
+            self.k_u_v * self.u_v_cost,
+            self.k_lat * self.lat_cost, 
+            self.k_lon * self.lon_cost, 
+            self.k_phi_error * self.phi_error_cost,
+            self.k_phi_dot * self.phidot_cost,
+            self.k_s * self.s_cost,
+            self.k_v * self.v_cost,
+            self.k_change_u_v * self.change_u_v,
+            self.k_change_u_delta * self.change_u_delta, 
+            self.k_final * self.final_costs,
+            self.k_x * self.x_cost,
+            self.k_x_dot * self.x_dot_cost
+        ]
+        all_costs = np.array(all_costs)
+        total_cost = np.sum(all_costs)    
+        return total_cost, all_costs
 
-    def add_state_constraints(self, opti, X, U, X_desired, T):
-
-        # opti.subject_to( opti.bounded(-1, X[0,:], self.max_v * T) ) #Constraints on X, Y
-        opti.subject_to( opti.bounded(self.min_y, X[1,:], self.max_y) )
+    def add_state_constraints(self, opti, X, U, X_desired, T, x0=None):
+        if x0 is None:
+            x_start = 0
+        else:
+            x_start = x0[0]
+        
+        opti.subject_to( opti.bounded(-1, X[0,:], self.max_v * T + x_start )) #Constraints on X, Y
+        opti.subject_to( opti.bounded(self.min_y+self.W/2.0, X[1,:], self.max_y-self.W/2.0) )
         opti.subject_to( opti.bounded(-np.pi/2, X[2,:], np.pi/2) ) #no crazy angle
 
         opti.subject_to(opti.bounded(-self.max_delta_u, U[0,:], self.max_delta_u))            
-        opti.subject_to(opti.bounded(-self.max_v_u, U[1,:], self.max_v_u)) # 0-60 around 4 m/s^2
-        opti.subject_to(opti.bounded(0, X[4,:], self.max_v))    
+        opti.subject_to(opti.bounded(self.min_v_u, U[1,:], self.max_v_u)) # 0-60 around 4 m/s^2
+        opti.subject_to(opti.bounded(self.min_v, X[4,:], self.max_v))    
 
         # Lane Deviations
         if self.max_X_dev < np.infty:
@@ -161,6 +186,63 @@ class MPC:
 
         f = cas.Function('f',[x,u],[ode],['x','u'],['ode'])
         return f
+    
+    def gen_f_desired_lane(self, world, lane_number, right_direction=True):
+        if right_direction == False:
+            raise Exception("Haven't implemented left lanes")
+
+        s = cas.MX.sym('s')
+        xd = s
+        yd = world.get_lane_centerline_y(lane_number, right_direction)
+        phid = 0
+        des_traj = cas.vertcat(xd, yd, phid)
+        fd = cas.Function('fd',[s],[des_traj],['s'],['des_traj'])
+
+        return fd
+
+    def get_car_circles(self, X, n_circles=2):
+        if n_circles==2:
+            x_circle_front = X[0:2,:] + (self.W/2) * cas.vertcat(cas.cos(X[2,:]), cas.sin(X[2,:])) 
+            x_circle_rear = X[0:2,:] - (self.W/2) * cas.vertcat(cas.cos(X[2,:]), cas.sin(X[2,:])) 
+            # x_circle_front = X[0:2,:] + (self.L/2 - self.W/2) * cas.vertcat(cas.cos(X[2,:]), cas.sin(X[2,:])) 
+            # x_circle_rear = X[0:2,:] - (self.L/2 - self.W/2) * cas.vertcat(cas.cos(X[2,:]), cas.sin(X[2,:]))
+            radius = 1.5
+            min_dist = 2*radius
+            centers = [x_circle_rear, x_circle_front]
+        elif n_circles==3:
+            x_circle_mid = X[0:2,:]
+            dist_from_center = self.L/2.0 - self.W/2
+            x_circle_rear = X[0:2,:]  -  dist_from_center * cas.vertcat(cas.cos(X[2,:]), cas.sin(X[2,:])) 
+            x_circle_front = X[0:2,:] +  dist_from_center * cas.vertcat(cas.cos(X[2,:]), cas.sin(X[2,:])) 
+            
+            centers = (x_circle_rear, x_circle_mid, x_circle_front)
+            radius = 1.1
+            min_dist = 2*radius            
+
+        return centers, radius
+
+    def get_car_circles_np(self, X):
+        if self.n_circles == 2:
+            # x_circle_front = X[0:2,:] + (self.L/2 - self.W/2) * np.array([np.cos(X[2,:]),np.sin(X[2,:])]) 
+            # x_circle_rear = X[0:2,:] - (self.L/2 - self.W/2) * np.array([np.cos(X[2,:]),np.sin(X[2,:])]) 
+            x_circle_front = X[0:2,:] + (self.W/2) * np.array([np.cos(X[2,:]),np.sin(X[2,:])]) 
+            x_circle_rear = X[0:2,:] - (self.W/2) * np.array([np.cos(X[2,:]),np.sin(X[2,:])]) 
+            radius = 1.5
+            # min_dist = 2*radius
+            return [x_circle_rear, x_circle_front], radius
+        elif self.n_circles == 3:
+            x_circle_mid = X[0:2,:]
+            dist_from_center = self.L/2.0 - self.W/2
+            x_circle_rear = X[0:2,:]  -  dist_from_center* np.array([np.cos(X[2,:]),np.sin(X[2,:])]) 
+            x_circle_front = X[0:2,:] +  dist_from_center* np.array([np.cos(X[2,:]),np.sin(X[2,:])]) 
+            
+            centers = [x_circle_rear, x_circle_mid, x_circle_front]
+            radius = 1.1
+            # min_dist = 2*radius
+        
+        return centers, radius
+
+
 
 class OptimizationMPC():
     def __init__(self, car1MPC, car2MPC,  ambMPC):
@@ -168,8 +250,9 @@ class OptimizationMPC():
         self.car2MPC = car2MPC   
         self.ambMPC = ambMPC
         self.opti = cas.Opti()
+        self.min_dist = 2 * 1.5   # 2 times the radius of 1.5
 
-        self.k_slack = 99999
+        self.k_slack = 9999
 
     def generate_optimization(self, N, min_dist, fd, T, x0, x0_2, x0_amb, print_level=5, slack = True):
 
@@ -183,15 +266,19 @@ class OptimizationMPC():
 
         #### Costs
         self.car1MPC.generate_costs(self.x_opt, self.u_opt, self.x_desired)
-        car1_costs = self.car1MPC.total_cost()
+        car1_costs, car1_costs_list = self.car1MPC.total_cost()
 
         self.car2MPC.generate_costs(self.x2_opt, self.u2_opt, self.x2_desired)
-        car2_costs = self.car2MPC.total_cost()
-
-
+        car2_costs, car2_costs_list = self.car2MPC.total_cost()
 
         self.ambMPC.generate_costs(self.xamb_opt, self.uamb_opt, self.xamb_desired)
-        amb_costs = self.ambMPC.total_cost()
+        amb_costs, amb_costs_list = self.ambMPC.total_cost()
+
+        self.slack_vars_list = self.generate_slack_variables(slack, N, 2 * 4 + 2* 2)
+        self.slack_cost = 0
+        for slack_var in self.slack_vars_list:
+            self.slack_cost += cas.sumsqr(slack_var)
+
 
         ######## optimization  ##################################
         self.opti.minimize(np.cos(self.ambMPC.theta_iamb)*amb_costs + np.sin(self.ambMPC.theta_iamb)*(car1_costs + car2_costs) + 
@@ -202,7 +289,7 @@ class OptimizationMPC():
 
         #constraints
         self.car1MPC.add_dynamics_constraints(self.opti, self.x_opt, self.u_opt, self.x_desired, p)
-        self.car1MPC.add_state_constraints(self.opti, self.x_opt, self.u_opt, self.x_desired, T )
+        self.car1MPC.add_state_constraints(self.opti, self.x_opt, self.u_opt, self.x_desired, T, x0 )
 
         self.car2MPC.add_state_constraints(self.opti, self.x2_opt, self.u2_opt, self.x2_desired, T )
         self.car2MPC.add_dynamics_constraints(self.opti, self.x2_opt, self.u2_opt, self.x2_desired, p2)
@@ -211,11 +298,49 @@ class OptimizationMPC():
         self.ambMPC.add_state_constraints(self.opti, self.xamb_opt, self.uamb_opt, self.xamb_desired, T)
         self.ambMPC.add_dynamics_constraints(self.opti, self.xamb_opt, self.uamb_opt, self.xamb_desired, pamb)
 
+
+        self.c1_f = self.opti.variable(2, N+1)
+        self.c1_r = self.opti.variable(2, N+1)
+        self.c2_f = self.opti.variable(2, N+1)
+        self.c2_r = self.opti.variable(2, N+1)
+        self.ca_f = self.opti.variable(2, N+1)
+        self.ca_r = self.opti.variable(2, N+1)
         # Collision Avoidance
+        min_dist = (self.ambMPC.min_dist + self.car2MPC.min_dist)/2.0 
         for k in range(N+1):
-            self.opti.subject_to( cas.sumsqr(self.x_opt[0:2,k] - self.x2_opt[0:2,k]) > min_dist**2 )
-            self.opti.subject_to( cas.sumsqr(self.x_opt[0:2,k] - self.xamb_opt[0:2,k]) > min_dist**2 )
-            self.opti.subject_to( cas.sumsqr(self.x2_opt[0:2,k] - self.xamb_opt[0:2,k]) > min_dist**2 )
+            # center_offset
+            self.c1_f[:,k] = self.x_opt[0:2,k] + 1.6 * cas.vertcat(cas.cos(self.x_opt[2,k]), cas.sin(self.x_opt[2,k])) 
+            self.c1_r[:,k] = self.x_opt[0:2,k] - 1.6 * cas.vertcat(cas.cos(self.x_opt[2,k]), cas.sin(self.x_opt[2,k])) 
+
+            self.c2_f[:,k] = self.x2_opt[0:2,k] + 1.6 * cas.vertcat(cas.cos(self.x2_opt[2,k]), cas.sin(self.x2_opt[2,k])) 
+            self.c2_r[:,k] = self.x2_opt[0:2,k] - 1.6 * cas.vertcat(cas.cos(self.x2_opt[2,k]), cas.sin(self.x2_opt[2,k])) 
+
+            self.ca_f[:,k] = self.xamb_opt[0:2,k] + 1.6 * cas.vertcat(cas.cos(self.xamb_opt[2,k]), cas.sin(self.xamb_opt[2,k])) 
+            self.ca_r[:,k] = self.xamb_opt[0:2,k] - 1.6 * cas.vertcat(cas.cos(self.xamb_opt[2,k]), cas.sin(self.xamb_opt[2,k])) 
+            # Car 1 -> Car2, Amb
+            self.opti.subject_to( cas.sumsqr(self.c1_f[:,k] - self.c2_f[:,k]) > min_dist**2 - self.slack_vars_list[0][0,k])
+            self.opti.subject_to( cas.sumsqr(self.c1_f[:,k] - self.c2_r[:,k]) > min_dist**2 - self.slack_vars_list[1][0,k])
+            self.opti.subject_to( cas.sumsqr(self.c1_f[:,k] - self.ca_f[:,k]) > min_dist**2 - self.slack_vars_list[2][0,k])
+            self.opti.subject_to( cas.sumsqr(self.c1_f[:,k] - self.ca_r[:,k]) > min_dist**2 - self.slack_vars_list[3][0,k])
+
+            self.opti.subject_to( cas.sumsqr(self.c1_r[:,k] - self.c2_f[:,k]) > min_dist**2 - self.slack_vars_list[4][0,k])
+            self.opti.subject_to( cas.sumsqr(self.c1_r[:,k] - self.c2_r[:,k]) > min_dist**2 - self.slack_vars_list[5][0,k])
+            self.opti.subject_to( cas.sumsqr(self.c1_r[:,k] - self.ca_f[:,k]) > min_dist**2 - self.slack_vars_list[6][0,k])
+            self.opti.subject_to( cas.sumsqr(self.c1_r[:,k] - self.ca_r[:,k]) > min_dist**2 - self.slack_vars_list[7][0,k])
+
+            # Car 2 -> Amb
+            self.opti.subject_to( cas.sumsqr(self.c2_f[:,k] - self.ca_f[:,k]) > min_dist**2 - self.slack_vars_list[8][0,k])
+            self.opti.subject_to( cas.sumsqr(self.c2_f[:,k] - self.ca_r[:,k]) > min_dist**2 - self.slack_vars_list[9][0,k])
+            self.opti.subject_to( cas.sumsqr(self.c2_r[:,k] - self.ca_f[:,k]) > min_dist**2 - self.slack_vars_list[10][0,k])
+            self.opti.subject_to( cas.sumsqr(self.c2_r[:,k] - self.ca_r[:,k]) > min_dist**2 - self.slack_vars_list[11][0,k])
+
+        for slack in self.slack_vars_list:
+            self.opti.subject_to(slack <= .1)
+        # # Collision Avoidance
+        # for k in range(N+1):
+        #     self.opti.subject_to( cas.sumsqr(self.x_opt[0:2,k] - self.x2_opt[0:2,k]) > min_dist**2 )
+        #     self.opti.subject_to( cas.sumsqr(self.x_opt[0:2,k] - self.xamb_opt[0:2,k]) > min_dist**2 )
+        #     self.opti.subject_to( cas.sumsqr(self.x2_opt[0:2,k] - self.xamb_opt[0:2,k]) > min_dist**2 )
 
         self.opti.set_value(p, x0)
         self.opti.set_value(p2, x0_2)
@@ -299,21 +424,22 @@ class OptimizationMPC():
             slack_vars = [self.opti.variable(1, N+1) for i in range(number_slack_vars)]
             for slack in slack_vars:
                 self.opti.subject_to(slack>=0)
+                # self.opti.subject_to(slack<=1.0)
         else:
             slack_vars = [self.opti.parameter(1, N+1) for i in range(number_slack_vars)]
             for slack in slack_vars:
                 self.opti.set_value(slack, np.zeros((1,N+1)))
         return slack_vars
 
-
 class IterativeBestResponseMPC(OptimizationMPC):
     ### We always assume that car1 is the one being optimized
     def __init__(self, car1MPC, car2MPC, ambMPC):
         OptimizationMPC.__init__(self, car1MPC, car2MPC, ambMPC)      
         self.min_dist = 2 * 1.5   # 2 times the radius of 1.5
-      
+        self.k_slack = 9999
 
-    def generate_optimization(self, N, fd, T, x0, x0_2, x0_amb, print_level=5, slack=True):
+
+    def generate_optimization(self, N, T, x0, x0_2, x0_amb, print_level=5, slack=True):
 
         # t_amb_goal = self.opti.variable()
         n_state, n_ctrl = 6, 2
@@ -358,7 +484,7 @@ class IterativeBestResponseMPC(OptimizationMPC):
 
         #constraints
         self.car1MPC.add_dynamics_constraints(self.opti, self.x_opt, self.u_opt, self.x_desired, p)
-        self.car1MPC.add_state_constraints(self.opti, self.x_opt, self.u_opt, self.x_desired, T)
+        self.car1MPC.add_state_constraints(self.opti, self.x_opt, self.u_opt, self.x_desired, T, x0)
 
         self.car2MPC.add_dynamics_constraints(self.opti, self.x2_opt, self.u2_opt, self.x2_desired, p2)
         self.ambMPC.add_dynamics_constraints(self.opti, self.xamb_opt, self.uamb_opt, self.xamb_desired, pamb)
@@ -371,38 +497,41 @@ class IterativeBestResponseMPC(OptimizationMPC):
         self.c2_r = self.opti.variable(2, N+1)
         self.ca_f = self.opti.variable(2, N+1)
         self.ca_r = self.opti.variable(2, N+1)
+
+        c1_circles = [self.c1_r, self.c1_f]
+        c2_circles = [self.c2_r, self.c2_f]
+        ca_circles = [self.ca_r, self.ca_f]
+
         # Collision Avoidance
         min_dist = self.min_dist 
         for k in range(N+1):
             # center_offset
-            self.c1_f[:,k] = self.x_opt[0:2,k] + 1.6 * cas.vertcat(cas.cos(self.x_opt[2,k]), cas.sin(self.x_opt[2,k])) 
-            self.c1_r[:,k] = self.x_opt[0:2,k] - 1.6 * cas.vertcat(cas.cos(self.x_opt[2,k]), cas.sin(self.x_opt[2,k])) 
 
-            self.c2_f[:,k] = self.x2_opt[0:2,k] + 1.6 * cas.vertcat(cas.cos(self.x2_opt[2,k]), cas.sin(self.x2_opt[2,k])) 
-            self.c2_r[:,k] = self.x2_opt[0:2,k] - 1.6 * cas.vertcat(cas.cos(self.x2_opt[2,k]), cas.sin(self.x2_opt[2,k])) 
+            self.c1_r[:,k], self.c1_f[:,k] = self.car1MPC.get_car_circles(self.x_opt[:,k]) 
+            self.c2_r[:,k], self.c2_f[:,k] = self.car2MPC.get_car_circles(self.x2_opt[:,k]) 
+            self.ca_r[:,k], self.ca_f[:,k] = self.ambMPC.get_car_circles(self.xamb_opt[:,k]) 
+            i=0
+            for c1_circle in c1_circles:
+                for c_other_circle in c2_circles+ca_circles:
+                    self.opti.subject_to(cas.sumsqr(c1_circle[:,k] - c_other_circle[:,k]) > min_dist**2 - self.slack_vars_list[i][0,k])
+                    i+=1
 
-            self.ca_f[:,k] = self.xamb_opt[0:2,k] + 1.6 * cas.vertcat(cas.cos(self.xamb_opt[2,k]), cas.sin(self.xamb_opt[2,k])) 
-            self.ca_r[:,k] = self.xamb_opt[0:2,k] - 1.6 * cas.vertcat(cas.cos(self.xamb_opt[2,k]), cas.sin(self.xamb_opt[2,k])) 
-            
-            self.opti.subject_to( cas.sumsqr(self.c1_f[:,k] - self.c2_f[:,k]) > min_dist**2 - self.slack_vars_list[0][0,k])
-            self.opti.subject_to( cas.sumsqr(self.c1_f[:,k] - self.c2_r[:,k]) > min_dist**2 - self.slack_vars_list[1][0,k])
-            self.opti.subject_to( cas.sumsqr(self.c1_f[:,k] - self.ca_f[:,k]) > min_dist**2 - self.slack_vars_list[2][0,k])
-            self.opti.subject_to( cas.sumsqr(self.c1_f[:,k] - self.ca_r[:,k]) > min_dist**2 - self.slack_vars_list[3][0,k])
+            # self.opti.subject_to( cas.sumsqr(self.c1_f[:,k] - self.c2_f[:,k]) > min_dist**2 - self.slack_vars_list[0][0,k])
+            # self.opti.subject_to( cas.sumsqr(self.c1_f[:,k] - self.c2_r[:,k]) > min_dist**2 - self.slack_vars_list[1][0,k])
+            # self.opti.subject_to( cas.sumsqr(self.c1_f[:,k] - self.ca_f[:,k]) > min_dist**2 - self.slack_vars_list[2][0,k])
+            # self.opti.subject_to( cas.sumsqr(self.c1_f[:,k] - self.ca_r[:,k]) > min_dist**2 - self.slack_vars_list[3][0,k])
 
-            self.opti.subject_to( cas.sumsqr(self.c1_r[:,k] - self.c2_f[:,k]) > min_dist**2 - self.slack_vars_list[4][0,k])
-            self.opti.subject_to( cas.sumsqr(self.c1_r[:,k] - self.c2_r[:,k]) > min_dist**2 - self.slack_vars_list[5][0,k])
-            self.opti.subject_to( cas.sumsqr(self.c1_r[:,k] - self.ca_f[:,k]) > min_dist**2 - self.slack_vars_list[6][0,k])
-            self.opti.subject_to( cas.sumsqr(self.c1_r[:,k] - self.ca_r[:,k]) > min_dist**2 - self.slack_vars_list[7][0,k])
-            # self.opti.subject_to( cas.sumsqr(self.x_opt[0:2,k] - self.x2_opt[0:2,k]) > min_dist**2 - self.slack1[0,k])
-            # self.opti.subject_to( cas.sumsqr(self.x_opt[0:2,k] - self.x2_opt[0:2,k]) > min_dist**2 - self.slack1[0,k])
-            # self.opti.subject_to( cas.sumsqr(self.x_opt[0:2,k] - self.x2_opt[0:2,k]) > min_dist**2 - self.slack1[0,k])
-            # self.opti.subject_to( cas.sumsqr(self.x_opt[0:2,k] - self.x2_opt[0:2,k]) > min_dist**2 - self.slack1[0,k])
-            # self.opti.subject_to( cas.sumsqr(self.x_opt[0:2,k] - self.xamb_opt[0:2,k]) > min_dist**2 - self.slack2[0,k])
+            # self.opti.subject_to( cas.sumsqr(self.c1_r[:,k] - self.c2_f[:,k]) > min_dist**2 - self.slack_vars_list[4][0,k])
+            # self.opti.subject_to( cas.sumsqr(self.c1_r[:,k] - self.c2_r[:,k]) > min_dist**2 - self.slack_vars_list[5][0,k])
+            # self.opti.subject_to( cas.sumsqr(self.c1_r[:,k] - self.ca_f[:,k]) > min_dist**2 - self.slack_vars_list[6][0,k])
+            # self.opti.subject_to( cas.sumsqr(self.c1_r[:,k] - self.ca_r[:,k]) > min_dist**2 - self.slack_vars_list[7][0,k])
+
 
         self.opti.set_value(p, x0)
         self.opti.set_value(p2, x0_2)
         self.opti.set_value(pamb, x0_amb) 
-        self.opti.solver('ipopt',{'warn_initial_bounds':True},{'print_level':print_level, 'max_iter':5000})
+        self.opti.solver('ipopt',{'warn_initial_bounds':True},{'print_level':print_level, 'max_iter':10000})
+
 
 
 
@@ -415,18 +544,36 @@ class IterativeBestResponseMPC(OptimizationMPC):
         x1, u1, x1_des, *_, = self.get_solution()
         return x1, u1, x1_des
 
-    # def get_solution(self, x2, u2, x2_desired, xamb, uamb, xamb_desired):
-    #     self.opti.set_value(self.x2_opt, x2)
-    #     self.opti.set_value(self.xamb_opt, xamb)
-    #     self.opti.set_value(self.u2_opt, u2) 
-    #     self.opti.set_value(self.uamb_opt, uamb) 
-    #     self.opti.set_value(self.x2_desired, x2_desired)
-    #     self.opti.set_value(self.xamb_desired, xamb_desired)
-
-    #     self.solution = self.opti.solve()
-    #     x1 = self.solution.value(self.x_opt)
-    #     u1 = self.solution.value(self.u_opt)
-    #     x1_des = self.solution.value(self.x_desired)
 
 
-    #     return 
+def load_state(file_name):
+
+    x1 = np.load(file_name + "x1.npy",allow_pickle=False)
+    u1 = np.load(file_name + "u1.npy",allow_pickle=False)
+    x1_des = np.load(file_name + "x1_des.npy", allow_pickle=False)
+    x2 = np.load(file_name + "x2.npy",allow_pickle=False)
+    u2 = np.load(file_name + "u2.npy",allow_pickle=False)
+    x2_des = np.load(file_name + "x2_des.npy",allow_pickle=False)
+    xamb = np.load(file_name + "xamb.npy",allow_pickle=False)
+    uamb = np.load(file_name + "uamb.npy",allow_pickle=False)
+    xamb_des = np.load(file_name + "xamb_des.npy",allow_pickle=False)
+
+    return x1, u1, x1_des, x2, u2, x2_des, xamb, uamb, xamb_des
+    
+
+
+def save_state(file_name, x1, u1, x1_des, x2, u2, x2_des, xamb, uamb, xamb_des):
+
+    np.save(file_name + "x1", x1,allow_pickle=False)
+    np.save(file_name + "u1", u1,allow_pickle=False)
+    np.save(file_name + "x1_des", x1_des, allow_pickle=False)
+    np.save(file_name + "x2", x2,allow_pickle=False)
+    np.save(file_name + "u2", u2,allow_pickle=False)
+    np.save(file_name + "x2_des", x2_des, allow_pickle=False)
+    np.save(file_name + "xamb", xamb,allow_pickle=False)
+    np.save(file_name + "uamb", uamb,allow_pickle=False)
+    np.save(file_name + "xamb_des", xamb_des, allow_pickle=False)
+    return file_name
+
+
+

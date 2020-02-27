@@ -9,19 +9,18 @@ class TrafficWorld():
         self.n_lanes_left = n_lanes_left
         self.n_lanes = self.n_lanes_left + self.n_lanes_right
 
+        self.grass_width = self.lane_width/4.0
 
         self.total_height = self.get_window_height()
         
-        self.y_min = 0 - 1.5*self.lane_width
-        self.y_max = 0 + (1 - 0.5 + self.n_lanes) * self.lane_width
-        self.x_min = 0 - self.lane_width # NO REAL GOOD REASON
+        self.y_min = -0.5*self.lane_width - self.grass_width
+        self.y_max = (- 0.5 + self.n_lanes) * self.lane_width + self.grass_width
+        self.x_min = - self.lane_width # NO REAL GOOD REASON
         self.x_max = x_max
 
 
     def get_window_height(self):
-        n_lanes_wgrass = self.n_lanes + 2
-        total_height = n_lanes_wgrass * self.lane_width
-        return total_height    
+        return 2*self.grass_width + self.n_lanes * self.lane_width 
 
     def get_lane_centerline_y(self, lane_number, right_direction=True):
         # count starts at 0
@@ -34,14 +33,14 @@ class TrafficWorld():
 
     def get_bottom_grass_y(self):
         y_bottom = self.y_min
-        y_top = self.y_min + self.lane_width
-        y_center = self.y_min + self.lane_width/2.0
+        y_top = self.y_min + self.grass_width
+        y_center = self.y_min + self.grass_width/2.0
         return y_bottom, y_center, y_top
 
     def get_top_grass_y(self):
         y_top = self.y_max
-        y_bottom = self.y_max - self.lane_width
-        y_center = (y_top + y_bottom)/2.0
+        y_bottom = self.y_max - self.grass_width
+        y_center = self.y_max - self.grass_width/2.0
         return y_bottom, y_center, y_top    
 
 
