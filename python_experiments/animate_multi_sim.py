@@ -28,18 +28,19 @@ if __name__ == "__main__":
 
 
     subdirectory_list = [
-        "20200227_133704less_kxdotlarger",
-        "20200227_141954pi2_5altru",
-        "20200227_142916pi_01_ego",
-        "20200227_143225pi4_pulloversame",
-        "20200227_143315pi2_5pulloversame",
-        "20200227_145744pi2_5_nograss",
-        "20200227_145800pi4_nograss",
-        "20200227_145922pi_5dnograss",
-        "20200227_161307pi4dnograss_slack",
-        "20200227_16521120200227_161307pi4nograss2",
-        "20200227_16523520200227_161307pi25altrunograss2",
-        "20200227_16533320200227_161307pi5degaltrunograss2",
+"20200228_113921TESTrandom_prorandom_i",        
+        # "20200227_133704less_kxdotlarger",
+        # "20200227_141954pi2_5altru",
+        # "20200227_142916pi_01_ego",
+        # "20200227_143225pi4_pulloversame",
+        # "20200227_143315pi2_5pulloversame",
+        # "20200227_145744pi2_5_nograss",
+        # "20200227_145800pi4_nograss",
+        # "20200227_145922pi_5dnograss",
+        # "20200227_161307pi4dnograss_slack",
+        # "20200227_16521120200227_161307pi4nograss2",
+        # "20200227_16523520200227_161307pi25altrunograss2",
+        # "20200227_16533320200227_161307pi5degaltrunograss2",
         # "20200227_165619constantV",
         # "20200227_170553constantHighSlack",
         # "20200227_171438constantVlargerLane",
@@ -50,7 +51,7 @@ if __name__ == "__main__":
     for subdir_name in subdirectory_list:
         # subdir_name = "20200227_170553constantHighSlack"
         folder = "results/" + subdir_name + "/"
-        PLOT_ALL = False
+        PLOT_ALL = True
         CIRCLES = True
         dt = 0.1
         x_MPC = mpc.MPC(dt)
@@ -61,7 +62,7 @@ if __name__ == "__main__":
 
 
         n_other_cars = 4
-        for ibr_sub_it_plot in range(1,200): 
+        for ibr_sub_it_plot in range(1,10): 
             gc.collect()
             # for ibr_sub_it in range(1, 40):
             if (ibr_sub_it_plot % (n_other_cars+1)) == 1:

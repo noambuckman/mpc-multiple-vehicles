@@ -2,9 +2,9 @@
 import numpy as np
 
 class TrafficWorld():
-    def __init__(self, n_lanes_right, n_lanes_left, x_max):
+    def __init__(self, n_lanes_right, n_lanes_left, x_max, lane_width=3.7):
         
-        self.lane_width = 3.7 #m avg lane width
+        self.lane_width = lane_width #m avg lane width
         self.n_lanes_right = n_lanes_right
         self.n_lanes_left = n_lanes_left
         self.n_lanes = self.n_lanes_left + self.n_lanes_right
