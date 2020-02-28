@@ -18,29 +18,62 @@ import src.MPC_Casadi as mpc
 import src.car_plotting as cplot
 import src.TrafficWorld as tw
 np.set_printoptions(precision=2)
+import src.IterativeBestResponseMPCMultiple as mibr
 
 
-subdir_name = "20200224-223223maxiter9999"
+subdir_name = "20200227_16523520200227_161307pi25altrunograss2"
 folder = "results/" + subdir_name + "/"
 ################ Analyze Results
 
-fig, ax = plt.subplots(5,1)
-fig.set_figheight(12)
-fig.set_figwidth(12)
-ax_t = ax[0]
-ax_u0 = ax[1]
-ax_u1 = ax[2]
-ax_usum = ax[3]
-ax_xmax = ax[4]
+fig_t, ax_t = plt.subplots(1,1)
+fig_t.set_figheight(12)
+fig_t.set_figwidth(12)
+# ax_t = ax[0
 
-all_amb = np.zeros((6,101, 16))
-all_x1 = np.zeros((6,101, 16))
-all_x2 = np.zeros((6,101, 16))
+fig_u, ax_u = plt.subplots(1,3)
+fig_u.set_figheight(12)
+fig_u.set_figwidth(12)
+
+ax_u0 = ax_u[0]
+ax_u1 = ax_u[1]
+ax_usum = ax_u[2]
+
+fig_max, ax_xmax = plt.subplots(1,1)
+
+
+# ax_xmax = ax_xma[4]
+
+rounds_ibr = 32
+n_other = 4
+
+
+
+n_full_rounds = int((rounds_ibr - 1)/(n_other+1))
+
+
+N = 51
+all_amb = np.zeros((6,N, rounds_ibr))
+all_x1 = np.zeros((6,N, rounds_ibr))
+all_x2 = np.zeros((6,N, rounds_ibr))
+
+
+# Here's the final answer
+last_amb_ibr =1 + n_full_rounds*(n_other + 1)
+ibr_prefix =  'data/' + '%03d'%last_amb_ibr
+xamb, uamb, xamb_des, xothers, uothers, xothers_des = mibr.load_state(folder + "data/" + ibr_prefix, n_other_cars)
+
+for r in range(1, n_full_rounds+1):
+    # Here's the final answer
+    amb_ibr = 1 + r*(n_other + 1)
+    ibr_prefix =  'data/' + '%03d'%amb_ibr
+    xamb, uamb, xamb_des, xothers, uothers, xothers_des = mibr.load_state(folder + "data/" + ibr_prefix, n_other_cars)
+    all_amb[:,:,r-1] = xamb
+
 
 
 
 initial = True
-for ibr_sub_it in range(1, 47):
+for ibr_i in range(1, rounds_ibr):
     if (ibr_sub_it % 3) == 0:
         response_car = "1"
     elif (ibr_sub_it % 3) == 1:
@@ -73,8 +106,10 @@ for ibr_sub_it in range(1, 47):
         all_x2[:,:,int(ibr_sub_it/3)] = x2        
         
 
+ax_t.set_title(['Ambulance Trajectories'])
 ax_t.set_ylabel('y [m]')
 ax_t.set_xlabel('x [m]')
+
 
 ax_u0.set_ylabel('u0')
 ax_u0.set_xlabel('t [100ms]')

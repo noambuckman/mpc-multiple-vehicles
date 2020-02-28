@@ -20,7 +20,7 @@ np.set_printoptions(precision=2)
 
 NEW = True
 if NEW:
-    optional_suffix = "20200227_161307pi5degaltrunograss2"
+    optional_suffix = "constantVSlackBigLane"
     subdir_name = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + optional_suffix
     folder = "results/" + subdir_name + "/"
     os.makedirs(folder)
@@ -38,7 +38,8 @@ print(folder)
 T = 10
 dt = 0.2
 N = int(T/dt) #Number of control intervals
-world = tw.TrafficWorld(2, 0, 1000)
+large_lane = 4.2
+world = tw.TrafficWorld(2, 0, 1000, large_lane)
 n_other = 4
 
 
@@ -88,11 +89,11 @@ for i in range(n_other):
     x0 = np.array([next_x0, world.get_lane_centerline_y(lane_number), 0, 0, initial_speed, 0]).T
     u1 = np.zeros((2,N))
     # u1[0,:] = np.clip(np.pi/180 *np.random.normal(size=(1,N)), -2 * np.pi/180, 2 * np.pi/180)
-    SAME_SIDE = False
-    if lane_number == 1 or SAME_SIDE:
-        u1[0,0] = 2 * np.pi/180
-    else:
-        u1[0,0] = -2 * np.pi/180
+    # SAME_SIDE = False
+    # if lane_number == 1 or SAME_SIDE:
+    #     u1[0,0] = 2 * np.pi/180
+    # else:
+    #     u1[0,0] = -2 * np.pi/180
     all_other_MPC += [x1_MPC]
     all_other_x0 += [x0]
     all_other_u += [u1]    
@@ -145,7 +146,8 @@ for n_round in range(n_total_round):
     nonresponse_u_list = all_other_u
     bri = mibr.IterativeBestResponseMPCMultiple(response_MPC, None, nonresponse_MPC_list )
     bri.k_slack = 9999
-    bri.generate_optimization(N, T, response_x0, None, nonresponse_x0_list,  1, slack=True)
+    bri.generate_optimization(N, T, response_x0, None, nonresponse_x0_list,  5, slack=True)
+    bri.opti.subject_to( bri.slack_cost <= 50)
     if WARM and (xamb is not None):
         bri.opti.set_initial(bri.x_opt, xamb)
     try:
@@ -157,9 +159,9 @@ for n_round in range(n_total_round):
         
         print("n_round %d i %02d Cost %.02f Slack %.02f "%(n_round, i, bri.solution.value(bri.total_svo_cost), bri.solution.value(bri.slack_cost)))
         print("Dir:", subdir_name)
+        uamb = u1
+        xamb = x1        
         if bri.solution.value(bri.slack_cost) <= min_slack:
-            uamb = u1
-            xamb = x1
             # all_other_u[i] = u1
             file_name = folder + "data/"+'%03d'%ibr_sub_it
             mibr.save_state(file_name, x1, u1, x1_des, other_x, other_u, other_des)
@@ -171,49 +173,49 @@ for n_round in range(n_total_round):
         runtimeerrors += 1                
     ibr_sub_it +=1
 
-    for i in range(len(all_other_MPC)):
-        response_MPC = all_other_MPC[i]
-        response_x0 = all_other_x0[i]
+    # for i in range(len(all_other_MPC)):
+    #     response_MPC = all_other_MPC[i]
+    #     response_x0 = all_other_x0[i]
 
-        nonresponse_MPC_list = all_other_MPC[:i] + all_other_MPC[i+1:]
-        nonresponse_x0_list = all_other_x0[:i] + all_other_x0[i+1:]
+    #     nonresponse_MPC_list = all_other_MPC[:i] + all_other_MPC[i+1:]
+    #     nonresponse_x0_list = all_other_x0[:i] + all_other_x0[i+1:]
 
-        # all_other_u changes over time
-        nonresponse_u_list = all_other_u[:i] + all_other_u[i+1:]
+    #     # all_other_u changes over time
+    #     nonresponse_u_list = all_other_u[:i] + all_other_u[i+1:]
 
-        bri = mibr.IterativeBestResponseMPCMultiple(response_MPC, amb_MPC, nonresponse_MPC_list )
-        bri.k_slack = 9999
+    #     bri = mibr.IterativeBestResponseMPCMultiple(response_MPC, amb_MPC, nonresponse_MPC_list )
+    #     bri.k_slack = 9999
 
-        bri.generate_optimization(N, T, response_x0, x0_amb, nonresponse_x0_list,  1, slack=True)
+    #     bri.generate_optimization(N, T, response_x0, x0_amb, nonresponse_x0_list,  1, slack=True)
           
-        try:
-            if WARM:
-                bri.opti.set_initial(bri.x_opt, xothers[i])
-                bri.opti.set_initial(bri.u_opt, uothers[i])
+    #     try:
+    #         if WARM:
+    #             bri.opti.set_initial(bri.x_opt, xothers[i])
+    #             bri.opti.set_initial(bri.u_opt, uothers[i])
 
-            bri.solve(uamb, nonresponse_u_list)
-            x1, u1, x1_des, xamb, uamb, xamb_des, other_x, other_u, other_des = bri.get_solution()
-            print("n_round %d  i %02d Cost %.02f Slack %.02f "%(n_round, i, bri.solution.value(bri.total_svo_cost), bri.solution.value(bri.slack_cost)))
-            print("Dir:", subdir_name)
+    #         bri.solve(uamb, nonresponse_u_list)
+    #         x1, u1, x1_des, xamb, uamb, xamb_des, other_x, other_u, other_des = bri.get_solution()
+    #         print("n_round %d  i %02d Cost %.02f Slack %.02f "%(n_round, i, bri.solution.value(bri.total_svo_cost), bri.solution.value(bri.slack_cost)))
+    #         print("Dir:", subdir_name)
 
-            if bri.solution.value(bri.slack_cost) <= min_slack:
-                # Update the responder
-                all_other_u[i] = u1
+    #         if bri.solution.value(bri.slack_cost) <= min_slack:
+    #             # Update the responder
+    #             all_other_u[i] = u1
                 
-                #for saving
-                xothers = other_x[:i] + [x1] + other_x[i:]
-                uothers = other_u[:i] + [u1] + other_u[i:]
-                xothers_des = other_des[:i] + [x1_des] + other_des[i:]
+    #             #for saving
+    #             xothers = other_x[:i] + [x1] + other_x[i:]
+    #             uothers = other_u[:i] + [u1] + other_u[i:]
+    #             xothers_des = other_des[:i] + [x1_des] + other_des[i:]
 
-                file_name = folder + "data/"+'%03d'%ibr_sub_it
-                mibr.save_state(file_name, xamb, xamb, xamb_des, xothers, uothers, xothers_des)
-                mibr.save_costs(file_name, bri)
-            else: 
-                print("Slack too large")    
-            ibr_sub_it+=1
-        except RuntimeError:
-            print("Max Iterations or Infeasible")
-            runtimeerrors += 1         
+    #             file_name = folder + "data/"+'%03d'%ibr_sub_it
+    #             mibr.save_state(file_name, xamb, xamb, xamb_des, xothers, uothers, xothers_des)
+    #             mibr.save_costs(file_name, bri)
+    #         else: 
+    #             print("Slack too large")    
+    #         ibr_sub_it+=1
+    #     except RuntimeError:
+    #         print("Max Iterations or Infeasible")
+    #         runtimeerrors += 1         
 
    
     # if WARM:
