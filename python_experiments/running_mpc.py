@@ -129,15 +129,18 @@ actual_xamb[:,0] = x0_amb
 
 actual_all_other_x0 = [np.zeros((6, 2*N)) for i in range(n_other)]
 
-for t_mpc in range(actual_xamb.shape[1]):
-    x0_amb = actual_xamb[:,t_mpc + 5]
+n_rounds_mpc = int(2*N/5)
+
+for i_mpc in range(n_rounds_mpc):
+    t_mpc_0 = i_mpc * 5
+    x0_amb = actual_xamb[:,t_mpc_0]
     print("Initial",x0_amb)
     if t_mpc > 0:
         uamb[:,:-1-5] = uamb[:,1+5:]
     print(actual_xamb)
     for i in range(len(all_other_x0)):
-        all_other_x0[i] = actual_all_other_x0[i][:,t_mpc + 5]
-        if t_mpc > 0:
+        all_other_x0[i] = actual_all_other_x0[i][:,t_mpc_0]
+        if t_mpc_0 > 0:
             all_other_u[i][:,:-1-5] = all_other_u[i][:,1+5:]
 
     WARM = True
@@ -234,10 +237,10 @@ for t_mpc in range(actual_xamb.shape[1]):
                 print("Max Iterations or Infeasible")
                 runtimeerrors += 1         
 
-    actual_xamb[:,t_mpc+1:t_mpc+1+1+5]  = xamb[:,1:1+1+5] # SAVE THE NEW INITIAL STATES
+    actual_xamb[:,t_mpc_0:t_mpc_0+1+5]  = xamb[:,:5+1] # SAVE THE NEW INITIAL STATES
     for i in range(len(all_other_x0)):
-            actual_all_other_x0[i][:,t_mpc+1:t_mpc+1+1+5] = xothers[i][:,1:1+1+5]                   
+        actual_all_other_x0[i][:,t_mpc_0:t_mpc_0+1+5] = xothers[i][:,:1+5]                   
         ##I'm actually saving all the x at each time step
         # mibr.save_state("RunningMPC%03d"%t_mpc + file_name, x1, u1, x1_des, other_x, other_u, other_des)
-    mibr.save_state(file_name + "RunningMPC%03d"%t_mpc, xamb, xamb, xamb_des, xothers, uothers, xothers_des)
-    print("MPC RD", t_mpc,actual_xamb[:,t_mpc+1+5])
+    mibr.save_state(file_name + "RunningMPC%03d"%t_mpc_0, xamb, xamb, xamb_des, xothers, uothers, xothers_des)
+    print("MPC RD", t_mpc_0,actual_xamb[:,t_mpc_0:t_mpc_0+1+5])
