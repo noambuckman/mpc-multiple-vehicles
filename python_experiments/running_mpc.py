@@ -124,10 +124,10 @@ uamb = np.zeros((2,N))
 uamb[0,:] = np.clip(np.pi/180 * np.random.normal(size=(1,N)), -2 * np.pi/180, 2 * np.pi/180)
 
 ibr_sub_it=1
-actual_xamb = np.zeros((6, 5*N))
+actual_xamb = np.zeros((6, 2*N))
 actual_xamb[:,0] = x0_amb
 
-actual_all_other_x0 = [np.zeros((6, 5*N)) for i in range(n_other)]
+actual_all_other_x0 = [np.zeros((6, 2*N)) for i in range(n_other)]
 
 for t_mpc in range(actual_xamb.shape[1]):
     x0_amb = actual_xamb[:,t_mpc]
@@ -141,7 +141,7 @@ for t_mpc in range(actual_xamb.shape[1]):
             all_other_u[i][:,:-1] = all_other_u[i][:,1:]
 
     WARM = True
-    n_total_round = 9
+    n_total_round = 3
     ibr_sub_it = 1
     runtimeerrors = 0
     min_slack = 100000.0
