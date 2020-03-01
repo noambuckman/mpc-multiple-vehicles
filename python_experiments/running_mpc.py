@@ -234,10 +234,10 @@ for t_mpc in range(actual_xamb.shape[1]):
                 print("Max Iterations or Infeasible")
                 runtimeerrors += 1         
 
-        actual_xamb[:,t_mpc+1]  = xamb[:,1] # SAVE THE NEW INITIAL STATES
-        for i in range(len(all_other_x0)):
+    actual_xamb[:,t_mpc+1]  = xamb[:,1] # SAVE THE NEW INITIAL STATES
+    for i in range(len(all_other_x0)):
             actual_all_other_x0[i][:,t_mpc+1] = xothers[i][:,1]                   
         ##I'm actually saving all the x at each time step
         # mibr.save_state("RunningMPC%03d"%t_mpc + file_name, x1, u1, x1_des, other_x, other_u, other_des)
-        mibr.save_state(file_name + "RunningMPC%03d"%t_mpc, xamb, xamb, xamb_des, xothers, uothers, xothers_des)
-        print("MPC RD", t_mpc,actual_xamb[:,t_mpc+1])
+    mibr.save_state(file_name + "RunningMPC%03d"%t_mpc, xamb, xamb, xamb_des, xothers, uothers, xothers_des)
+    print("MPC RD", t_mpc,actual_xamb[:,t_mpc+1])
