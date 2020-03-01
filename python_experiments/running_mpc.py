@@ -124,16 +124,17 @@ uamb = np.zeros((2,N))
 uamb[0,:] = np.clip(np.pi/180 * np.random.normal(size=(1,N)), -2 * np.pi/180, 2 * np.pi/180)
 
 ibr_sub_it=1
-actual_xamb = np.array((6, 10*N))
+actual_xamb = np.zeros((6, 5*N))
 actual_xamb[:,0] = x0_amb
 
-actual_all_other_x0 = [np.array((6, 10*N)) for i in range(n_other)]
+actual_all_other_x0 = [np.zeros((6, 5*N)) for i in range(n_other)]
 
 for t_mpc in range(actual_xamb.shape[1]):
     x0_amb = actual_xamb[:,t_mpc]
+    print("Initial",x0_amb)
     if t_mpc > 0:
         uamb[:,:-1] = uamb[:,1:]
-
+    print(actual_xamb)
     for i in range(len(all_other_x0)):
         all_other_x0[i] = actual_all_other_x0[i][:,t_mpc]
         if t_mpc > 0:
@@ -221,7 +222,11 @@ for t_mpc in range(actual_xamb.shape[1]):
                     #for saving
                     xothers = other_x[:i] + [x1] + other_x[i:]
                     uothers = other_u[:i] + [u1] + other_u[i:]
-                    xothers_des = other_des[:i] + [x1_des] + other_des[i:]
+                    xo
+
+
+
+thers_des = other_des[:i] + [x1_des] + other_des[i:]
 
                     file_name = folder + "data/"+'%03d'%ibr_sub_it
                     mibr.save_state(file_name, xamb, xamb, xamb_des, xothers, uothers, xothers_des)
@@ -238,6 +243,5 @@ for t_mpc in range(actual_xamb.shape[1]):
             actual_all_other_x0[i][:,t_mpc+1] = xothers[i][:,1]                   
         ##I'm actually saving all the x at each time step
         # mibr.save_state("RunningMPC%03d"%t_mpc + file_name, x1, u1, x1_des, other_x, other_u, other_des)
-        mibr.save_state("RunningMPC%03d"%t_mpc + file_name, xamb, xamb, xamb_des, xothers, uothers, xothers_des)
+        mibr.save_state(file_name + "RunningMPC%03d"%t_mpc, xamb, xamb, xamb_des, xothers, uothers, xothers_des)
         print("MPC RD", t_mpc,actual_xamb[:,t_mpc+1])
-
