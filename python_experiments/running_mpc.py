@@ -222,11 +222,7 @@ for t_mpc in range(actual_xamb.shape[1]):
                     #for saving
                     xothers = other_x[:i] + [x1] + other_x[i:]
                     uothers = other_u[:i] + [u1] + other_u[i:]
-                    xo
-
-
-
-thers_des = other_des[:i] + [x1_des] + other_des[i:]
+                    xothers_des = other_des[:i] + [x1_des] + other_des[i:]
 
                     file_name = folder + "data/"+'%03d'%ibr_sub_it
                     mibr.save_state(file_name, xamb, xamb, xamb_des, xothers, uothers, xothers_des)
