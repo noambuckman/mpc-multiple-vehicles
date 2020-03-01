@@ -135,7 +135,7 @@ for i_mpc in range(n_rounds_mpc):
     t_mpc_0 = i_mpc * 5
     x0_amb = actual_xamb[:,t_mpc_0]
     print("Initial",x0_amb)
-    if t_mpc > 0:
+    if t_mpc_0 > 0:
         uamb[:,:-1-5] = uamb[:,1+5:]
     print(actual_xamb)
     for i in range(len(all_other_x0)):
