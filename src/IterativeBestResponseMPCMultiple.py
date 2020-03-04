@@ -16,6 +16,7 @@ class IterativeBestResponseMPCMultiple:
         self.opti = cas.Opti()
         self.min_dist = 2 * 1.5   # 2 times the radius of 1.5
         self.k_slack = 99999
+        self.k_CA = 99999
 
 
     def generate_optimization(self, N, T, x0, x0_amb, x0_other, print_level=5, slack=True):
@@ -71,7 +72,6 @@ class IterativeBestResponseMPCMultiple:
 
 
         self.response_svo_cost = np.cos(self.responseMPC.theta_iamb)*self.car1_costs
-        
         self.other_svo_cost = np.sin(self.responseMPC.theta_iamb)*self.amb_costs
         self.total_svo_cost = self.response_svo_cost + self.other_svo_cost + self.k_slack * self.slack_cost
         ######## optimization  ##################################
@@ -97,49 +97,26 @@ class IterativeBestResponseMPCMultiple:
 
         # Proxy for the collision avoidance points on each vehicle
         self.c1_vars = [self.opti.variable(2, N+1) for c in range(self.responseMPC.n_circles)]
-        # self.c1_f = self.opti.variable(2, N+1)
-        # self.c1_r = self.opti.variable(2, N+1)
-        
         if self.ambMPC:  
             ca_vars = [self.opti.variable(2, N+1) for c in range(self.responseMPC.n_circles)]  
 
-        # cother_vars = []
-
         self.other_circles = [[self.opti.variable(2, N+1) for c in range(self.responseMPC.n_circles)] for i in range(len(self.allother_x_opt))]
-        # self.other_rear_circles = [self.opti.variable(2, N+1) for i in range(len(self.allother_x_opt) )] 
 
         # Collision Avoidance
-        # min_dist = self.min_dist 
         for k in range(N+1):
             # center_offset
             centers, response_radius = self.responseMPC.get_car_circles(self.x_opt[:,k]) 
-            # for ci in range(len(centers)):
-            #     self.c1_vars[ci][:,k] = centers[ci]
-            # self.c1_r[:,k], self.c1_f[:,k] = 
-            # c1_centers, min_dist = 
             for c1_circle in centers:
                 for i in range(len(self.allother_x_opt)):
-                    
-                    # other_centers_vars = self.other_rear_circles[i]
                     other_centers, other_radius = self.otherMPClist[i].get_car_circles(self.allother_x_opt[i][:,k])    
                     for ci in range(len(other_centers)):
-                        # print(other_centers[ci].shape)
-                        # print(c1_circle.shape)
-                        dist=c1_circle - other_centers[ci]
-                        # print(dist.shape)
-                        # self.opti.subject_to(cas.sumsqr(c1_circle[:,k] - other_centers[ci][:,k]) > (response_radius + other_radius)**2 - self.slack_vars_list[i][ci,k])
+                        dist = c1_circle - other_centers[ci]
                         self.opti.subject_to(cas.sumsqr(dist) > (response_radius + other_radius)**2 - self.slack_vars_list[i][ci,k])
-
-                    # self.opti.subject_to(cas.sumsqr(c1_circle[:,k] - co_r[:,k]) > min_dist**2 - self.slack_vars_list[i][0,k])
-                    # self.opti.subject_to(cas.sumsqr(c1_circle[:,k] - co_f[:,k]) > min_dist**2 - self.slack_vars_list[i][1,k])
-
                 # Don't forget the ambulance
                 if self.ambMPC:    
                     amb_circles, amb_radius = self.ambMPC.get_car_circles(self.xamb_opt[:,k])    
                     for ci in range(len(amb_circles)):                    
                         self.opti.subject_to(cas.sumsqr(c1_circle - amb_circles[ci]) > (response_radius + amb_radius)**2 - self.slack_amb[ci,k])
-                    # self.opti.subject_to(cas.sumsqr(c1_circle[:,k] - self.ca_f[:,k]) > min_dist**2 - self.slack_amb[1,k])
-
 
         self.opti.set_value(p, x0)
 
@@ -151,9 +128,6 @@ class IterativeBestResponseMPCMultiple:
 
         self.opti.solver('ipopt',{'warn_initial_bounds':True},{'print_level':print_level, 'max_iter':10000})
 
-
-    # def solve(self):
-    #     self.solution = self.opti.solve()
 
     def solve(self, uamb, uother):
 
