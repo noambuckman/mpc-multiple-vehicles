@@ -16,7 +16,8 @@ class IterativeBestResponseMPCMultiple:
         self.opti = cas.Opti()
         self.min_dist = 2 * 1.5   # 2 times the radius of 1.5
         self.k_slack = 99999
-        self.k_CA = 99999
+        self.k_CA = 0
+        self.collision_cost = 0
 
 
     def generate_optimization(self, N, T, x0, x0_amb, x0_other, print_level=5, slack=True):
@@ -73,7 +74,7 @@ class IterativeBestResponseMPCMultiple:
 
         self.response_svo_cost = np.cos(self.responseMPC.theta_iamb)*self.car1_costs
         self.other_svo_cost = np.sin(self.responseMPC.theta_iamb)*self.amb_costs
-        self.total_svo_cost = self.response_svo_cost + self.other_svo_cost + self.k_slack * self.slack_cost
+        self.total_svo_cost = self.response_svo_cost + self.other_svo_cost + self.k_slack * self.slack_cost + self.k_CA * self.collision_cost
         ######## optimization  ##################################
         
         self.opti.minimize(self.total_svo_cost)    
@@ -101,7 +102,7 @@ class IterativeBestResponseMPCMultiple:
             ca_vars = [self.opti.variable(2, N+1) for c in range(self.responseMPC.n_circles)]  
 
         self.other_circles = [[self.opti.variable(2, N+1) for c in range(self.responseMPC.n_circles)] for i in range(len(self.allother_x_opt))]
-
+        self.collision_cost = 0
         # Collision Avoidance
         for k in range(N+1):
             # center_offset
@@ -110,13 +111,19 @@ class IterativeBestResponseMPCMultiple:
                 for i in range(len(self.allother_x_opt)):
                     other_centers, other_radius = self.otherMPClist[i].get_car_circles(self.allother_x_opt[i][:,k])    
                     for ci in range(len(other_centers)):
-                        dist = c1_circle - other_centers[ci]
-                        self.opti.subject_to(cas.sumsqr(dist) > (response_radius + other_radius)**2 - self.slack_vars_list[i][ci,k])
+                        dist_sqr = cas.sumsqr(c1_circle - other_centers[ci])
+                        self.opti.subject_to(dist_sqr - (response_radius + other_radius)**2 > 0 - self.slack_vars_list[i][ci,k])
+                        dist_btw_object = cas.sqrt(dist_sqr) - 1.1*(response_radius + other_radius)
+
+                        self.collision_cost += 1/dist_btw_object**4
                 # Don't forget the ambulance
                 if self.ambMPC:    
                     amb_circles, amb_radius = self.ambMPC.get_car_circles(self.xamb_opt[:,k])    
                     for ci in range(len(amb_circles)):                    
                         self.opti.subject_to(cas.sumsqr(c1_circle - amb_circles[ci]) > (response_radius + amb_radius)**2 - self.slack_amb[ci,k])
+                        dist_btw_object = cas.sqrt(cas.sumsqr(c1_circle - amb_circles[ci])) - 1.1*(response_radius + amb_radius)
+                        self.collision_cost += 1/dist_btw_object**4
+                        
 
         self.opti.set_value(p, x0)
 
