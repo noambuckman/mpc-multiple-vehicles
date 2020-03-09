@@ -49,7 +49,7 @@ class MPC:
         self.min_y = -np.infty
 
         self.max_X_dev = np.infty
-        self.max_Y_dev = 10.0        
+        self.max_Y_dev = np.infty        
 
         self.f = self.gen_f_vehicle_dynamics()
         self.fd = None
@@ -57,6 +57,7 @@ class MPC:
         # Distance used for collision avoidance
         self.circle_radius = np.sqrt(2) * self.W/2.0
         self.min_dist = 2 * self.circle_radius   # 2 times the radius of 1.5
+        self.radius = None
 
     def generate_lateral_cost(self, X, X_desired):
         lateral_cost = np.sum([(-cas.sin(X_desired[2,k]) * (X[0,k]-X_desired[0,k]) + 
@@ -127,18 +128,19 @@ class MPC:
         else:
             x_start = x0[0]
         
-        opti.subject_to( opti.bounded(-1, X[0,:], self.max_v * T + x_start )) #Constraints on X, Y
+        opti.subject_to( opti.bounded(-1, X[0,:], np.infty )) #Constraints on X, Y
         opti.subject_to( opti.bounded(self.min_y+self.W/2.0, X[1,:], self.max_y-self.W/2.0) )
         opti.subject_to( opti.bounded(-np.pi/2, X[2,:], np.pi/2) ) #no crazy angle
+        opti.subject_to(opti.bounded(self.min_v, X[4,:], self.max_v))    
+
 
         opti.subject_to(opti.bounded(-self.max_delta_u, U[0,:], self.max_delta_u))            
         opti.subject_to(opti.bounded(self.min_v_u, U[1,:], self.max_v_u)) # 0-60 around 4 m/s^2
-        opti.subject_to(opti.bounded(self.min_v, X[4,:], self.max_v))    
 
-        # Lane Deviations
-        if self.max_X_dev < np.infty:
-            opti.subject_to( opti.bounded(-self.max_X_dev, X[0,:] - X_desired[0,:], self.max_X_dev))
-        opti.subject_to( opti.bounded(-self.max_Y_dev, X[1,:] - X_desired[1,:], self.max_Y_dev))
+        # # Lane Deviations
+        # if self.max_X_dev < np.infty:
+        #     opti.subject_to( opti.bounded(-self.max_X_dev, X[0,:] - X_desired[0,:], self.max_X_dev))
+        # opti.subject_to( opti.bounded(-self.max_Y_dev, X[1,:] - X_desired[1,:], self.max_Y_dev))
 
 
     def add_dynamics_constraints(self, opti, X, U, X_desired, x0):
@@ -147,13 +149,17 @@ class MPC:
 
         # State Dynamics
         N = U.shape[1]
+        epsilon_disc = 0.0001
         for k in range(N):
-            # opti.subject_to( X[:, k+1] == F(X[:, k], U[:, k], dt))
+            # opti.subject_to( opti.bounded(-epsilon_disc, X[:, k+1] - self.F_kutta(self.f, X[:, k], U[:, k]), epsilon_disc))
             opti.subject_to( X[:, k+1] == self.F_kutta(self.f, X[:, k], U[:, k]))
         
         for k in range(N+1):
             opti.subject_to( X_desired[:, k] == self.fd(X[-1, k]) ) #This should be the trajectory dynamic constraint             
+        # for k in range(N+1):
+        #     opti.subject_to( opti.bounded(-epsilon_disc, X_desired[:, k] - self.fd(X[-1, k]), epsilon_disc)) #This should be the trajectory dynamic constraint   
 
+        # opti.subject_to(opti.bounded(-epsilon_disc, X[:,0] - x0, epsilon_disc))
         opti.subject_to(X[:,0] == x0)
 
     def F_kutta(self, f, x_k, u_k):
@@ -216,9 +222,10 @@ class MPC:
             x_circle_front = X[0:2,:] +  dist_from_center * cas.vertcat(cas.cos(X[2,:]), cas.sin(X[2,:])) 
             
             centers = (x_circle_rear, x_circle_mid, x_circle_front)
-            radius = 1.1
-            min_dist = 2*radius            
-
+            if self.radius is None:
+                radius = 1.1
+            else:
+                radius = self.radius
         return centers, radius
 
     def get_car_circles_np(self, X):

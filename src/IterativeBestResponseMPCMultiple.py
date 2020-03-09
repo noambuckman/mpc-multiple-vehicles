@@ -26,9 +26,11 @@ class IterativeBestResponseMPCMultiple:
         n_state, n_ctrl = 6, 2
         #Variables
         self.x_opt = self.opti.variable(n_state, N+1)
+        # self.x_opt = cas.sym('x_opt',n_state, N+1))
+        
         self.u_opt  = self.opti.variable(n_ctrl, N)
         self.x_desired  = self.opti.variable(3, N+1)
-        
+        # self.x_desired = cas.MX.sym('x_des', 3, N+1)
         p = self.opti.parameter(n_state, 1)
 
         # Presume to be given...and we will initialize soon
@@ -41,6 +43,7 @@ class IterativeBestResponseMPCMultiple:
         self.allother_x_opt = [self.opti.variable(n_state, N+1) for i in self.otherMPClist] 
         self.allother_u_opt = [self.opti.parameter(n_ctrl, N) for i in self.otherMPClist] 
         self.allother_x_desired = [self.opti.variable(3, N+1) for i in self.otherMPClist] 
+        # self.allother_x_desired = [cas.MX.sym('x_des', 3, N+1) for i in self.otherMPClist] 
         self.allother_p = [self.opti.parameter(n_state, 1) for i in self.otherMPClist]
 
         #### Costs
@@ -109,21 +112,34 @@ class IterativeBestResponseMPCMultiple:
             centers, response_radius = self.responseMPC.get_car_circles(self.x_opt[:,k]) 
             for c1_circle in centers:
                 for i in range(len(self.allother_x_opt)):
-                    other_centers, other_radius = self.otherMPClist[i].get_car_circles(self.allother_x_opt[i][:,k])    
-                    for ci in range(len(other_centers)):
-                        dist_sqr = cas.sumsqr(c1_circle - other_centers[ci])
-                        self.opti.subject_to(dist_sqr - (response_radius + other_radius)**2 > 0 - self.slack_vars_list[i][ci,k])
-                        dist_btw_object = cas.sqrt(dist_sqr) - 1.1*(response_radius + other_radius)
+                    initial_distance = cas.sqrt(cas.sumsqr(x0_other[i] - x0))
+                    if initial_distance <= 20: #collision avoidance distance for other cars
+                        # print("CA:  Car %d, t%d %.04f"%(i, k, initial_distance))
+                        other_centers, other_radius = self.otherMPClist[i].get_car_circles(self.allother_x_opt[i][:,k])    
+                        for ci in range(len(other_centers)):
+                            dist_sqr = cas.sumsqr(c1_circle - other_centers[ci])
+                            dist_btw_object = cas.sqrt(dist_sqr) - (response_radius + other_radius)
+                            self.opti.subject_to(dist_btw_object > 0 - self.slack_vars_list[i][ci,k])
+                            distance_clipped = cas.fmax(dist_btw_object, 0.001)
+                            # dist_btw_object = cas.fmax(cas.sqrt(dist_sqr) - 1.1*(response_radius + other_radius), 0.00001)
 
-                        self.collision_cost += 1/dist_btw_object**4
+                            self.collision_cost += 10/distance_clipped**2
                 # Don't forget the ambulance
                 if self.ambMPC:    
                     amb_circles, amb_radius = self.ambMPC.get_car_circles(self.xamb_opt[:,k])    
                     for ci in range(len(amb_circles)):                    
                         self.opti.subject_to(cas.sumsqr(c1_circle - amb_circles[ci]) > (response_radius + amb_radius)**2 - self.slack_amb[ci,k])
-                        dist_btw_object = cas.sqrt(cas.sumsqr(c1_circle - amb_circles[ci])) - 1.1*(response_radius + amb_radius)
-                        self.collision_cost += 1/dist_btw_object**4
-                        
+                        dist_btw_object = cas.fmax(cas.sqrt(cas.sumsqr(c1_circle - amb_circles[ci])) - 1.1*(response_radius + amb_radius), 0.00001)
+                        self.collision_cost += 10/dist_btw_object**2
+                
+                WALL_CA = True
+                if WALL_CA:
+                    dist_btw_wall_bottom = c1_circle[1] - (self.responseMPC.min_y + self.responseMPC.W/2.0)
+                    dist_btw_wall_top = c1_circle[1] - (self.responseMPC.max_y - self.responseMPC.W/2.0)
+                    self.collision_cost += 0.1 * 1/dist_btw_wall_bottom**2
+                    self.collision_cost += 0.1 * 1/dist_btw_wall_top**2
+
+  
 
         self.opti.set_value(p, x0)
 
@@ -133,7 +149,8 @@ class IterativeBestResponseMPCMultiple:
         if self.ambMPC:    
             self.opti.set_value(pamb, x0_amb) 
 
-        self.opti.solver('ipopt',{'warn_initial_bounds':True},{'print_level':print_level, 'max_iter':10000})
+        self.opti.solver('ipopt',{'warn_initial_bounds':True},
+        {'print_level':print_level, 'max_iter':10000, 'constr_viol_tol':0.0001})
 
 
     def solve(self, uamb, uother):
