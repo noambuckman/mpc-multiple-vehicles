@@ -68,23 +68,24 @@ def get_frame(x, x_MPC, ax=None, car_name="red", alpha = 1.0):
 
 
 def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desired=None, xothers_desired=None,  
-                CIRCLES=False, parallelize=True):
+                CIRCLES=False, parallelize=True, camera_speed = None):
     N = xamb_plot.shape[1]
     # if CIRCLES:
     if parallelize:
         pool = multiprocessing.Pool(processes=8)
         plot_partial = functools.partial(plot_multiple_cars, x_mpc=x_mpc, xothers_plot=xothers_plot, xamb_plot=xamb_plot, CIRCLES=CIRCLES, xothers_desired=xothers_desired, xamb_desired=xamb_desired,
-                                         folder=folder, world=world)
+                                         folder=folder, world=world, camera_speed = camera_speed)
         pool.map(plot_partial, range(N)) #will apply k=1...N to plot_partial
     else:
         for k in range(N):
-            plot_multiple_cars( k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desired, xamb_desired, folder, world)     
+            plot_multiple_cars( k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desired, xamb_desired, folder, world, camera_speed)     
     return None
             
 
-def plot_multiple_cars(k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desired, xamb_desired, folder, world):
+def plot_multiple_cars(k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desired, xamb_desired, folder, world, camera_speed = None):
     ''' This only has info from x_mpc but not any individual ones'''
-
+    if camera_speed is None:
+        camera_speed = x_mpc.max_v
     figsize="LARGE"
     if figsize == "LARGE":
         figwidth_in=12.0
@@ -93,9 +94,9 @@ def plot_multiple_cars(k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desir
 
     ymax = world.y_max
     ymin = world.y_min     
-    initial_speed = x_mpc.max_v
+    # initial_speed = 0.9 * x_mpc.max_v
     # center_frame = xamb_plot[0,k]
-    center_frame = xamb_plot[0,0] + k*initial_speed*x_mpc.dt
+    center_frame = xamb_plot[0,0] + k*camera_speed*x_mpc.dt
     # center_frame = xamb_plot[0,0]
     axlim_minx, axlim_maxx = center_frame - 5, center_frame + 100,    
 

@@ -4,6 +4,9 @@ __pycache__/
 
 __init__.py
 .ipynb_checkpoints/
+*.npy
+*.png
+*.mp4
 
 trash/
 results/
