@@ -131,10 +131,10 @@ class IterativeBestResponseMPCMultiple:
                     if initial_distance <= 20: #collision avoidance distance for other cars
                         # print("CA:  Car %d, t%d %.04f"%(i, k, initial_distance))
                         r = self.responseMPC.radius ### THIS NEEDS TO BE ACCURATE
-                        
+                        ci = 0
                         self.generate_collision_ellipse(c1_circle[0], c1_circle[1], 
                                                         self.allother_x_opt[i][0,k], self.allother_x_opt[i][1,k], self.allother_x_opt[i][2,k],
-                                                        alphas[i], betas[i], None)
+                                                        alphas[i], betas[i], self.slack_vars_list[i][ci,k])
                         CIRCLE = False
                         if CIRCLE:
                             other_centers, other_radius = self.otherMPClist[i].get_car_circles(self.allother_x_opt[i][:,k])    
@@ -229,7 +229,6 @@ class IterativeBestResponseMPCMultiple:
         R_o = cas.vertcat(cas.horzcat(cas.cos(phi_o), 0), cas.horzcat(0, cas.sin(phi_o)))
         M = cas.vertcat(cas.horzcat(1/alpha_o**2, 0), cas.horzcat(0, 1/beta_o**2))
         dX = cas.vertcat(dx, dy)
-        # M_ellipse = np.array([[1/alpha_o**2, 0],[0, 1/beta_o**2]])   
         prod =    cas.mtimes([dX.T, R_o.T, M, R_o, dX])
         self.opti.subject_to(prod > (1 - slack))
 
