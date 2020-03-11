@@ -1,5 +1,6 @@
 import numpy as np
 import casadi as cas
+import scipy.optimize
 
 class MPC:
     def __init__(self, dt):
@@ -208,46 +209,72 @@ class MPC:
 
     def get_car_circles(self, X, n_circles=2):
         if n_circles==2:
-            x_circle_front = X[0:2,:] + (self.W/2) * cas.vertcat(cas.cos(X[2,:]), cas.sin(X[2,:])) 
-            x_circle_rear = X[0:2,:] - (self.W/2) * cas.vertcat(cas.cos(X[2,:]), cas.sin(X[2,:])) 
+            r, dx = 1.728843542029462, 0.7738902428000489  #solved using notebook for minimizing radius
+            r, dx = 1.75, 0.77389
+            x_circle_front = X[0:2,:] + dx * cas.vertcat(cas.cos(X[2,:]), cas.sin(X[2,:])) 
+            x_circle_rear = X[0:2,:] - dx * cas.vertcat(cas.cos(X[2,:]), cas.sin(X[2,:])) 
             # x_circle_front = X[0:2,:] + (self.L/2 - self.W/2) * cas.vertcat(cas.cos(X[2,:]), cas.sin(X[2,:])) 
             # x_circle_rear = X[0:2,:] - (self.L/2 - self.W/2) * cas.vertcat(cas.cos(X[2,:]), cas.sin(X[2,:]))
             radius = 1.5
             min_dist = 2*radius
+            radius = r
             centers = [x_circle_rear, x_circle_front]
         elif n_circles==3:
+            r, dx = 1.464421812899125, 1.0947808598616502
+            r, dx = 1.47, 1.15
             x_circle_mid = X[0:2,:]
-            dist_from_center = self.L/2.0 - self.W/2
-            x_circle_rear = X[0:2,:]  -  dist_from_center * cas.vertcat(cas.cos(X[2,:]), cas.sin(X[2,:])) 
-            x_circle_front = X[0:2,:] +  dist_from_center * cas.vertcat(cas.cos(X[2,:]), cas.sin(X[2,:])) 
+            # dist_from_center = self.L/2.0 - self.W/2
+            x_circle_rear = X[0:2,:]  -  dx * cas.vertcat(cas.cos(X[2,:]), cas.sin(X[2,:])) 
+            x_circle_front = X[0:2,:] +  dx * cas.vertcat(cas.cos(X[2,:]), cas.sin(X[2,:])) 
             
             centers = (x_circle_rear, x_circle_mid, x_circle_front)
-            if self.radius is None:
-                radius = 1.1
-            else:
-                radius = self.radius
+            self.radius = r
+            radius = self.radius
+            # if self.radius is None:
+            #     radius = 1.1
+            # else:
+            #     radius = self.radius
         return centers, radius
 
     def get_car_circles_np(self, X):
         if self.n_circles == 2:
-            # x_circle_front = X[0:2,:] + (self.L/2 - self.W/2) * np.array([np.cos(X[2,:]),np.sin(X[2,:])]) 
-            # x_circle_rear = X[0:2,:] - (self.L/2 - self.W/2) * np.array([np.cos(X[2,:]),np.sin(X[2,:])]) 
-            x_circle_front = X[0:2,:] + (self.W/2) * np.array([np.cos(X[2,:]),np.sin(X[2,:])]) 
-            x_circle_rear = X[0:2,:] - (self.W/2) * np.array([np.cos(X[2,:]),np.sin(X[2,:])]) 
-            radius = 1.5
+            r, dx = 1.75, 0.77389
+            x_circle_front = X[0:2,:] + dx * np.array([np.cos(X[2,:]),np.sin(X[2,:])]) 
+            x_circle_rear = X[0:2,:] - dx * np.array([np.cos(X[2,:]),np.sin(X[2,:])]) 
+            radius = r
             # min_dist = 2*radius
             return [x_circle_rear, x_circle_front], radius
         elif self.n_circles == 3:
             x_circle_mid = X[0:2,:]
-            dist_from_center = self.L/2.0 - self.W/2
-            x_circle_rear = X[0:2,:]  -  dist_from_center* np.array([np.cos(X[2,:]),np.sin(X[2,:])]) 
-            x_circle_front = X[0:2,:] +  dist_from_center* np.array([np.cos(X[2,:]),np.sin(X[2,:])]) 
+            r, dx = 1.47, 1.15
+            x_circle_rear = X[0:2,:]  - dx *  np.array([np.cos(X[2,:]),np.sin(X[2,:])]) 
+            x_circle_front = X[0:2,:] +  dx *  np.array([np.cos(X[2,:]),np.sin(X[2,:])]) 
             
             centers = [x_circle_rear, x_circle_mid, x_circle_front]
-            radius = 1.1
+            radius = r
             # min_dist = 2*radius
         
         return centers, radius
+
+    def get_ellipse(L, W):
+        '''Solve for the minimal inscribing ellipse.  X-axis is aligned with length of car'''
+        min_elipse_a =  lambda a: (1 - L**2/(2*a)**2 - W**2/(2*a + W - L)**2)
+        
+        ax = scipy.optimize.fsolve(min_elipse_a, L/2.0)
+        by = ax + .5*(W-L)
+        return ax, by
+
+    def get_collision_ellipse(r, L_other=None, W_other=None):
+        if L_other is None:
+            L_other = self.L
+        if W_other is None:
+            W_other = self.W
+        a, b = get_ellipse(L_other, W_other) 
+        minimal_positive_root = lambda delta: (2*(delta + r)**2*(2*a*b + a*(delta + r) + b*(delta + r)))/((a + b)*(a + b + 2*delta + 2*r))-r**2
+        delta = scipy.optimize.fsolve(minimal_positive_root, r)
+        a_new = a+delta+r
+        b_new = b+delta+r
+        return a_new, b_new, delta, a, b
 
 
 
