@@ -110,8 +110,10 @@ class IterativeBestResponseMPCMultiple:
         # Before we start, compute the alpha beta geometry parameters for the other vehicles
         alphas = []
         betas = []
+        centers, response_radius = self.responseMPC.get_car_circles(self.x_opt[:,0]) 
+
         for i in range(len(self.otherMPClist)):
-            a_other, b_other, delta, a, b = self.otherMPClist[i].get_collision_ellipse(r)
+            a_other, b_other, delta, a, b = self.otherMPClist[i].get_collision_ellipse(response_radius)
             alphas += [a_other]
             betas += [b_other]
         
