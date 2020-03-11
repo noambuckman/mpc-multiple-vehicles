@@ -223,14 +223,14 @@ class IterativeBestResponseMPCMultiple:
 
     def generate_collision_ellipse(self, x_e, y_e, x_o, y_o, phi_o, alpha_o, beta_o, slack):
         dx = x_o - x_e
-        dy = y_o - y_o
+        dy = y_o - y_e
         if slack is None:
             slack = 0
-        R_o = cas.vertcat(cas.horzcat([cas.cos(phi_o), 0]),cas.horzcat([0, cas.sin(phi_o)]))
+        R_o = cas.vertcat(cas.horzcat(cas.cos(phi_o), 0), cas.horzcat(0, cas.sin(phi_o)))
 
         dX = cas.vertcat(dx, dy)
         M_ellipse = np.array([[1/alpha_o**2, 0],[0, 1/beta_o**2]])      
-        self.opti.subject_to(cas.mtimes([dX.T, R_o.T, R_o, dX]) > (1 - slack))
+        self.opti.subject_to(cas.mtimes([dX.T, R_o.T, M_ellipse, R_o, dX]) > (1 - slack))
 
 
 def load_state(file_name, n_others):
