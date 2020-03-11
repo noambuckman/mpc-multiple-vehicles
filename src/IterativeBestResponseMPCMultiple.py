@@ -118,7 +118,7 @@ class IterativeBestResponseMPCMultiple:
             betas += [b_other]
         
         if self.ambMPC:
-            a_amb, b_amb, delta, a, b = self.ambMPC.get_collision_ellipse(r)
+            a_amb, b_amb, delta, a, b = self.ambMPC.get_collision_ellipse(response_radius)
 
 
         # Collision Avoidance
@@ -130,11 +130,7 @@ class IterativeBestResponseMPCMultiple:
                     initial_distance = cas.sqrt(cas.sumsqr(x0_other[i] - x0))
                     if initial_distance <= 20: #collision avoidance distance for other cars
                         # print("CA:  Car %d, t%d %.04f"%(i, k, initial_distance))
-                        r = self.responseMPC.radius ### THIS NEEDS TO BE ACCURATE
-                        ci = 0
-                        self.generate_collision_ellipse(c1_circle[0], c1_circle[1], 
-                                                        self.allother_x_opt[i][0,k], self.allother_x_opt[i][1,k], self.allother_x_opt[i][2,k],
-                                                        alphas[i], betas[i], self.slack_vars_list[i][ci,k])
+                        
                         CIRCLE = False
                         if CIRCLE:
                             other_centers, other_radius = self.otherMPClist[i].get_car_circles(self.allother_x_opt[i][:,k])    
@@ -146,6 +142,14 @@ class IterativeBestResponseMPCMultiple:
                                 # dist_btw_object = cas.fmax(cas.sqrt(dist_sqr) - 1.1*(response_radius + other_radius), 0.00001)
 
                                 self.collision_cost += 10/distance_clipped**2
+                        else:
+                            ci = 0
+                            buffer_distance = self.generate_collision_ellipse(c1_circle[0], c1_circle[1], 
+                                                            self.allother_x_opt[i][0,k], self.allother_x_opt[i][1,k], self.allother_x_opt[i][2,k],
+                                                            alphas[i], betas[i], self.slack_vars_list[i][ci,k])
+                            
+                            distance_clipped = cas.fmax(buffer_distance, 0.001)
+                            self.collision_cost += 10/distance_clipped**2
                 # Don't forget the ambulance
                 if self.ambMPC:    
                     amb_circles, amb_radius = self.ambMPC.get_car_circles(self.xamb_opt[:,k])
@@ -156,9 +160,11 @@ class IterativeBestResponseMPCMultiple:
                             dist_btw_object = cas.fmax(cas.sqrt(cas.sumsqr(c1_circle - amb_circles[ci])) - 1.1*(response_radius + amb_radius), 0.00001)
                             self.collision_cost += 10/dist_btw_object**2
                     else:
-                        self.generate_collision_ellipse(c1_circle[0], c1_circle[1], 
+                        buffer_distance = self.generate_collision_ellipse(c1_circle[0], c1_circle[1], 
                                                                                 self.xamb_opt[0,k], self.xamb_opt[1,k], self.xamb_opt[2,k],
-                                                                                a_amb, b_amb, None)                        
+                                                                                a_amb, b_amb, None)     
+                        distance_clipped = cas.fmax(buffer_distance, 0.001)
+                        self.collision_cost += 10/distance_clipped**2                   
                 
                 WALL_CA = True
                 if WALL_CA:
@@ -231,6 +237,7 @@ class IterativeBestResponseMPCMultiple:
         dX = cas.vertcat(dx, dy)
         prod =    cas.mtimes([dX.T, R_o.T, M, R_o, dX])
         self.opti.subject_to(prod > (1 - slack))
+        return prod - 1
 
 
 def load_state(file_name, n_others):
