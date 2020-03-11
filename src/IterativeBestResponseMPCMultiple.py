@@ -226,7 +226,7 @@ class IterativeBestResponseMPCMultiple:
         dy = y_o - y_o
         if slack is None:
             slack = 0
-        R_o = np.array([[cas.cos(phi_o), 0],[0, cas.sin(phi_o)]])
+        R_o = cas.vertcat(cas.horzcat([cas.cos(phi_o), 0]),cas.horzcat([0, cas.sin(phi_o)]))
 
         dX = cas.vertcat(dx, dy)
         M_ellipse = np.array([[1/alpha_o**2, 0],[0, 1/beta_o**2]])      
