@@ -256,7 +256,7 @@ class MPC:
         
         return centers, radius
 
-    def get_ellipse(L, W):
+    def get_ellipse(self, L, W):
         '''Solve for the minimal inscribing ellipse.  X-axis is aligned with length of car'''
         min_elipse_a =  lambda a: (1 - L**2/(2*a)**2 - W**2/(2*a + W - L)**2)
         
@@ -264,12 +264,12 @@ class MPC:
         by = ax + .5*(W-L)
         return ax, by
 
-    def get_collision_ellipse(r, L_other=None, W_other=None):
+    def get_collision_ellipse(self, r, L_other=None, W_other=None):
         if L_other is None:
             L_other = self.L
         if W_other is None:
             W_other = self.W
-        a, b = get_ellipse(L_other, W_other) 
+        a, b = self.get_ellipse(L_other, W_other) 
         minimal_positive_root = lambda delta: (2*(delta + r)**2*(2*a*b + a*(delta + r) + b*(delta + r)))/((a + b)*(a + b + 2*delta + 2*r))-r**2
         delta = scipy.optimize.fsolve(minimal_positive_root, r)
         a_new = a+delta+r
