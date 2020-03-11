@@ -227,10 +227,11 @@ class IterativeBestResponseMPCMultiple:
         if slack is None:
             slack = 0
         R_o = cas.vertcat(cas.horzcat(cas.cos(phi_o), 0), cas.horzcat(0, cas.sin(phi_o)))
-
+        M = cas.vertcat(cas.horzcat(1/alpha_o**2, 0), cas.horzcat(0, 1/beta_o**2))
         dX = cas.vertcat(dx, dy)
-        M_ellipse = np.array([[1/alpha_o**2, 0],[0, 1/beta_o**2]])      
-        self.opti.subject_to(cas.mtimes([dX.T, R_o.T, M_ellipse, R_o, dX]) > (1 - slack))
+        # M_ellipse = np.array([[1/alpha_o**2, 0],[0, 1/beta_o**2]])   
+        prod =    cas.mtimes([dX.T, R_o.T, M, R_o, dX])
+        self.opti.subject_to(prod > (1 - slack))
 
 
 def load_state(file_name, n_others):
