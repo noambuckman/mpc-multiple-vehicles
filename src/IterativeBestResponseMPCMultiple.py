@@ -2,7 +2,7 @@ import numpy as np
 import casadi as cas
 import src.MPC_Casadi as mpc
 
-
+import matplotlib.pyplot as plt
 
 
 class IterativeBestResponseMPCMultiple:
