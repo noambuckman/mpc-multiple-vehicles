@@ -42,9 +42,11 @@ class IterativeBestResponseMPCMultiple:
             self.xamb_desired = self.opti.variable(3, N+1)
             pamb = self.opti.parameter(n_state, 1)
 
-        self.allother_x_opt = [self.opti.variable(n_state, N+1) for i in self.otherMPClist] 
+        # self.allother_x_opt = [self.opti.variable(n_state, N+1) for i in self.otherMPClist] 
+        self.allother_x_opt = [self.opti.parameter(n_state, N+1) for i in self.otherMPClist] 
         self.allother_u_opt = [self.opti.parameter(n_ctrl, N) for i in self.otherMPClist] 
-        self.allother_x_desired = [self.opti.variable(3, N+1) for i in self.otherMPClist] 
+        # self.allother_x_desired = [self.opti.variable(3, N+1) for i in self.otherMPClist]
+        self.allother_x_desired = [self.opti.parameter(3, N+1) for i in self.otherMPClist]
         # self.allother_x_desired = [cas.MX.sym('x_des', 3, N+1) for i in self.otherMPClist] 
         self.allother_p = [self.opti.parameter(n_state, 1) for i in self.otherMPClist]
 
