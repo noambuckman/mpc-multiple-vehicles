@@ -243,6 +243,8 @@ class IterativeBestResponseMPCMultiple:
         plt.plot(self.opti.debug.value(self.x_opt)[0,:], 
         self.opti.debug.value(self.x_opt)[1,:],
         'o')
+        plt.xlim([-1, 100])
+        plt.ylim([-1 , 10]
         plt.show()
 
 
