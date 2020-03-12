@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 .vscode/
+*.DS_Store
 
 __init__.py
 .ipynb_checkpoints/
