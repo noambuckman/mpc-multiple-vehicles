@@ -3,8 +3,8 @@ import casadi as cas
 import src.MPC_Casadi as mpc
 
 import matplotlib.pyplot as plt
-import car_plotting_multiple as cplotm
-import TrafficWorld as tw
+import src.car_plotting_multiple as cplotm
+import src.TrafficWorld as tw
 
 class IterativeBestResponseMPCMultiple:
     ### We always assume that car1 is the one being optimized
