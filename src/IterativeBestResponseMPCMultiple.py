@@ -91,15 +91,15 @@ class IterativeBestResponseMPCMultiple:
         self.responseMPC.add_dynamics_constraints(self.opti, self.x_opt, self.u_opt, self.x_desired, p)
         self.responseMPC.add_state_constraints(self.opti, self.x_opt, self.u_opt, self.x_desired, T, x0)
         
-        if self.ambMPC:        
-            self.ambMPC.add_dynamics_constraints(self.opti, self.xamb_opt, self.uamb_opt, self.xamb_desired, pamb)
+        # if self.ambMPC:        
+        #     self.ambMPC.add_dynamics_constraints(self.opti, self.xamb_opt, self.uamb_opt, self.xamb_desired, pamb)
         
-        for i in range(len(self.otherMPClist)):
-            self.otherMPClist[i].add_dynamics_constraints(self.opti, 
-                                                        self.allother_x_opt[i], self.allother_u_opt[i], self.allother_x_desired[i], 
-                                                        self.allother_p[i])
+        # for i in range(len(self.otherMPClist)):
+        #     self.otherMPClist[i].add_dynamics_constraints(self.opti, 
+        #                                                 self.allother_x_opt[i], self.allother_u_opt[i], self.allother_x_desired[i], 
+        #                                                 self.allother_p[i])
 
-        ## Generate the circles
+        # ## Generate the circles
         
 
 
