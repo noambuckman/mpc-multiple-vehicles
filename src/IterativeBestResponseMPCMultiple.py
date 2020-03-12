@@ -240,7 +240,9 @@ class IterativeBestResponseMPCMultiple:
         return prod - 1
 
     def debug_callback(self, i):
-        plt.plot(self.opti.debug.value(self.x_opt)[0,:], self.opti.debug.value(self.x_opt)[1,:]),'o')
+        plt.plot(self.opti.debug.value(self.x_opt)[0,:], 
+        self.opti.debug.value(self.x_opt)[1,:],
+        'o')
         plt.show()
 
 
