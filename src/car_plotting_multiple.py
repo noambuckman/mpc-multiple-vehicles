@@ -125,7 +125,6 @@ def plot_multiple_cars(k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desir
         centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
         for ci in range(len(centers)):
             xy_f = centers[ci]
-            print(xy_f)
             circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius, color='red')
             ax.add_patch(circle_patch_f)
         # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2, color='red')
@@ -134,7 +133,9 @@ def plot_multiple_cars(k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desir
         # Plot the ambulance as circles
         centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
         for ci in range(len(centers)):
+            
             xy_f = centers[ci]
+            print(xy_f)
             circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius, color='red')
             ax.add_patch(circle_patch_f)
 
