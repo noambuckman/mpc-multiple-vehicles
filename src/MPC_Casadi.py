@@ -246,17 +246,23 @@ class MPC:
             x_circle_rear = X[0:2,:] - dx * np.array([np.cos(X[2,:]),np.sin(X[2,:])]) 
             radius = r
             # min_dist = 2*radius
-            return [x_circle_rear, x_circle_front], radius
+            centers = [x_circle_rear, x_circle_front]
         elif self.n_circles == 3:
-            x_circle_mid = X[0:2,:]
             r, dx = 1.47, 1.15
+            x_circle_mid = X[0:2,:]
             x_circle_rear = X[0:2,:]  - dx *  np.array([np.cos(X[2,:]),np.sin(X[2,:])]) 
             x_circle_front = X[0:2,:] +  dx *  np.array([np.cos(X[2,:]),np.sin(X[2,:])]) 
             
             centers = [x_circle_rear, x_circle_mid, x_circle_front]
             radius = r
             # min_dist = 2*radius
-        
+        elif self.n_circles == 1:
+            radius = self.L/2.0
+            x_circle = X[0:2,:]
+            centers = [x_circle]   
+        else:
+            raise Exception("self.n_circles was not set with a correct number")
+            
         return centers, radius
 
     def get_ellipse(self, L, W):
