@@ -134,7 +134,6 @@ def plot_multiple_cars(k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desir
         centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
         for ci in range(len(centers)):
             xy_f = centers[ci]
-            print(ci, xy_f)
             circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius, color='red')
             ax.add_patch(circle_patch_f)
 
@@ -143,7 +142,7 @@ def plot_multiple_cars(k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desir
             x,y,phi = x1_plot[0,k], x1_plot[2,k], x1_plot[2,k]
             a, b = x_mpc.ax, x_mpc.by
             ellipse_patch = patches.Ellipse((x, y), 2*a, 2*b, angle=np.rad2deg(phi), fill=False, edgecolor='red')
-            ax.add_patch(circle_patch_f)
+            ax.add_patch(ellipse_patch)
             # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2)
             # ax.add_patch(circle_patch_r)
 
