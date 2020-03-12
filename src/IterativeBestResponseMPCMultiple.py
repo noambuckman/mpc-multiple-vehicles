@@ -239,6 +239,11 @@ class IterativeBestResponseMPCMultiple:
         self.opti.subject_to(prod > (1 - slack))
         return prod - 1
 
+    def debug_callback(self, i):
+        plt.plot(self.opti.debug.value(self.x_opt)[0,:], self.opti.debug.value(self.x_opt)[1,:]),'o')
+        plt.show()
+
+
 
 def load_state(file_name, n_others):
     xamb = np.load(file_name + "xamb.npy",allow_pickle=False)
