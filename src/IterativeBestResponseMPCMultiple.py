@@ -3,7 +3,8 @@ import casadi as cas
 import src.MPC_Casadi as mpc
 
 import matplotlib.pyplot as plt
-
+import car_plotting_multiple as cplotm
+import TrafficWorld as tw
 
 class IterativeBestResponseMPCMultiple:
     ### We always assume that car1 is the one being optimized
@@ -19,6 +20,7 @@ class IterativeBestResponseMPCMultiple:
         self.k_CA = 0
         self.collision_cost = 0
 
+        self.world = tw.TrafficWorld(2, 0, 10000)
 
     def generate_optimization(self, N, T, x0, x0_amb, x0_other, print_level=5, slack=True):
         
@@ -240,11 +242,15 @@ class IterativeBestResponseMPCMultiple:
         return prod - 1
 
     def debug_callback(self, i):
-        plt.plot(self.opti.debug.value(self.x_opt)[0,:], 
-        self.opti.debug.value(self.x_opt)[1,:],
-        'o')
-        plt.xlim([-1, 100])
-        plt.ylim([-1 , 10])
+        xothers_plot = [self.opti.debug.value(xo) for xo in self.allother_x_opt]
+        xamb_plot = self.opti.debug.value(self.x_opt)
+        
+        CIRCLES=True
+        for k in [0, -1]:
+            cplotm.plot_multiple_cars( k, self.responseMPC, xothers_plot, xamb_plot, CIRCLES, None, None, None, self.world, None)     
+
+        plt.plot(xamb_plot[0,:], xamb_plot[1,:],'o')
+
         plt.show()
 
 

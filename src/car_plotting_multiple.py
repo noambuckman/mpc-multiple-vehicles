@@ -160,11 +160,9 @@ def plot_multiple_cars(k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desir
         
         ax = get_frame(xamb_plot[:,k], x_mpc, ax, "Amb")
     fig = plt.gcf()
-    fig.savefig(folder + 'imgs/' '{:03d}.png'.format(k))
-    # plt.cla()
-    # fig.clf()
-    # ax.remove()
-    plt.close(fig)    
+    if folder is not None:
+        fig.savefig(folder + 'imgs/' '{:03d}.png'.format(k))
+        plt.close(fig)    
 
 def add_grass(ax, world, k):
     axlim_minx, axlim_maxx = ax.get_xlim()
