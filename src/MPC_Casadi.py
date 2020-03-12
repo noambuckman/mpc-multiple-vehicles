@@ -60,6 +60,9 @@ class MPC:
         self.min_dist = 2 * self.circle_radius   # 2 times the radius of 1.5
         self.radius = None
 
+        self.ax, self.by = self.get_ellipse(self.L, self.W) # if you change L, W after construction
+                                                            # then it will need to be recalculated
+
     def generate_lateral_cost(self, X, X_desired):
         lateral_cost = np.sum([(-cas.sin(X_desired[2,k]) * (X[0,k]-X_desired[0,k]) + 
             cas.cos(X_desired[2,k]) * (X[1,k]-X_desired[1,k]))**2
