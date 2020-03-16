@@ -181,7 +181,7 @@ for i_mpc in range(n_rounds_mpc):
         bri.k_slack = 1000.0
         bri.k_CA = 10.0
         bri.world = world
-        bri.generate_optimization(N, T, response_x0, None, nonresponse_x0_list,  1, slack=True)
+        bri.generate_optimization(N, T, response_x0, None, nonresponse_x0_list,  5, slack=True)
         for slack_var in bri.slack_vars_list: ## Added to constrain slacks
             bri.opti.subject_to(cas.vec(slack_var) < .1)
         INFEASIBLE = True
