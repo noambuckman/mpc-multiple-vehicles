@@ -248,7 +248,7 @@ class IterativeBestResponseMPCMultiple:
         xamb_plot = self.opti.debug.value(self.x_opt)
         
         CIRCLES=True
-        for k in [0, xamb_plot.shape[1] - 1]:
+        for k in range(xamb_plot.shape[1]):
             cplotm.plot_multiple_cars( k, self.responseMPC, xothers_plot, xamb_plot, CIRCLES, None, None, None, self.world, 0)     
             plt.plot(xamb_plot[0,:], xamb_plot[1,:],'o')
             plt.show()
