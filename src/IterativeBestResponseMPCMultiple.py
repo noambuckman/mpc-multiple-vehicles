@@ -73,10 +73,10 @@ class IterativeBestResponseMPCMultiple:
 
         self.slack_cost = 0
         for slack_var in self.slack_vars_list:
-            self.slack_cost += cas.sumsqr(slack_var)
+            self.slack_cost += cas.sumsqr(slack_var**2)
         
         if self.ambMPC:    
-            self.slack_cost += cas.sumsqr(self.slack_amb)
+            self.slack_cost += cas.sumsqr(self.slack_amb**2)
 
 
         self.response_svo_cost = np.cos(self.responseMPC.theta_iamb)*self.car1_costs
