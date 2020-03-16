@@ -243,7 +243,7 @@ class IterativeBestResponseMPCMultiple:
         self.opti.subject_to(prod > (1 - slack))
         return prod - 1
 
-    def debug_callback(self):
+    def debug_callback(self, i):
         xothers_plot = [self.opti.debug.value(xo) for xo in self.allother_x_opt]
         xamb_plot = self.opti.debug.value(self.x_opt)
         
