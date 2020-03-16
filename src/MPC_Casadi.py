@@ -196,7 +196,7 @@ class MPC:
         u_all (of shape 2, N) and compute the state trajectory'''
         N = u_all.shape[1]
         x = np.zeros(shape=(6, N + 1))
-        x[:,0:1] == x_0.reshape(6, 1)
+        x[:,0:1] = x_0.reshape(6, 1)
         for k in range(N):
             u_k = u_all[:, k]
             x_k = x[:, k]
