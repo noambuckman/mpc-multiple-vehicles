@@ -38,6 +38,23 @@ class MPC:
         self.k_final = 0
 
         
+        ### These settings most recently gave good results
+
+        self.k_u_v = 0.01
+        self.k_u_delta = .00001
+        self.k_change_u_v = 0.01
+        self.k_change_u_delta = 0
+
+        self.k_s = 0
+        self.k_x = 0
+        self.k_x_dot = -1.0 / 100.0
+        self.k_lat = 0.001
+        self.k_lon = 0.0
+
+        self.k_phi_error = 0.001
+        self.k_phi_dot = 0.0
+        ####
+
         # Constraints
         self.max_delta_u = 5 * np.pi/180
         self.max_acceleration = 4
@@ -173,6 +190,24 @@ class MPC:
         k4 = f(x_k+self.dt*k3,   u_k)
         x_next = x_k + self.dt/6*(k1+2*k2+2*k3+k4) 
         return x_next
+
+    def forward_simulate_all(self, x_0, u_all):
+        ''' Tale an an initial state (x_0) and control inputs
+        u_all (of shape 2, N) and compute the state trajectory'''
+        N = u_all.shape[1]
+        x = np.zeros(shape=(6, N + 1))
+        x[:,0:1] == x_0.reshape(6, 1)
+        for k in range(N):
+            u_k = u_all[:, k]
+            x_k = x[:, k]
+            x_knext = self.F_kutta(self.f, x_k, u_k)
+            x[:,k+1:k+2] = x_knext
+
+        x_des = np.zeros(shape=(3, N + 1))        
+        for k in range(N + 1):
+            x_des[:, k:k+1] = self.fd(x[-1,k])
+
+        return x, x_des
     
     def gen_f_vehicle_dynamics(self):
         X = cas.MX.sym('X')
