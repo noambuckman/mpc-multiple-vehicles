@@ -241,7 +241,10 @@ class IterativeBestResponseMPCMultiple:
         dX = cas.vertcat(dx, dy)
         prod =    cas.mtimes([dX.T, R_o.T, M, R_o, dX])
         self.opti.subject_to(prod > (1 - slack))
-        return prod - 1
+
+        M_smaller = cas.vertcat(cas.horzcat(1/(0.5*alpha_o)**2, 0), cas.horzcat(0, 1/(.5*beta_o)**2))
+        dist_prod =    cas.mtimes([dX.T, R_o.T, M_smaller, R_o, dX])
+        return dist_prod - 1
 
     def debug_callback(self, i):
         xothers_plot = [self.opti.debug.value(xo) for xo in self.allother_x_opt]
