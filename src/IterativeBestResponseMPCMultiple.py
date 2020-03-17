@@ -152,7 +152,7 @@ class IterativeBestResponseMPCMultiple:
                                                             self.allother_x_opt[i][0,k], self.allother_x_opt[i][1,k], self.allother_x_opt[i][2,k],
                                                             alphas[i], betas[i], self.slack_vars_list[i][ci,k])
                             
-                            distance_clipped = cas.fmax(buffer_distance, 0.001)
+                            distance_clipped = cas.fmax(buffer_distance, -1)
                             self.collision_cost += 10/distance_clipped**2
                 # Don't forget the ambulance
                 if self.ambMPC:    
@@ -244,7 +244,10 @@ class IterativeBestResponseMPCMultiple:
 
         M_smaller = cas.vertcat(cas.horzcat(1/(0.5*alpha_o)**2, 0), cas.horzcat(0, 1/(.5*beta_o)**2))
         dist_prod =    cas.mtimes([dX.T, R_o.T, M_smaller, R_o, dX])
-        return dist_prod - 1
+        dist = dist_prod - 1
+
+        euc_dist = dx**2 + dy**2
+        return euc_dist
 
     def debug_callback(self, i):
         xothers_plot = [self.opti.debug.value(xo) for xo in self.allother_x_opt]
