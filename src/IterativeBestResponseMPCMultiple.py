@@ -256,6 +256,10 @@ class IterativeBestResponseMPCMultiple:
         plt.hlines(35*0.447,0,xamb_plot.shape[1])
         plt.ylabel('Speed')
         plt.show()
+        print("%d J_i %.03f,  J_j %.03f, Slack %.03f, CA  %.03f"%(i, self.solution.value(self.response_svo_cost), self.solution.value(self.other_svo_cost), self.solution.value(self.k_slack*self.slack_cost), self.solution.value(self.k_CA*self.collision_cost)))
+
+
+
 
 
 
