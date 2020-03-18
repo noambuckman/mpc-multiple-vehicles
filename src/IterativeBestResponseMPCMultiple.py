@@ -139,7 +139,8 @@ class IterativeBestResponseMPCMultiple:
                             
                             euclidean_distance = cas.sqrt((c1_circle[0]-self.allother_x_opt[i][0,k])**2 + (c1_circle[1]-self.allother_x_opt[i][1,k])**2)
                             # distance_clipped = cas.fmax(buffer_distance, -1)
-                            self.collision_cost += 10/euclidean_distance**2
+                            distance_clipped = cas.fmax(buffer_distance, 0.00001)
+                            self.collision_cost += 1/distance_clipped**8       
                 # Don't forget the ambulance
                 if self.ambMPC:    
                     amb_circles, amb_radius = self.ambMPC.get_car_circles(self.xamb_opt[:,k])
@@ -233,11 +234,11 @@ class IterativeBestResponseMPCMultiple:
         prod =    cas.mtimes([dX.T, R_o.T, M, R_o, dX])
         self.opti.subject_to(prod >= (1 - slack))
 
-        M_smaller = cas.vertcat(cas.horzcat(1/(0.5*alpha_o)**2, 0), cas.horzcat(0, 1/(.5*beta_o)**2))
-        dist_prod =    cas.mtimes([dX.T, R_o.T, M_smaller, R_o, dX])
-        dist = dist_prod - 1
+        # M_smaller = cas.vertcat(cas.horzcat(1/(0.5*alpha_o)**2, 0), cas.horzcat(0, 1/(.5*beta_o)**2))
+        # dist_prod =    cas.mtimes([dX.T, R_o.T, M_smaller, R_o, dX])
+        # dist = dist_prod - 1
 
-        euc_dist = dx**2 + dy**2
+        # euc_dist = dx**2 + dy**2
         return prod
 
     def debug_callback(self, i, PLOT=True):
