@@ -82,10 +82,7 @@ class IterativeBestResponseMPCMultiple:
         self.response_svo_cost = np.cos(self.responseMPC.theta_iamb)*self.car1_costs
         self.other_svo_cost = np.sin(self.responseMPC.theta_iamb)*self.amb_costs
         self.total_svo_cost = self.response_svo_cost + self.other_svo_cost + self.k_slack * self.slack_cost + self.k_CA * self.collision_cost
-        ######## optimization  ##################################
-        
-        self.opti.minimize(self.total_svo_cost)    
-        ##########################################################
+
 
         #constraints
         self.responseMPC.add_dynamics_constraints(self.opti, self.x_opt, self.u_opt, self.x_desired, p)
@@ -179,7 +176,10 @@ class IterativeBestResponseMPCMultiple:
                     self.collision_cost += 0.1 * 1/dist_btw_wall_top**2
 
   
-
+        ######## optimization  ##################################
+        
+        self.opti.minimize(self.total_svo_cost)    
+        ##########################################################
         self.opti.set_value(p, x0)
 
         for i in range(len(self.allother_p)):
