@@ -153,8 +153,8 @@ class IterativeBestResponseMPCMultiple:
                         buffer_distance = self.generate_collision_ellipse(c1_circle[0], c1_circle[1], 
                                                                                 self.xamb_opt[0,k], self.xamb_opt[1,k], self.xamb_opt[2,k],
                                                                                 a_amb, b_amb, None)     
-                        distance_clipped = cas.fmax(buffer_distance, 0.001)
-                        self.collision_cost += 10/distance_clipped**2                   
+                        distance_clipped = cas.fmax(buffer_distance, 0.00001)
+                        self.collision_cost += 1/distance_clipped**8                   
                 
                 WALL_CA = True
                 if WALL_CA:
@@ -238,21 +238,22 @@ class IterativeBestResponseMPCMultiple:
         dist = dist_prod - 1
 
         euc_dist = dx**2 + dy**2
-        return euc_dist
+        return prod
 
-    def debug_callback(self, i):
+    def debug_callback(self, i, PLOT=True):
         xothers_plot = [self.opti.debug.value(xo) for xo in self.allother_x_opt]
         xamb_plot = self.opti.debug.value(self.x_opt)
         
-        CIRCLES=True
-        for k in range(xamb_plot.shape[1]):
-            cplotm.plot_multiple_cars( k, self.responseMPC, xothers_plot, xamb_plot, CIRCLES, None, None, None, self.world, 0)     
-            plt.plot(xamb_plot[0,:], xamb_plot[1,:],'o')
+        if PLOT:
+            CIRCLES=True
+            for k in range(xamb_plot.shape[1]):
+                cplotm.plot_multiple_cars( k, self.responseMPC, xothers_plot, xamb_plot, CIRCLES, None, None, None, self.world, 0)     
+                plt.plot(xamb_plot[0,:], xamb_plot[1,:],'o')
+                plt.show()
+            plt.plot(xamb_plot[4,:])
+            plt.hlines(35*0.447,0,xamb_plot.shape[1])
+            plt.ylabel('Speed')
             plt.show()
-        plt.plot(xamb_plot[4,:])
-        plt.hlines(35*0.447,0,xamb_plot.shape[1])
-        plt.ylabel('Speed')
-        plt.show()
         print("%d Total Cost %.03f J_i %.03f,  J_j %.03f, Slack %.03f, CA  %.03f"%
                 (i, self.opti.debug.value(self.total_svo_cost), self.opti.debug.value(self.response_svo_cost), self.opti.debug.value(self.other_svo_cost), self.opti.debug.value(self.k_slack*self.slack_cost), self.opti.debug.value(self.k_CA*self.collision_cost)))
 
