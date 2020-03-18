@@ -151,7 +151,7 @@ class MPC:
         
         opti.subject_to( opti.bounded(-1, X[0,:], np.infty )) #Constraints on X, Y
         opti.subject_to( opti.bounded(self.min_y+self.W/2.0, X[1,:], self.max_y-self.W/2.0) )
-        opti.subject_to( opti.bounded(-np.pi/2, X[2,:], np.pi/2) ) #no crazy angle
+        # opti.subject_to( opti.bounded(-np.pi/2, X[2,:], np.pi/2) ) #no crazy angle
         opti.subject_to(opti.bounded(self.min_v, X[4,:], self.max_v))    
 
 
