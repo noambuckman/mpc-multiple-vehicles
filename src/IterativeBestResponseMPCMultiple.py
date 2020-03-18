@@ -152,8 +152,9 @@ class IterativeBestResponseMPCMultiple:
                                                             self.allother_x_opt[i][0,k], self.allother_x_opt[i][1,k], self.allother_x_opt[i][2,k],
                                                             alphas[i], betas[i], self.slack_vars_list[i][ci,k])
                             
-                            distance_clipped = cas.fmax(buffer_distance, -1)
-                            self.collision_cost += 10/distance_clipped**2
+                            euclidean_distance = cas.sqrt((c1_circle[0]-self.allother_x_opt[i][0,k])**2 + (c1_circle[1]-self.allother_x_opt[i][1,k])**2)
+                            # distance_clipped = cas.fmax(buffer_distance, -1)
+                            self.collision_cost += 10/euclidean_distance**2
                 # Don't forget the ambulance
                 if self.ambMPC:    
                     amb_circles, amb_radius = self.ambMPC.get_car_circles(self.xamb_opt[:,k])
@@ -170,7 +171,7 @@ class IterativeBestResponseMPCMultiple:
                         distance_clipped = cas.fmax(buffer_distance, 0.001)
                         self.collision_cost += 10/distance_clipped**2                   
                 
-                WALL_CA = True
+                WALL_CA = False
                 if WALL_CA:
                     dist_btw_wall_bottom = c1_circle[1] - (self.responseMPC.min_y + self.responseMPC.W/2.0)
                     dist_btw_wall_top = c1_circle[1] - (self.responseMPC.max_y - self.responseMPC.W/2.0)
@@ -188,7 +189,7 @@ class IterativeBestResponseMPCMultiple:
             self.opti.set_value(pamb, x0_amb) 
 
         self.opti.solver('ipopt',{'warn_initial_bounds':True},
-        {'print_level':print_level, 'max_iter':10000, 'constr_viol_tol':0.0001})
+        {'print_level':print_level, 'max_iter':10000})
 
 
     def solve(self, uamb, uother):
@@ -240,7 +241,7 @@ class IterativeBestResponseMPCMultiple:
         M = cas.vertcat(cas.horzcat(1/alpha_o**2, 0), cas.horzcat(0, 1/beta_o**2))
         dX = cas.vertcat(dx, dy)
         prod =    cas.mtimes([dX.T, R_o.T, M, R_o, dX])
-        self.opti.subject_to(prod > (1 - slack))
+        self.opti.subject_to(prod >= (1 - slack))
 
         M_smaller = cas.vertcat(cas.horzcat(1/(0.5*alpha_o)**2, 0), cas.horzcat(0, 1/(.5*beta_o)**2))
         dist_prod =    cas.mtimes([dX.T, R_o.T, M_smaller, R_o, dX])
