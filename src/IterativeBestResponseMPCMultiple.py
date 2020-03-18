@@ -167,12 +167,13 @@ class IterativeBestResponseMPCMultiple:
                         distance_clipped = cas.fmax(buffer_distance, 0.001)
                         self.collision_cost += 10/distance_clipped**2                   
                 
-                WALL_CA = False
+                WALL_CA = True
                 if WALL_CA:
-                    dist_btw_wall_bottom = c1_circle[1] - (self.responseMPC.min_y + self.responseMPC.W/2.0)
-                    dist_btw_wall_top = c1_circle[1] - (self.responseMPC.max_y - self.responseMPC.W/2.0)
-                    self.collision_cost += 0.1 * 1/dist_btw_wall_bottom**2
-                    self.collision_cost += 0.1 * 1/dist_btw_wall_top**2
+                    dist_btw_wall_bottom =  c1_circle[1] - (self.responseMPC.min_y + self.responseMPC.W/2.0) 
+                    dist_btw_wall_top = (self.responseMPC.max_y - self.responseMPC.W/2.0) - c1_circle[1]
+
+                    self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_bottom, 0.00001)**2)
+                    self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_top, 0.00001))**2
 
   
         ######## optimization  ##################################
