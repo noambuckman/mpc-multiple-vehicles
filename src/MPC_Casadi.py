@@ -149,14 +149,14 @@ class MPC:
         else:
             x_start = x0[0]
         
-        opti.subject_to( opti.bounded(-1, X[0,:], np.infty )) #Constraints on X, Y
-        opti.subject_to( opti.bounded(self.min_y+self.W/2.0, X[1,:], self.max_y-self.W/2.0) )
-        # opti.subject_to( opti.bounded(-np.pi/2, X[2,:], np.pi/2) ) #no crazy angle
+        # opti.subject_to( opti.bounded(-1, X[0,:], np.infty )) #Constraints on X, Y
+        # opti.subject_to( opti.bounded(self.min_y+self.W/2.0, X[1,:], self.max_y-self.W/2.0) )
+        # # opti.subject_to( opti.bounded(-np.pi/2, X[2,:], np.pi/2) ) #no crazy angle
         opti.subject_to(opti.bounded(self.min_v, X[4,:], self.max_v))    
 
 
-        opti.subject_to(opti.bounded(-self.max_delta_u, U[0,:], self.max_delta_u))            
-        opti.subject_to(opti.bounded(self.min_v_u, U[1,:], self.max_v_u)) # 0-60 around 4 m/s^2
+        # opti.subject_to(opti.bounded(-self.max_delta_u, U[0,:], self.max_delta_u))            
+        # opti.subject_to(opti.bounded(self.min_v_u, U[1,:], self.max_v_u)) # 0-60 around 4 m/s^2
 
         # # Lane Deviations
         # if self.max_X_dev < np.infty:
