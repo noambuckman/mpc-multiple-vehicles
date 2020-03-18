@@ -244,10 +244,11 @@ class IterativeBestResponseMPCMultiple:
     def debug_callback(self, i, PLOT=True):
         xothers_plot = [self.opti.debug.value(xo) for xo in self.allother_x_opt]
         xamb_plot = self.opti.debug.value(self.x_opt)
-        
+        plot_range = range(xamb_plot.shape[1])
+        plot_range = [xamb_plot.shape[1] - 1]
         if PLOT:
             CIRCLES=True
-            for k in range(xamb_plot.shape[1]):
+            for k in plot_range:
                 cplotm.plot_multiple_cars( k, self.responseMPC, xothers_plot, xamb_plot, CIRCLES, None, None, None, self.world, 0)     
                 plt.plot(xamb_plot[0,:], xamb_plot[1,:],'o')
                 plt.show()

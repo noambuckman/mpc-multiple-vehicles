@@ -51,8 +51,8 @@ class MPC:
         self.k_lat = 0.001
         self.k_lon = 0.0
 
-        self.k_phi_error = 0.01
-        self.k_phi_dot = 0.01
+        self.k_phi_error = 0.001
+        self.k_phi_dot = 0.0
         ####
 
         # Constraints
