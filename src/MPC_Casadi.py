@@ -56,8 +56,8 @@ class MPC:
         ####
 
         # Constraints
-        self.max_delta_u = 5 * np.pi/180
-        self.max_acceleration = 4
+        self.max_delta_u = 5 * np.pi/180 * self.dt ### THIS IS THE DELTA< NEEDS TO BE A FUNCTION OF DT
+        self.max_acceleration = 4  * self.dt
         self.max_v_u = self.max_acceleration
         self.min_v_u = -self.max_v_u        
 
