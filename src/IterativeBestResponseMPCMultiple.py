@@ -73,7 +73,9 @@ class IterativeBestResponseMPCMultiple:
 
         self.slack_cost = 0
         for slack_var in self.slack_vars_list:
-            self.slack_cost += slack_var**3
+            for i in range(slack_var.shape[0]):
+                for j in range(slack_var.shape[1]):
+                    self.slack_cost += slack_var[i,j]**3
         
         if self.ambMPC:    
             self.slack_cost += cas.sumsqr(self.slack_amb**4)
