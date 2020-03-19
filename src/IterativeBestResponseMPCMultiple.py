@@ -263,7 +263,8 @@ class IterativeBestResponseMPCMultiple:
             plt.show()
         print("%d Total Cost %.03f J_i %.03f,  J_j %.03f, Slack %.03f, CA  %.03f"%
                 (i, self.opti.debug.value(self.total_svo_cost), self.opti.debug.value(self.response_svo_cost), self.opti.debug.value(self.other_svo_cost), self.opti.debug.value(self.k_slack*self.slack_cost), self.opti.debug.value(self.k_CA*self.collision_cost)))
-
+        for i in range(len(self.car1_costs_list)):
+            print(" %.04f : %s"%(self.opti.debug.value(self.car1_costs_list[i]),self.car1_cost_titles[i]))        
 
 
 
