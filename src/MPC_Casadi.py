@@ -150,7 +150,7 @@ class MPC:
             "self.k_s * self.s_cost",
             "self.k_v * self.v_cost",
             "self.k_change_u_v * self.change_u_v",
-            "self.k_change_u_delta * self.change_u_delta," 
+            "self.k_change_u_delta * self.change_u_delta", 
             "self.k_final * self.final_costs",
             "self.k_x * self.x_cost",
             "self.k_x_dot * self.x_dot_cost",
