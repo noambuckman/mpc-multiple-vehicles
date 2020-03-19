@@ -171,7 +171,7 @@ class IterativeBestResponseMPCMultiple:
         self.total_svo_cost = self.response_svo_cost + self.other_svo_cost + self.k_slack * self.slack_cost + self.k_CA * self.collision_cost
         # self.total_svo_cost = self.k_slack * self.slack_cost + self.k_CA * self.collision_cost
         # self.opti.minimize(self.total_svo_cost)    
-        self.opti.minimize(self.ambMPC.x_dot_cost)
+        self.opti.minimize(self.responseMPC.x_dot_cost)
         ##########################################################
         self.opti.set_value(p, x0)
 
