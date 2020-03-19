@@ -254,9 +254,10 @@ class IterativeBestResponseMPCMultiple:
                 cplotm.plot_multiple_cars( k, self.responseMPC, xothers_plot, xamb_plot, CIRCLES, None, None, None, self.world, 0)     
                 plt.plot(xamb_plot[0,:], xamb_plot[1,:],'o')
                 plt.show()
-            plt.plot(xamb_plot[4,:])
+            plt.plot(xamb_plot[4,:],'--')
+            plt.plot(xamb_plot[4,:] * np.cos(xamb_plot[2,:]))
+            plt.ylabel("Velocity / Vx")
             plt.hlines(35*0.447,0,xamb_plot.shape[1])
-            plt.ylabel('Speed')
             plt.show()
         print("%d Total Cost %.03f J_i %.03f,  J_j %.03f, Slack %.03f, CA  %.03f"%
                 (i, self.opti.debug.value(self.total_svo_cost), self.opti.debug.value(self.response_svo_cost), self.opti.debug.value(self.other_svo_cost), self.opti.debug.value(self.k_slack*self.slack_cost), self.opti.debug.value(self.k_CA*self.collision_cost)))
