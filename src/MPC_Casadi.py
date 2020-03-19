@@ -139,9 +139,26 @@ class MPC:
             self.k_x * self.x_cost,
             self.k_x_dot * self.x_dot_cost
         ]
+
+        cost_titles = [
+            "self.k_u_delta * self.u_delta_cost",
+            "self.k_u_v * self.u_v_cost",
+            "self.k_lat * self.lat_cost", 
+            "self.k_lon * self.lon_cost", 
+            "self.k_phi_error * self.phi_error_cost",
+            "self.k_phi_dot * self.phidot_cost",
+            "self.k_s * self.s_cost",
+            "self.k_v * self.v_cost",
+            "self.k_change_u_v * self.change_u_v",
+            "self.k_change_u_delta * self.change_u_delta," 
+            "self.k_final * self.final_costs",
+            "self.k_x * self.x_cost",
+            "self.k_x_dot * self.x_dot_cost",
+        ]
+
         all_costs = np.array(all_costs)
         total_cost = np.sum(all_costs)    
-        return total_cost, all_costs
+        return total_cost, all_costs, cost_titles
 
     def add_state_constraints(self, opti, X, U, X_desired, T, x0=None):
         if x0 is None:

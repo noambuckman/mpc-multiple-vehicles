@@ -53,11 +53,11 @@ class IterativeBestResponseMPCMultiple:
         #### Costs
             
         self.responseMPC.generate_costs(self.x_opt, self.u_opt, self.x_desired)
-        self.car1_costs, self.car1_costs_list = self.responseMPC.total_cost()
+        self.car1_costs, self.car1_costs_list, self.car1_cost_titles = self.responseMPC.total_cost()
 
         if self.ambMPC:
             self.ambMPC.generate_costs(self.xamb_opt, self.uamb_opt, self.xamb_desired)
-            self.amb_costs, self.amb_costs_list = self.ambMPC.total_cost()
+            self.amb_costs, self.amb_costs_list, self.amb_cost_titles = self.ambMPC.total_cost()
         else:
             self.amb_costs, self.amb_costs_list = 0, []
 
