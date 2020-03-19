@@ -139,10 +139,9 @@ class IterativeBestResponseMPCMultiple:
                                                             self.allother_x_opt[i][0,k], self.allother_x_opt[i][1,k], self.allother_x_opt[i][2,k],
                                                             alphas[i], betas[i], self.slack_vars_list[i][ci,k])
                             
-                            euclidean_distance = cas.sqrt((c1_circle[0]-self.allother_x_opt[i][0,k])**2 + (c1_circle[1]-self.allother_x_opt[i][1,k])**2)
                             # distance_clipped = cas.fmax(buffer_distance, -1)
-                            distance_clipped = cas.fmax(buffer_distance, 0.00001)
-                            self.collision_cost += 1/distance_clipped**8       
+                            distance_clipped = cas.fmax(buffer_distance, 0.01)
+                            self.collision_cost += 1/distance_clipped**self.k_CA_power      
                 # Don't forget the ambulance
                 if self.ambMPC:    
                     amb_circles, amb_radius = self.ambMPC.get_car_circles(self.xamb_opt[:,k])
