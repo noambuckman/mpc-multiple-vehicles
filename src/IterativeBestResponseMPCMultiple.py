@@ -18,7 +18,9 @@ class IterativeBestResponseMPCMultiple:
         self.min_dist = 2 * 1.5   # 2 times the radius of 1.5
         self.k_slack = 99999
         self.k_CA = 0
+        self.k_CA_power = 8
         self.collision_cost = 0
+        self.WALL_CA = False
 
         self.world = tw.TrafficWorld(2, 0, 10000)
 
@@ -57,7 +59,7 @@ class IterativeBestResponseMPCMultiple:
 
         if self.ambMPC:
             self.ambMPC.generate_costs(self.xamb_opt, self.uamb_opt, self.xamb_desired)
-            self.amb_costs, self.amb_costs_list, self.amb_cost_titles = self.ambMPC.total_cost()
+            self.amb_costs, self.amb_costs_list, self.amb_cost = self.ambMPC.total_cost()
         else:
             self.amb_costs, self.amb_costs_list = 0, []
 
@@ -155,10 +157,9 @@ class IterativeBestResponseMPCMultiple:
                                                                                 self.xamb_opt[0,k], self.xamb_opt[1,k], self.xamb_opt[2,k],
                                                                                 a_amb, b_amb, None)     
                         distance_clipped = cas.fmax(buffer_distance, 0.00001)
-                        self.collision_cost += 1/distance_clipped**8                   
+                        self.collision_cost += 1/distance_clipped**self.k_CA_power                  
                 
-                WALL_CA = True
-                if WALL_CA:
+                if self.WALL_CA:
                     dist_btw_wall_bottom =  c1_circle[1] - (self.responseMPC.min_y + self.responseMPC.W/2.0) 
                     dist_btw_wall_top = (self.responseMPC.max_y - self.responseMPC.W/2.0) - c1_circle[1]
 
