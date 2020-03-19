@@ -121,7 +121,10 @@ class MPC:
         self.change_u_delta = cas.sumsqr(U[0,1:N-1] - U[0,0:N-2])
         self.change_u_v = cas.sumsqr(U[1,1:N-1] - U[1,0:N-2])
         self.x_cost = cas.sumsqr(X[0,:])
-        self.x_cost = cas.sum2([.95**k * X[0,k]**2 for k in range(X.shape[0])])
+        x_cost = 0
+        for k in range(X.shape[0]):
+            x_cost += .95**k * X[0,k]**2
+        self.x_cost = x_cost
         self.x_dot_cost = cas.sumsqr(X[4, :] * cas.cos(X[2,:]))
 
     def total_cost(self):
