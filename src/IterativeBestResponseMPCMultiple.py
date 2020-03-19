@@ -245,8 +245,9 @@ class IterativeBestResponseMPCMultiple:
     def debug_callback(self, i, PLOT=True):
         xothers_plot = [self.opti.debug.value(xo) for xo in self.allother_x_opt]
         xamb_plot = self.opti.debug.value(self.x_opt)
+        max_x = np.max(xamb_plot[0,:])
         plot_range = range(xamb_plot.shape[1])
-        plot_range = [xamb_plot.shape[1] - 1]
+        # plot_range = [xamb_plot.shape[1] - 1]
         if PLOT:
             CIRCLES=True
             for k in plot_range:
