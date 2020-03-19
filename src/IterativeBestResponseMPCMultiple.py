@@ -87,7 +87,7 @@ class IterativeBestResponseMPCMultiple:
 
         #constraints
         self.responseMPC.add_dynamics_constraints(self.opti, self.x_opt, self.u_opt, self.x_desired, p)
-        self.responseMPC.add_state_constraints(self.opti, self.x_opt, self.u_opt, self.x_desired, T, x0)
+        self.responseMPC.add_state_constraints(self.opti, self.x_opt, self.u_opt, self.x_desired, T)
 
 
         # Proxy for the collision avoidance points on each vehicle
