@@ -123,7 +123,7 @@ class MPC:
         self.x_cost = cas.sumsqr(X[0,:])
         x_cost = 0
         for k in range(X.shape[0]):
-            x_cost += .95**k * X[0,k]**2
+            x_cost += 1.05**k * X[0,k]**2
         self.x_cost = x_cost
         self.x_dot_cost = cas.sumsqr(X[4, :] * cas.cos(X[2,:]))
 
