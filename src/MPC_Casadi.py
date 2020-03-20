@@ -262,8 +262,8 @@ class MPC:
 
         return fd
 
-    def get_car_circles(self, X, n_circles=2):
-        if n_circles==2:
+    def get_car_circles(self, X):
+        if self.n_circles==2:
             r, dx = 1.728843542029462, 0.7738902428000489  #solved using notebook for minimizing radius
             r, dx = 1.75, 0.77389
             x_circle_front = X[0:2,:] + dx * cas.vertcat(cas.cos(X[2,:]), cas.sin(X[2,:])) 
@@ -274,7 +274,7 @@ class MPC:
             min_dist = 2*radius
             radius = r
             centers = [x_circle_rear, x_circle_front]
-        elif n_circles==3:
+        elif self.n_circles==3:
             r, dx = 1.464421812899125, 1.0947808598616502
             r, dx = 1.47, 1.15
             x_circle_mid = X[0:2,:]
