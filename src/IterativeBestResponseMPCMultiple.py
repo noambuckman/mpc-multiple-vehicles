@@ -341,4 +341,45 @@ def load_costs_int(i):
     return car1_costs_list, amb_costs_list, svo_cost, other_svo_cost , total_svo_cost
 
 
-    
+def generate_warm_u(N, car_mpc):
+    u0_warm_profiles = {}
+    u1_warm_profiles = {}
+    ## braking
+    u_warm = np.zeros((2,N))
+    u_warm[0,:] = np.zeros(shape=(1,N))
+    u_warm[1,:] = np.ones(shape=(1,N)) * car_mpc.min_v_u
+    u1_warm_profiles["braking"] = u_warm
+
+    ## accelerate
+    u_warm = np.zeros((2,N))
+    u_warm[0,:] = np.zeros(shape=(1,N))
+    u_warm[1,:] = np.ones(shape=(1,N)) * car_mpc.max_v_u
+    u1_warm_profiles["accelerating"] = u_warm
+
+    ## no accelerate
+    u_warm = np.zeros((2,N))
+    u1_warm_profiles["none"] = u_warm
+    ##############################
+
+    ## lane change left
+    u_warm = np.zeros((2,N))
+    u_l1 = 0
+    u_r1 = int(N/3)
+    u_l2 = int(2*N/3)
+    # u_r2 = int(3*N/4)
+    u_warm[0,u_l1] = - 0.5 * car_mpc.max_delta_u
+    u_warm[0,u_r1] = car_mpc.max_delta_u
+    u_warm[0,u_l2] = - 0.5 * car_mpc.max_delta_u
+
+    u_warm[1,:] = np.zeros(shape=(1,N)) 
+    u0_warm_profiles["lane_change_left"] = u_warm
+
+    u0_warm_profiles["lane_change_right"] = - u0_warm_profiles["lane_change_left"]
+    u0_warm_profiles["none"] = np.zeros(shape=(2,N))
+
+    u_warm_profiles = {}
+    for u0_k in u0_warm_profiles.keys():
+        for u1_k in u1_warm_profiles.keys():
+            u_k = u0_k + " " + u1_k
+            u_warm_profiles[u_k] = u0_warm_profiles[u0_k] + u1_warm_profiles[u1_k]
+    return u_warm_profiles
