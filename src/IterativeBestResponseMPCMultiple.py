@@ -39,9 +39,9 @@ class IterativeBestResponseMPCMultiple:
 
         # Presume to be given...and we will initialize soon
         if self.ambMPC:
-            self.xamb_opt = self.opti.variable(n_state, N+1)
+            self.xamb_opt = self.opti.parameter(n_state, N+1)
             self.uamb_opt = self.opti.parameter(n_ctrl, N)
-            self.xamb_desired = self.opti.variable(3, N+1)
+            self.xamb_desired = self.opti.parameter(3, N+1)
             pamb = self.opti.parameter(n_state, 1)
 
         # self.allother_x_opt = [self.opti.variable(n_state, N+1) for i in self.otherMPClist] 
