@@ -9,11 +9,6 @@ import numpy as np
 import scipy.misc
 from scipy import ndimage
 
-##### For viewing the videos in Jupyter Notebook
-import io
-import base64
-from IPython.display import HTML
-
 import multiprocessing
 import functools
 import src.TrafficWorld as tw

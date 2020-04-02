@@ -372,9 +372,9 @@ def generate_warm_u(N, car_mpc):
     u_warm[0,u_l2] = - 0.5 * car_mpc.max_delta_u
 
     u_warm[1,:] = np.zeros(shape=(1,N)) 
-    u0_warm_profiles["lane_change_left"] = u_warm
+    u0_warm_profiles["lane_change_right"] = u_warm
 
-    u0_warm_profiles["lane_change_right"] = - u0_warm_profiles["lane_change_left"]
+    u0_warm_profiles["lane_change_left"] = - u0_warm_profiles["lane_change_left"]
     u0_warm_profiles["none"] = np.zeros(shape=(2,N))
 
     u_warm_profiles = {}
