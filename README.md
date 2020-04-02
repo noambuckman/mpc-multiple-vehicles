@@ -13,9 +13,15 @@ The main code being developed is:
 
 
 Dependents:
+-  Scipy
 -  Numpy
 -  Matplotlib
--  Casadi
+-  Casadi 3.51
+
+Installation:
+conda install -c conda-forge/label/cf202003 casadi
+conda install matplotlib
+conda install scipy
 
 If you use the code, please cite the paper:
 <Insert Title>
