@@ -57,7 +57,7 @@ class MPC:
 
         # Constraints
         self.max_delta_u = 5 * np.pi/180 * self.dt ### THIS IS THE DELTA< NEEDS TO BE A FUNCTION OF DT
-        self.max_acceleration = 4  * self.dt
+        self.max_acceleration = 4  * self.dt #4 m/s^2
         self.max_v_u = self.max_acceleration
         self.min_v_u = -self.max_v_u        
 
@@ -65,6 +65,7 @@ class MPC:
         self.min_v = 0.0
         self.max_y = np.infty
         self.min_y = -np.infty
+        self.strict_wall_constraint = True
 
         self.max_X_dev = np.infty
         self.max_Y_dev = np.infty        
@@ -121,10 +122,10 @@ class MPC:
         self.change_u_delta = cas.sumsqr(U[0,1:N-1] - U[0,0:N-2])
         self.change_u_v = cas.sumsqr(U[1,1:N-1] - U[1,0:N-2])
         self.x_cost = cas.sumsqr(X[0,:])
-        x_cost = 0
-        for k in range(X.shape[0]):
-            x_cost += 1.05**k * X[0,k]**2
-        self.x_cost = x_cost
+        # x_cost = 0
+        # for k in range(X.shape[0]):
+        #     x_cost += 1.05**k * X[0,k]**2
+        # self.x_cost = x_cost
         self.x_dot_cost = cas.sumsqr(X[4, :] * cas.cos(X[2,:]))
 
     def total_cost(self):
@@ -167,7 +168,8 @@ class MPC:
     def add_state_constraints(self, opti, X, U, X_desired, T):
         
         opti.subject_to( opti.bounded(-1, X[0,:], np.infty )) #Constraints on X, Y
-        opti.subject_to( opti.bounded(self.min_y+self.W/2.0, X[1,:], self.max_y-self.W/2.0) )
+        if self.strict_wall_constraint:
+            opti.subject_to( opti.bounded(self.min_y+self.W/2.0, X[1,:], self.max_y-self.W/2.0) )
         opti.subject_to( opti.bounded(-np.pi/2, X[2,:], np.pi/2) ) #no crazy angle
         opti.subject_to(opti.bounded(self.min_v, X[4,:], self.max_v))    
 
