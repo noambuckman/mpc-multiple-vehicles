@@ -113,8 +113,7 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desire
         elif ELLIPSES:
             # Plot the ambulance as circles
             centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
-            alpha_k = 0.1 + k/xamb_plot.shape[0] * (1-0.1)
-
+            alpha_k = 0.1 + float(k)/xamb_plot.shape[1] * (1-0.1)
             for ci in range(len(centers)):
                 xy_f = centers[ci]
                 circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius, color='red',alpha=alpha_k)

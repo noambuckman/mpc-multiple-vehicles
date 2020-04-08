@@ -92,7 +92,7 @@ for i in range(n_other):
 
     x1_MPC.k_phi_error = 0.001
     x1_MPC.k_phi_dot = 0.01    
-    x1_MPC.strict_wall_constraint = False
+    x1_MPC.strict_wall_constraint = True
 
     ####Vehicle Initial Conditions
     if i%2 == 0: 
@@ -113,12 +113,11 @@ for i in range(n_other):
         u1[0,0] = 2 * np.pi/180
     else:
         u1[0,0] = -2 * np.pi/180
-    u1[0,0] = 0 
+    # u1[0,0] = 0 
 
     all_other_MPC += [x1_MPC]
     all_other_x0 += [x0]
     all_other_u += [u1]    
-
 # Settings for Ambulance
 amb_MPC = cp.deepcopy(x1_MPC)
 amb_MPC.theta_iamb = 0.0
@@ -180,9 +179,12 @@ for i_mpc in range(n_rounds_mpc):
             for i in range(n_other):
                 if i_mpc == 0:
                     all_other_u_ibr[i] = np.zeros(shape=(2, N)) ## All vehicles constant velocity
+                    if i%2==0:
+                        all_other_u_ibr[i][0,0] = -2 * np.pi/180  # This is a hack and should be explicit that it's lane change
+                    else:
+                        all_other_u_ibr[i][0,0] = 2 * np.pi/180  # This is a hack and should be explicit that it's lane change                   
                 else:
                     all_other_u_ibr[i] = np.concatenate((all_other_u_mpc[i][:, number_ctrl_pts_executed:], np.tile(all_other_u_mpc[i][:,-1:],(1, number_ctrl_pts_executed))),axis=1) ##   
-                print((all_other_u_ibr[i], all_other_x0[i]))
                 all_other_x_ibr[i], all_other_x_des_ibr[i] = all_other_MPC[i].forward_simulate_all(all_other_x0[i].reshape(6,1), all_other_u_ibr[i])
 
         ########## Solve the Ambulance MPC ##########
@@ -295,7 +297,7 @@ for i_mpc in range(n_rounds_mpc):
                 else:
                     # take the control inputs of the last MPC and continue the ctrl
                     if i_mpc > 0:
-                        u_warm_profiles["previous"] = np.concatenate((all_other_u[i][:, number_ctrl_pts_executed:], np.tile(all_other_u[i][:,-1:],(1, number_ctrl_pts_executed))),axis=1) ##    
+                        u_warm_profiles["previous"] = np.concatenate((all_other_u_mpc[i][:, number_ctrl_pts_executed:], np.tile(all_other_u_mpc[i][:,-1:],(1, number_ctrl_pts_executed))),axis=1) ##    
 
                 min_response_cost = 99999999
                 for k_warm in u_warm_profiles.keys():

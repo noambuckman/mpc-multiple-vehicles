@@ -182,8 +182,8 @@ class IterativeBestResponseMPCMultiple:
         if self.ambMPC:    
             self.opti.set_value(pamb, x0_amb) 
 
-        self.opti.solver('ipopt',{},
-        {'print_level':print_level, 'max_iter':10000})
+        # self.opti.solver('ipopt',{},{'print_level':print_level, 'max_iter':10000})
+        self.opti.solver('ipopt',{},{'print_level':print_level})
 
 
     def solve(self, uamb, uother):
