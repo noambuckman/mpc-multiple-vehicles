@@ -212,7 +212,8 @@ for i_mpc in range(n_rounds_mpc):
             bri.k_slack, bri.k_CA, bri.k_CA_power, bri.world, bri.wall_CA = k_slack, k_CA, k_CA_power, world, wall_CA
             # for slack_var in bri.slack_vars_list: ## Added to constrain slacks
             #     bri.opti.subject_to(cas.vec(slack_var) <= 1.0)
-            bri.generate_optimization(N, T, response_x0, None, nonresponse_x0_list,  0, slack=False)
+            solve_amb = True
+            bri.generate_optimization(N, T, response_x0, None, nonresponse_x0_list,  0, slack=False, solve_amb=solve_amb)
             bri.opti.set_initial(bri.u_opt, u_warm)            
             bri.opti.set_initial(bri.x_opt, x_warm)
             bri.opti.set_initial(bri.x_desired, x_des_warm)   
@@ -220,38 +221,22 @@ for i_mpc in range(n_rounds_mpc):
             for j in range(len(nonresponse_x_list)):
                 bri.opti.set_value(bri.allother_x_opt[j], nonresponse_x_list[j])
                 bri.opti.set_value(bri.allother_x_desired[j], nonresponse_xd_list[j])
-            
-            # print("Plot the Warm Start")
-            # print("  k_warm", k_warm)
-            # plt.plot(u_warm[0])
-            # plt.ylabel("Steering")
-            # plt.show()
-            # plt.plot(u_warm[1])
-            # plt.ylabel("Acceleration")            
-            # plt.show()            
-            # for k in range(N):
-            #     cmplot.plot_multiple_cars( k, bri.responseMPC, nonresponse_x_list, x_warm,  True, None, None, None, bri.world, 0)     
-            #     plt.show()            
             ### Solve the Optimization
             # Debugging
             # plot_range = [N]
             # bri.opti.callback(lambda i: bri.debug_callback(i, plot_range))
             # bri.opti.callback(lambda i: print("J_i %.03f,  J_j %.03f, Slack %.03f, CA  %.03f"%(bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.other_svo_cost), bri.solution.value(bri.k_slack*bri.slack_cost), bri.solution.value(bri.k_CA*bri.collision_cost))))
             try:
-                bri.solve(None, nonresponse_u_list)
+                bri.solve(None, nonresponse_u_list, solve_amb)
                 x1, u1, x1_des, _, _, _, _, _, _ = bri.get_solution()
                 print(" i_mpc %d n_round %d i %02d Cost %.02f Slack %.02f "%(i_mpc, i_rounds_ibr, i, bri.solution.value(bri.total_svo_cost), bri.solution.value(bri.slack_cost)))
                 print(" J_i %.03f,  J_j %.03f, Slack %.03f, CA  %.03f"%(bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.other_svo_cost), bri.solution.value(bri.k_slack*bri.slack_cost), bri.solution.value(bri.k_CA*bri.collision_cost)))
                 print(" Dir:", subdir_name)
                 if bri.solution.value(bri.slack_cost) < min_slack:
-                    current_cost = bri.solution.value(bri.total_svo_cost)
-                    # print("  WARM START: %s, C: %0.02f"%(k_warm, current_cost)) 
-                    # for k in range(N):
-                    #     cmplot.plot_multiple_cars( k, bri.responseMPC, nonresponse_x_list, x_warm,  True, None, None, None, bri.world, 0)                                                     
-                    #     plt.show()     
+                    current_cost = bri.solution.value(bri.total_svo_cost)  
                     print( " SOLUTION")
                     cmplot.plot_single_frame(world, bri.responseMPC, x1, nonresponse_x_list, None, xamb_desired=None, xothers_desired=None,  
-                CIRCLES=True, parallelize=True, camera_speed = 0)
+                            CIRCLES=True, parallelize=True, camera_speed = 0)
                     plt.show()
                     plt.plot(u1[0,:])
                     plt.ylabel("Steering")
@@ -305,12 +290,16 @@ for i_mpc in range(n_rounds_mpc):
                     #### OPTIMZATION SETTINGS
                     bri = mibr.IterativeBestResponseMPCMultiple(response_MPC, amb_MPC, nonresponse_MPC_list)
                     bri.k_slack, bri.k_CA, bri.k_CA_power, bri.world, bri.wall_CA = k_slack, k_CA, k_CA_power, world, wall_CA
-                    bri.generate_optimization(N, T, response_x0, x0_amb, nonresponse_x0_list,  0, slack=False)
+                    bri.generate_optimization(N, T, response_x0, x0_amb, nonresponse_x0_list,  0, slack=False, solve_amb=solve_amb)
                     # bri.opti.callback(lambda i: print("J_i %.03f,  J_j %.03f, Slack %.03f, CA  %.03f"%(bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.other_svo_cost), bri.solution.value(bri.k_slack*bri.slack_cost), bri.solution.value(bri.k_CA*bri.collision_cost))))
                     # bri.opti.callback(lambda i: bri.debug_callback(i, range(N)))
-                    ### Set the trajectories of the nonresponse vehicles (as given)        
-                    bri.opti.set_value(bri.xamb_opt, xamb_ibr)
-                    bri.opti.set_value(bri.xamb_desired, xamb_des_ibr)
+                    ### Set the trajectories of the nonresponse vehicles (as given)      
+                    if solve_amb:
+                        bri.opti.set_initial(bri.xamb_opt, xamb_ibr)
+                        bri.opti.set_initial(bri.xamb_desired, xamb_des_ibr)                        
+                    else:
+                        bri.opti.set_value(bri.xamb_opt, xamb_ibr)
+                        bri.opti.set_value(bri.xamb_desired, xamb_des_ibr)
                     for j in range(len(nonresponse_x_list)):
                         bri.opti.set_value(bri.allother_x_opt[j], nonresponse_x_list[j])
                         bri.opti.set_value(bri.allother_x_desired[j], nonresponse_xd_list[j])
@@ -338,7 +327,7 @@ for i_mpc in range(n_rounds_mpc):
                     #     plt.show()
                     # Debugging
                     try:                     ### Solve the Optimization
-                        bri.solve(uamb_ibr, nonresponse_u_list)
+                        bri.solve(uamb_ibr, nonresponse_u_list, solve_amb)
                         x1_ibr_k, u1_ibr_k, x1_des_ibr_k, _, _, _, _, _, _ = bri.get_solution()
                         if PRINT_FLAG:
                             print("  i_mpc %d n_round %d i %02d Cost %.02f Slack %.02f "%(i_mpc, i_rounds_ibr, i, bri.solution.value(bri.total_svo_cost), bri.solution.value(bri.slack_cost)))
