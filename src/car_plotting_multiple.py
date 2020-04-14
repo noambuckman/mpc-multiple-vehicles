@@ -88,29 +88,28 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desire
 
     add_lanes(ax, world)
     add_grass(ax, world, k)   
-    ELLIPSES = True
-    CIRCLES = False
+
     for k in range(xamb_plot.shape[1]):             
+        # if CIRCLES:
+        #     for i in range(len(xothers_plot)):
+        #         x1_plot = xothers_plot[i]
+        #         centers, radius = x_mpc.get_car_circles_np(x1_plot[:,k:k+1])
+        #         for ci in range(len(centers)):
+        #             xy_f = centers[ci]
+        #             circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius)
+        #             ax.add_patch(circle_patch_f)
+        #         # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2)
+        #         # ax.add_patch(circle_patch_r)
+
+
+        #     centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
+        #     for ci in range(len(centers)):
+        #         xy_f = centers[ci]
+        #         circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius, color='red')
+        #         ax.add_patch(circle_patch_f)
+        #     # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2, color='red')
+        #     # ax.add_patch(circle_patch_r)  
         if CIRCLES:
-            for i in range(len(xothers_plot)):
-                x1_plot = xothers_plot[i]
-                centers, radius = x_mpc.get_car_circles_np(x1_plot[:,k:k+1])
-                for ci in range(len(centers)):
-                    xy_f = centers[ci]
-                    circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius)
-                    ax.add_patch(circle_patch_f)
-                # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2)
-                # ax.add_patch(circle_patch_r)
-
-
-            centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
-            for ci in range(len(centers)):
-                xy_f = centers[ci]
-                circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius, color='red')
-                ax.add_patch(circle_patch_f)
-            # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2, color='red')
-            # ax.add_patch(circle_patch_r)  
-        elif ELLIPSES:
             # Plot the ambulance as circles
             centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
             alpha_k = 0.1 + float(k)/xamb_plot.shape[1] * (1-0.1)
@@ -131,7 +130,7 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desire
 
             centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])                  
 
-        if not CIRCLES and not ELLIPSES:
+        if not CIRCLES:
             for i in range(len(xothers_plot)):
                 x1_plot = xothers_plot[i]
                 if (i%2)==0:
@@ -188,28 +187,27 @@ def plot_multiple_cars(k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desir
 
     add_lanes(ax, world)
     add_grass(ax, world, k)   
-    ELLIPSES = True
-    CIRCLES = False             
+          
+    # if CIRCLES:
+        # for i in range(len(xothers_plot)):
+        #     x1_plot = xothers_plot[i]
+        #     centers, radius = x_mpc.get_car_circles_np(x1_plot[:,k:k+1])
+        #     for ci in range(len(centers)):
+        #         xy_f = centers[ci]
+        #         circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius)
+        #         ax.add_patch(circle_patch_f)
+        #     # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2)
+        #     # ax.add_patch(circle_patch_r)
+
+
+        # centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
+        # for ci in range(len(centers)):
+        #     xy_f = centers[ci]
+        #     circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius, color='red')
+        #     ax.add_patch(circle_patch_f)
+        # # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2, color='red')
+        # # ax.add_patch(circle_patch_r)  
     if CIRCLES:
-        for i in range(len(xothers_plot)):
-            x1_plot = xothers_plot[i]
-            centers, radius = x_mpc.get_car_circles_np(x1_plot[:,k:k+1])
-            for ci in range(len(centers)):
-                xy_f = centers[ci]
-                circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius)
-                ax.add_patch(circle_patch_f)
-            # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2)
-            # ax.add_patch(circle_patch_r)
-
-
-        centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
-        for ci in range(len(centers)):
-            xy_f = centers[ci]
-            circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius, color='red')
-            ax.add_patch(circle_patch_f)
-        # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2, color='red')
-        # ax.add_patch(circle_patch_r)  
-    elif ELLIPSES:
         # Plot the ambulance as circles
         centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
         for ci in range(len(centers)):
@@ -229,7 +227,7 @@ def plot_multiple_cars(k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desir
 
         centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])                  
 
-    if not CIRCLES and not ELLIPSES:
+    if not CIRCLES:
         for i in range(len(xothers_plot)):
             x1_plot = xothers_plot[i]
             if (i%2)==0:
