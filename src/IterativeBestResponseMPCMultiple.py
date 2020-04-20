@@ -387,12 +387,11 @@ def generate_warm_x(car_mpc, world, x0):
     x_warm_default[3,:] = np.zeros((1, N+1))
     x_warm_default[4,:] = constant_v
     x_warm_default[5,:] = t_array * car_mpc.max_v
-    x_warm_profiles["constant v"] = x_warm_default
+    x_warm_profiles["0constant v"] = x_warm_default
     # lane change up
     y_up = y0 + lane_width
-    print("y_up", y_up)
     for percent_change in [0.00, 0.5, 0.75]:
-        key = "up %d"%(int(100*percent_change))
+        key = "0up %d"%(int(100*percent_change))
         x_up = np.copy(x_warm_default)
         ti_lane_change = int(percent_change * (N+1))
         y = y_up * np.ones((1, N+1))
@@ -401,9 +400,8 @@ def generate_warm_x(car_mpc, world, x0):
         x_warm_profiles[key] = x_up
 
     y_down = y0 - lane_width
-    print("y down", y_down)
     for percent_change in [0.00, 0.5, 0.75]:
-        key = "down %d"%(int(100*percent_change))
+        key = "0down %d"%(int(100*percent_change))
         x_up = np.copy(x_warm_default)
         ti_lane_change = int(percent_change * (N+1))
         y = y_down * np.ones((1, N+1))
