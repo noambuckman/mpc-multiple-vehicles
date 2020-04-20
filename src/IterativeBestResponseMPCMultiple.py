@@ -378,7 +378,7 @@ def generate_warm_x(car_mpc, world, x0):
     lane_width = world.lane_width
     constant_v = car_mpc.max_v
     t_array = np.arange(0, car_mpc.dt*(N+1) - 0.000001, car_mpc.dt)
-    x = t_array * car_mpc.max_v 
+    x = x0[0] + t_array * car_mpc.max_v 
     y0 = x0[1]
     x_warm_default = np.repeat(x0.reshape(6,1), N+1, 1)
     x_warm_default[0,:] = x
