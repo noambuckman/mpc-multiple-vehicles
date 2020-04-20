@@ -285,7 +285,11 @@ def add_lanes(ax, world):
         centerline_y = world.get_lane_centerline_y(lane_number, True)   
         topline_y = centerline_y + world.lane_width/2.0
         if lane_number == (world.n_lanes_right - 1):
-            ax.plot([xmin1, xmax1], [topline_y, topline_y], dashes=[10,10],color='y')
+            NO_PLOT_YELLOW = True
+            if NO_PLOT_YELLOW:
+                continue
+            else:
+                ax.plot([xmin1, xmax1], [topline_y, topline_y], dashes=[10,10],color='y')
         else:
             ax.plot([xmin1, xmax1], [topline_y, topline_y], dashes=[10,10], color='0.5')
     for lane_number in range(world.n_lanes_left):
