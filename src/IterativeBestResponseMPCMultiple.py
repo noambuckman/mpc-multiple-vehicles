@@ -372,8 +372,10 @@ def load_costs_int(i):
 
     return car1_costs_list, amb_costs_list, svo_cost, other_svo_cost , total_svo_cost
 
-def generate_warm_x(car_mpc, world, x0):
+def generate_warm_x(car_mpc, world, x0): 
     x_warm_profiles = {}
+    N = car_mpc.N
+    lane_width = world.lane_width
     constant_v = car_mpc.max_v
     t_array = np.arange(0, car_mpc.dt*(N+1) - 0.000001, car_mpc.dt)
     x = t_array * car_mpc.max_v 
@@ -391,7 +393,7 @@ def generate_warm_x(car_mpc, world, x0):
     print("y_up", y_up)
     for percent_change in [0.00, 0.5, 0.75]:
         key = "up %d"%(int(100*percent_change))
-        x_up = cp.copy(x_warm_default)
+        x_up = np.copy(x_warm_default)
         ti_lane_change = int(percent_change * (N+1))
         y = y_up * np.ones((1, N+1))
         y[:,:ti_lane_change] = x0[1] * np.ones((1,ti_lane_change))
@@ -402,7 +404,7 @@ def generate_warm_x(car_mpc, world, x0):
     print("y down", y_down)
     for percent_change in [0.00, 0.5, 0.75]:
         key = "down %d"%(int(100*percent_change))
-        x_up = cp.copy(x_warm_default)
+        x_up = np.copy(x_warm_default)
         ti_lane_change = int(percent_change * (N+1))
         y = y_down * np.ones((1, N+1))
         y[:,:ti_lane_change] = x0[1] * np.ones((1,ti_lane_change))
