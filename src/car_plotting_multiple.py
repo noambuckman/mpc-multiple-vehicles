@@ -61,7 +61,7 @@ def get_frame(x, x_MPC, ax=None, car_name="red", alpha = 1.0):
     return ax    
 
 def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desired=None, xothers_desired=None,  
-                CIRCLES=False, parallelize=True, camera_speed = None):
+                CIRCLES=False, parallelize=True, camera_speed = None, car_ids = None):
     '''Plots the progression of all cars in one frame'''
     if camera_speed is None:
         camera_speed = x_mpc.max_v
@@ -119,10 +119,20 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desire
                 ax.add_patch(circle_patch_f)
 
             for i in range(len(xothers_plot)):
+
+                if car_ids is not None:
+                    car_id = car_ids[i+1]  
+                else:
+                    car_id = i
+                if (car_id%2)==0:
+                    color="red"
+                else:
+                    color="green"
+
                 x1_plot = xothers_plot[i]
                 x, y, phi = x1_plot[0,k], x1_plot[1,k], x1_plot[2,k]
                 a, b = x_mpc.ax, x_mpc.by
-                ellipse_patch = patches.Ellipse((x, y), 2*a, 2*b, angle=np.rad2deg(phi), fill=False, edgecolor='red', alpha=alpha_k)
+                ellipse_patch = patches.Ellipse((x, y), 2*a, 2*b, angle=np.rad2deg(phi), fill=False, color='red', alpha=alpha_k)
                 ax.add_patch(ellipse_patch)
                 # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2)
                 # ax.add_patch(circle_patch_r)
@@ -133,7 +143,11 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desire
         if not CIRCLES:
             for i in range(len(xothers_plot)):
                 x1_plot = xothers_plot[i]
-                if (i%2)==0:
+                if car_ids is not None:
+                    car_id = car_ids[i+1]  
+                else:
+                    car_id = i
+                if (car_id%2)==0:
                     color="red"
                 else:
                     color="green"
