@@ -372,11 +372,14 @@ def load_costs_int(i):
 
     return car1_costs_list, amb_costs_list, svo_cost, other_svo_cost , total_svo_cost
 
-def generate_warm_x(car_mpc, world, x0): 
+def generate_warm_x(car_mpc, world, x0, average_v=None): 
     x_warm_profiles = {}
     N = car_mpc.N
     lane_width = world.lane_width
-    constant_v = car_mpc.max_v
+    if average_v is None:
+        constant_v = car_mpc.max_v
+    else:
+        constant_v = average_v
     t_array = np.arange(0, car_mpc.dt*(N+1) - 0.000001, car_mpc.dt)
     x = x0[0] + t_array * car_mpc.max_v 
     y0 = x0[1]
