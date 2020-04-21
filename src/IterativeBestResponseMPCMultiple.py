@@ -381,7 +381,7 @@ def generate_warm_x(car_mpc, world, x0, average_v=None):
     else:
         constant_v = average_v
     t_array = np.arange(0, car_mpc.dt*(N+1) - 0.000001, car_mpc.dt)
-    x = x0[0] + t_array * car_mpc.max_v 
+    x = x0[0] + t_array * constant_v
     y0 = x0[1]
     x_warm_default = np.repeat(x0.reshape(6,1), N+1, 1)
     x_warm_default[0,:] = x
@@ -389,7 +389,7 @@ def generate_warm_x(car_mpc, world, x0, average_v=None):
     x_warm_default[2,:] = np.zeros((1, N+1))
     x_warm_default[3,:] = np.zeros((1, N+1))
     x_warm_default[4,:] = constant_v
-    x_warm_default[5,:] = t_array * car_mpc.max_v
+    x_warm_default[5,:] = t_array * constant_v
     x_warm_profiles["0constant v"] = x_warm_default
     # lane change up
     y_up = y0 + lane_width
