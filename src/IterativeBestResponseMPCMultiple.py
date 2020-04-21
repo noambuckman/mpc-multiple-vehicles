@@ -276,12 +276,17 @@ class IterativeBestResponseMPCMultiple:
         # euc_dist = dx**2 + dy**2
         return dist_prod
 
-    def debug_callback(self, i, plot_range=[]):
+    def debug_callback(self, i, plot_range=[], file_name = False):
         xothers_plot = [self.opti.debug.value(xo) for xo in self.allother_x_opt]
         xamb_plot = self.opti.debug.value(self.x_opt)
         max_x = np.max(xamb_plot[0,:])
         # plot_range = range(xamb_plot.shape[1])
         # plot_range = [xamb_plot.shape[1] - 1]
+        if file_name:
+            uamb_plot = self.opti.debug.value(self.u_opt)
+            uothers_plot = [self.opti.debug.value(xo) for xo in self.allother_u_opt]
+            save_state(file_name, xamb_plot, uamb_plot, None, xothers_plot, uothers_plot, None)
+
         if len(plot_range)>0:
             CIRCLES=True
             for k in plot_range:
