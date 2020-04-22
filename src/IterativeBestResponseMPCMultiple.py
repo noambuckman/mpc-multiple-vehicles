@@ -3,7 +3,7 @@ import casadi as cas
 import src.MPC_Casadi as mpc
 
 import matplotlib.pyplot as plt
-import cmplot as cmplot
+import src.car_plotting_multiple as cmplot
 import src.TrafficWorld as tw
 
 class IterativeBestResponseMPCMultiple:
