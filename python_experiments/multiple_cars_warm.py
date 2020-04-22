@@ -330,7 +330,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                         solve_amb = False
                     else:
                         solve_amb = True  
-                                            
+
                     bri.generate_optimization(N, T, response_x0, x0_amb, nonresponse_x0_list,  0, slack=False, solve_amb=solve_amb)
                     # bri.opti.callback(lambda i: print("J_i %.03f,  J_j %.03f, Slack %.03f, CA  %.03f"%(bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.other_svo_cost), bri.solution.value(bri.k_slack*bri.slack_cost), bri.solution.value(bri.k_CA*bri.collision_cost))))
                     # bri.opti.callback(lambda i: bri.debug_callback(i, range(N)))
@@ -463,5 +463,12 @@ actual_xamb = actual_xamb[:,:actual_t+number_ctrl_pts_executed+1]
 for i in range(len(all_other_x)):
     actual_xothers[i] = actual_xothers[i][:,:actual_t+number_ctrl_pts_executed+1]
 
+mean_amb_v = np.median(actual_xamb[4,:])
+min_amb_v = np.min(actual_xamb[4,:])
+print("Min Speed", min_amb_v, mean_amb_v)
+print("Plotting all")
+cmplot.plot_cars(bri_mpc.world, bri_mpc.responseMPC, actual_xamb, actual_xothers, folder, None, None, False, False, min_amb_v)
+
 file_name = folder + "data/"+'a%02d%03d'%(i_mpc, i_rounds_ibr)
+print("Saving to...  ", file_name)
 mibr.save_state(file_name, actual_xamb, uamb_mpc, xamb_des_mpc, actual_xothers, all_other_u_mpc, all_other_x_des_mpc)
