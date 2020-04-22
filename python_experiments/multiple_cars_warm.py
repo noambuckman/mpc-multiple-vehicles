@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 import copy as cp
 import pickle
 
-# PROJECT_PATH = '/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-multiple-vehicles/'
-PROJECT_PATH = '/Users/noambuckman/mpc-multiple-vehicles/'
+PROJECT_PATH = '/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-multiple-vehicles/'
+# PROJECT_PATH = '/Users/noambuckman/mpc-multiple-vehicles/'
 sys.path.append(PROJECT_PATH)
 
 import casadi as cas
@@ -21,9 +21,9 @@ import src.car_plotting_multiple as cmplot
 svo_theta = np.pi/4.0
 # random_seed = args.random_seed[0]
 random_seed = 3
-NEW = False
+NEW = True
 if NEW:
-    optional_suffix = "ellipses"
+    optional_suffix = "6cars"
     subdir_name = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + optional_suffix
     folder = "results/" + subdir_name + "/"
     os.makedirs(folder)
@@ -40,17 +40,17 @@ if random_seed > 0:
 
 
 #######################################################################
-T = 5  # MPC Planning Horizon
+T = 3  # MPC Planning Horizon
 dt = 0.2
 N = int(T/dt) #Number of control intervals in MPC
-n_rounds_mpc = 6
-percent_mpc_executed = 1.0 ## This is the percent of MPC that is executed
+n_rounds_mpc = 8
+percent_mpc_executed = .80 ## This is the percent of MPC that is executed
 number_ctrl_pts_executed =  int(np.floor(N*percent_mpc_executed))
 print("number ctrl pts:  %d"%number_ctrl_pts_executed)
 XAMB_ONLY = False
 PLOT_FLAG, SAVE_FLAG, PRINT_FLAG = False, False, False
-n_other = 2
-n_rounds_ibr = 2
+n_other = 20
+n_rounds_ibr = 4
 
 world = tw.TrafficWorld(2, 0, 1000)
     # large_world = tw.TrafficWorld(2, 0, 1000, 5.0)
@@ -153,257 +153,3 @@ if SAVE_FLAG:
 #### SOLVE THE MPC #####################################################
 xamb_executed, all_other_x_executed = None, [] #This gets updated after each round of MPC
 uamb_mpc, all_other_u_mpc = None, []
-for i_mpc in range(n_rounds_mpc):
-    min_slack = np.infty
-    actual_t = i_mpc * number_ctrl_pts_executed
-    ###### Update the initial conditions for all vehicles
-    if i_mpc > 0:
-        x0_amb = xamb_executed[:, number_ctrl_pts_executed] 
-        for i in range(len(all_other_x0)):
-            all_other_x0[i] = all_other_x_executed[i][:, number_ctrl_pts_executed]        
-
-    uamb_ibr = None
-    xamb_ibr = None
-    xamb_des_ibr = None
-    all_other_u_ibr = [None for i in range(n_other)]    
-    all_other_x_ibr = [None for i in range(n_other)]
-    all_other_x_des_ibr = [None for i in range(n_other)]
-    amb_solved_flag = False
-    other_solved_flag = [False for i in range(n_other)]
-
-    for i_rounds_ibr in range(n_rounds_ibr):
-        print("Initial conditions MPC_i: %d IBR_i: %d x: %0.1f y:%0.1f"%(i_mpc, i_rounds_ibr, x0_amb[0], x0_amb[1]))
-        if i_rounds_ibr == 0:
-            ###### Initial guess for the other u.  This will be updated once the other vehicles
-            ###### solve the best response to the ambulance. Initial guess just looks at the last solution. This could also be a lange change
-            for i in range(n_other):
-                if i_mpc == 0:
-                    all_other_u_ibr[i] = np.zeros(shape=(2, N)) ## All vehicles constant velocity
-                    if i%2==0:
-                        all_other_u_ibr[i][0,0] = -2 * np.pi/180  # This is a hack and should be explicit that it's lane change
-                    else:
-                        all_other_u_ibr[i][0,0] = 2 * np.pi/180  # This is a hack and should be explicit that it's lane change                   
-                else:
-                    all_other_u_ibr[i] = np.concatenate((all_other_u_mpc[i][:, number_ctrl_pts_executed:], np.tile(all_other_u_mpc[i][:,-1:],(1, number_ctrl_pts_executed))),axis=1) ##   
-                all_other_x_ibr[i], all_other_x_des_ibr[i] = all_other_MPC[i].forward_simulate_all(all_other_x0[i].reshape(6,1), all_other_u_ibr[i])
-
-        ########## Solve the Ambulance MPC ##########
-        response_MPC = amb_MPC
-        response_x0 = x0_amb
-        nonresponse_MPC_list = all_other_MPC
-        nonresponse_x0_list = all_other_x0
-        nonresponse_u_list = all_other_u_ibr
-        nonresponse_x_list = all_other_x_ibr
-        nonresponse_xd_list = all_other_x_des_ibr
-        ################# Generate the warm starts ###############################
-        u_warm_profiles = mibr.generate_warm_u(N, response_MPC)
-        if i_rounds_ibr > 0:            # warm start with the solution from the last IBR round
-            u_warm_profiles["previous"] = uamb_ibr    
-        else:                           # take the control inputs of the last MPC and continue the ctrl
-            if i_mpc > 0:
-                u_warm_profiles["previous"] = np.concatenate((uamb_mpc[:, number_ctrl_pts_executed:], np.tile(uamb_mpc[:,-1:],(1, number_ctrl_pts_executed))),axis=1) ##    
-        #######################################################################
-        min_response_cost = 99999999
-        for k_warm in u_warm_profiles.keys():
-            u_warm = u_warm_profiles[k_warm]
-            x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm)
-            bri = mibr.IterativeBestResponseMPCMultiple(response_MPC, None, nonresponse_MPC_list )
-            k_slack, k_CA, k_CA_power, wall_CA = 10000.0, 0.000000000000000, 4, True
-            bri.k_slack, bri.k_CA, bri.k_CA_power, bri.world, bri.wall_CA = k_slack, k_CA, k_CA_power, world, wall_CA
-            # for slack_var in bri.slack_vars_list: ## Added to constrain slacks
-            #     bri.opti.subject_to(cas.vec(slack_var) <= 1.0)
-            solve_amb = True
-            bri.generate_optimization(N, T, response_x0, None, nonresponse_x0_list,  0, slack=False, solve_amb=solve_amb)
-            bri.opti.set_initial(bri.u_opt, u_warm)            
-            bri.opti.set_initial(bri.x_opt, x_warm)
-            bri.opti.set_initial(bri.x_desired, x_des_warm)   
-            ### Set the trajectories of the nonresponse vehicles (as given)        
-            for j in range(len(nonresponse_x_list)):
-                bri.opti.set_value(bri.allother_x_opt[j], nonresponse_x_list[j])
-                bri.opti.set_value(bri.allother_x_desired[j], nonresponse_xd_list[j])
-            ### Solve the Optimization
-            # Debugging
-            # plot_range = [N]
-            # bri.opti.callback(lambda i: bri.debug_callback(i, plot_range))
-            # bri.opti.callback(lambda i: print("J_i %.03f,  J_j %.03f, Slack %.03f, CA  %.03f"%(bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.other_svo_cost), bri.solution.value(bri.k_slack*bri.slack_cost), bri.solution.value(bri.k_CA*bri.collision_cost))))
-            try:
-                bri.solve(None, nonresponse_u_list, solve_amb)
-                x1, u1, x1_des, _, _, _, _, _, _ = bri.get_solution()
-                print(" i_mpc %d n_round %d i %02d Cost %.02f Slack %.02f "%(i_mpc, i_rounds_ibr, i, bri.solution.value(bri.total_svo_cost), bri.solution.value(bri.slack_cost)))
-                print(" J_i %.03f,  J_j %.03f, Slack %.03f, CA  %.03f"%(bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.other_svo_cost), bri.solution.value(bri.k_slack*bri.slack_cost), bri.solution.value(bri.k_CA*bri.collision_cost)))
-                print(" Dir:", subdir_name)
-                if bri.solution.value(bri.slack_cost) < min_slack:
-                    current_cost = bri.solution.value(bri.total_svo_cost)  
-                    print( " SOLUTION")
-                    cmplot.plot_single_frame(world, bri.responseMPC, x1, nonresponse_x_list, None, xamb_desired=None, xothers_desired=None,  
-                            CIRCLES=True, parallelize=True, camera_speed = 0)
-                    plt.show()
-                    plt.plot(u1[0,:])
-                    plt.ylabel("Steering")
-                    plt.show()
-                    plt.plot(u1[1,:])
-                    plt.hlines(amb_MPC.max_v_u,0,u1.shape[1])
-                    plt.hlines(amb_MPC.min_v_u,0,u1.shape[1])                    
-                    plt.ylabel("Acceleration")            
-                    plt.show()                                                                 
-                    if current_cost < min_response_cost:                # Update the solution for response vehicle at this iteration
-                        uamb_ibr = u1
-                        xamb_ibr = x1
-                        xamb_des_ibr = x1_des
-                        min_response_cost = current_cost
-                        min_response_warm_ibr = k_warm
-                        min_bri_ibr = bri
-                        amb_solved_flag = True  
-                                         
-                        # file_name = folder + "data/"+'%03d'%ibr_sub_it
-                        # mibr.save_state(file_name, xamb, uamb, xamb_des, all_other_x, all_other_u, all_other_x_des)
-                        # mibr.save_costs(file_name, bri)                  
-            except RuntimeError:
-                print("Infeasibility: k_warm %s"%k_warm)
-                # ibr_sub_it +=1   
-        if not amb_solved_flag:
-            raise Exception("Ambulance did not converge to a solution")
-        ########### SOLVE FOR THE OTHER VEHICLES ON THE ROAD
-        if not XAMB_ONLY:
-            for i in range(len(all_other_MPC)):
-                print("SOLVING AGENT %d"%i)
-                response_MPC = all_other_MPC[i]
-                response_x0 = all_other_x0[i]
-                nonresponse_MPC_list = all_other_MPC[:i] + all_other_MPC[i+1:]
-                nonresponse_x0_list = all_other_x0[:i] + all_other_x0[i+1:]
-                nonresponse_u_list = all_other_u_ibr[:i] + all_other_u_ibr[i+1:]
-                nonresponse_x_list = all_other_x_ibr[:i] + all_other_x_ibr[i+1:]
-                nonresponse_xd_list = all_other_x_des_ibr[:i] + all_other_x_des_ibr[i+1:]
-
-                ################  Warm Start
-                u_warm_profiles = mibr.generate_warm_u(N, response_MPC)
-                if i_rounds_ibr > 0:   # warm start with the solution from the last IBR round
-                    u_warm_profiles["previous"] = all_other_u_ibr[i] 
-                else:
-                    # take the control inputs of the last MPC and continue the ctrl
-                    if i_mpc > 0:
-                        u_warm_profiles["previous"] = np.concatenate((all_other_u_mpc[i][:, number_ctrl_pts_executed:], np.tile(all_other_u_mpc[i][:,-1:],(1, number_ctrl_pts_executed))),axis=1) ##    
-
-                min_response_cost = 99999999
-                for k_warm in u_warm_profiles.keys():
-                   
-                    #### OPTIMZATION SETTINGS
-                    bri = mibr.IterativeBestResponseMPCMultiple(response_MPC, amb_MPC, nonresponse_MPC_list)
-                    bri.k_slack, bri.k_CA, bri.k_CA_power, bri.world, bri.wall_CA = k_slack, k_CA, k_CA_power, world, wall_CA
-                    bri.generate_optimization(N, T, response_x0, x0_amb, nonresponse_x0_list,  0, slack=False, solve_amb=solve_amb)
-                    # bri.opti.callback(lambda i: print("J_i %.03f,  J_j %.03f, Slack %.03f, CA  %.03f"%(bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.other_svo_cost), bri.solution.value(bri.k_slack*bri.slack_cost), bri.solution.value(bri.k_CA*bri.collision_cost))))
-                    # bri.opti.callback(lambda i: bri.debug_callback(i, range(N)))
-                    ### Set the trajectories of the nonresponse vehicles (as given)      
-                    if solve_amb:
-                        bri.opti.set_initial(bri.xamb_opt, xamb_ibr)
-                        bri.opti.set_initial(bri.xamb_desired, xamb_des_ibr)                        
-                    else:
-                        bri.opti.set_value(bri.xamb_opt, xamb_ibr)
-                        bri.opti.set_value(bri.xamb_desired, xamb_des_ibr)
-                    for j in range(len(nonresponse_x_list)):
-                        bri.opti.set_value(bri.allother_x_opt[j], nonresponse_x_list[j])
-                        bri.opti.set_value(bri.allother_x_desired[j], nonresponse_xd_list[j])
-                    # for slack_var in bri.slack_vars_list: ## Added to constrain slacks
-                    #     bri.opti.subject_to(cas.vec(slack_var) <= 1.0)                    
-                    
-                    u_warm = u_warm_profiles[k_warm]
-                    x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm)                    
-                    bri.opti.set_initial(bri.u_opt, u_warm)            
-                    bri.opti.set_initial(bri.x_opt, x_warm)
-                    bri.opti.set_initial(bri.x_desired, x_des_warm)   
-
-
-                    # print("Plot the Warm Start")
-                    # print("  k_warm", k_warm)
-                    # plt.plot(u_warm[0])
-                    # plt.ylabel("Steering")
-                    # plt.show()
-                    # plt.plot(u_warm[1])
-                    # plt.ylabel("Acceleration")            
-                    # plt.show()                       
-                    # for k in range(N):
-                    #     temp_amb_nonresponse = nonresponse_x_list + [xamb]
-                    #     cmplot.plot_multiple_cars( k, bri.responseMPC, temp_amb_nonresponse, x_warm,  True, None, None, None, bri.world, 0)     
-                    #     plt.show()
-                    # Debugging
-                    try:                     ### Solve the Optimization
-                        bri.solve(uamb_ibr, nonresponse_u_list, solve_amb)
-                        x1_ibr_k, u1_ibr_k, x1_des_ibr_k, _, _, _, _, _, _ = bri.get_solution()
-                        if PRINT_FLAG:
-                            print("  i_mpc %d n_round %d i %02d Cost %.02f Slack %.02f "%(i_mpc, i_rounds_ibr, i, bri.solution.value(bri.total_svo_cost), bri.solution.value(bri.slack_cost)))
-                            print("  J_i %.03f,  J_j %.03f, Slack %.03f, CA  %.03f"%(bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.other_svo_cost), bri.solution.value(bri.k_slack*bri.slack_cost), bri.solution.value(bri.k_CA*bri.collision_cost)))
-                            print("  Dir:", subdir_name)
-                        if bri.solution.value(bri.slack_cost) < min_slack:
-                            current_cost = bri.solution.value(bri.total_svo_cost)
-                            if current_cost < min_response_cost:
-                                all_other_x_ibr[i] = x1_ibr_k
-                                all_other_u_ibr[i] = u1_ibr_k
-                                all_other_x_des_ibr[i] = x1_des_ibr_k
-                                other_solved_flag[i] = True
-                                min_response_cost = current_cost
-                                min_response_warm = k_warm
-                                min_bri = bri
-
-                                if SAVE_FLAG:
-                                    file_name = folder + "data/"+'%03d'%i_rounds_ibr
-                                    mibr.save_state(file_name, xamb_ibr, uamb_ibr, xamb_des_ibr, all_other_x_ibr, all_other_u_ibr, all_other_x_des_ibr)
-                                    mibr.save_costs(file_name, bri)
-                    except RuntimeError:
-                        print("  Infeasibility: k_warm %s"%k_warm)
-                if not other_solved_flag[i]:
-                    raise Exception("i did not converge to a solution")
-
-    xamb_mpc = xamb_ibr
-    xamb_des_mpc = xamb_des_ibr
-    uamb_mpc = uamb_ibr
-    all_other_u_mpc = all_other_u_ibr
-    all_other_x_mpc = all_other_x_ibr
-    all_other_x_des_mpc = all_other_x_des_ibr
-    bri_mpc = min_bri
-    file_name = folder + "data/"+'r%02d%03d'%(i_mpc, i_rounds_ibr)
-
-    all_other_x_executed = [np.zeros(shape=(6,number_ctrl_pts_executed+1)) for i in range(n_other)]
-    all_other_u_executed = [np.zeros(shape=(2,number_ctrl_pts_executed)) for i in range(n_other)]
-    if (not amb_solved_flag) or (False in other_solved_flag):
-        print("MPC Error: One of the vehicles did not converge to a solution.")
-        print(xamb_mpc)
-        print(all_other_x_mpc)
-        raise Exception
-    else:
-        ### SAVE EXECUTED MPC SOLUTION TO HISTORY
-        actual_t = i_mpc * number_ctrl_pts_executed
-        xamb_executed, uamb_executed = xamb_mpc[:,:number_ctrl_pts_executed+1], uamb_mpc[:,:number_ctrl_pts_executed]
-        actual_xamb[:,actual_t:actual_t+number_ctrl_pts_executed+1], actual_uamb[:,actual_t:actual_t+number_ctrl_pts_executed] = xamb_executed, uamb_executed
-        for i in range(len(all_other_x)):
-            all_other_x_executed[i], all_other_u_executed[i] = all_other_x_mpc[i][:,:number_ctrl_pts_executed+1], all_other_u_mpc[i][:,:number_ctrl_pts_executed]
-            actual_xothers[i][:,actual_t:actual_t+number_ctrl_pts_executed+1], actual_uothers[i][:,actual_t:actual_t+number_ctrl_pts_executed] = all_other_x_executed[i], all_other_u_executed[i]
-
-        ### SAVE STATES AND PLOT
-        if SAVE_FLAG:
-            mibr.save_state(file_name, xamb_mpc, uamb_mpc, xamb_des_mpc, all_other_x_mpc, all_other_u_mpc, all_other_x_des_mpc)
-            mibr.save_costs(file_name, bri_mpc)        
-        print(" MPC Done:  Rd %02d / %02d"%(i_mpc, n_rounds_mpc))
-        print(" Full MPC Solution", xamb_mpc[0:2,:])
-        print(" Executed MPC", xamb_mpc[0:2,:number_ctrl_pts_executed+1])
-        print(" Solution Costs...")
-        for cost in bri_mpc.car1_costs_list:
-            print("%.04f"%bri_mpc.solution.value(cost))
-        print(bri_mpc.solution.value(bri_mpc.k_CA * bri_mpc.collision_cost), bri_mpc.solution.value(bri_mpc.collision_cost))
-        print(bri_mpc.solution.value(bri_mpc.k_slack * bri_mpc.slack_cost), bri_mpc.solution.value(bri_mpc.slack_cost))
-        print(" Save to...", file_name)
-        
-        plot_range = range(number_ctrl_pts_executed+1)
-        for k in plot_range:
-            cmplot.plot_multiple_cars( k, bri_mpc.responseMPC, all_other_x_mpc, xamb_mpc, True, None, None, None, bri_mpc.world, 0)     
-            plt.show()
-        plt.plot(xamb_mpc[4,:],'--')
-        plt.plot(xamb_mpc[4,:] * np.cos(xamb_mpc[2,:]))
-        plt.ylabel("Velocity / Vx (full mpc)")
-        plt.hlines(35*0.447,0,xamb_mpc.shape[1])
-        plt.show()
-        plt.plot(uamb_mpc[1,:],'o')
-        plt.hlines(amb_MPC.max_v_u,0,uamb_mpc.shape[1])
-        plt.hlines(amb_MPC.min_v_u,0,uamb_mpc.shape[1])
-        plt.ylabel("delta_u_v")
-        plt.show()
-print("Solver Done!  Runtime: %.1d"%(time.time()-t_start_time))
