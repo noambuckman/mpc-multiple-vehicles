@@ -140,7 +140,7 @@ class IterativeBestResponseMPCMultiple:
                         distance_clipped = cas.fmax(buffer_distance, 0.00001)
                         self.collision_cost += 1/distance_clipped**self.k_CA_power      
                     else:
-                        print("i out of distance"%i)                       
+                        print("i=%s out of distance"%i)                       
                 # Don't forget the ambulance
                 if self.ambMPC:    
                     buffer_distance = self.generate_collision_ellipse(response_circle_xy[0], response_circle_xy[1], 
