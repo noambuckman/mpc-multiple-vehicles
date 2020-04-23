@@ -77,7 +77,7 @@ class IterativeBestResponseMPCMultiple:
         
         if self.ambMPC:    
             self.slack_amb = self.generate_slack_variables(slack, N, 1)[0]
-            self.slack_amb_other = self.generate_slack_variables(slack, N, len(self.otherMPClist), n_circles=self.responseMPC.n_circles)
+            self.slack_amb_other = self.generate_slack_variables(slack, N, len(self.otherMPClist), n_ego_circles = self.responseMPC.n_circles)
 
         self.slack_cost = 0
         for slack_var in self.slack_vars_list:
