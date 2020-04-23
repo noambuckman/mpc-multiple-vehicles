@@ -121,7 +121,7 @@ class IterativeBestResponseMPCMultiple:
         if self.ambMPC:
             a_amb, b_amb, delta, a, b = self.ambMPC.get_collision_ellipse(response_radius)
 
-        self.pairwise_distances = cas.SX.zeros((len(self.allother_x_opt), self.responseMPC.n_circles, N+1))
+        self.pairwise_distances = [cas.SX.zeros((self.responseMPC.n_circles, N+1)) for j in range(len(self.allother_x_opt))]
         # Collision Avoidance
         for k in range(N+1):
             # center_offset
@@ -136,7 +136,7 @@ class IterativeBestResponseMPCMultiple:
                         buffer_distance, dist = self.generate_collision_ellipse(response_circle_xy[0], response_circle_xy[1], 
                                                         self.allother_x_opt[i][0,k], self.allother_x_opt[i][1,k], self.allother_x_opt[i][2,k],
                                                         alphas[i], betas[i], self.slack_vars_list[i][center_counter, k])
-                        self.pairwise_distances[i, center_counter, k] = dist
+                        self.pairwise_distances[i][center_counter, k] = dist
                         # distance_clipped = cas.fmax(buffer_distance, -1)
                         self.opti.subject_to(dist >= (1 - self.slack_vars_list[i][center_counter, k]))
                         distance_clipped = cas.fmax(buffer_distance, 0.00001)
