@@ -59,7 +59,7 @@ def get_frame(x, x_MPC, ax=None, car_name="red", alpha = 1.0):
     ax.add_artist(ab)        
     return ax    
 
-def plot_single_frame(x_mpc, xamb_plot, xothers_plot, folder, CIRCLES="Ellipse", parallelize=True, camera_speed = None, plot_range = None, car_ids = None, xamb_desired=None, xothers_desired=None):
+def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, CIRCLES="Ellipse", parallelize=True, camera_speed = None, plot_range = None, car_ids = None, xamb_desired=None, xothers_desired=None):
     '''Plots the progression of all cars in one frame'''
     if camera_speed is None:
         camera_speed = x_mpc.max_v
@@ -68,8 +68,8 @@ def plot_single_frame(x_mpc, xamb_plot, xothers_plot, folder, CIRCLES="Ellipse",
         figwidth_in=12.0
     else:
         figwidth_in=6.0
-    ymax = x_mpc.world.y_max
-    ymin = x_mpc.world.y_min     
+    ymax = world.y_max
+    ymin = world.y_min     
     # initial_speed = 0.9 * x_mpc.max_v
     # center_frame = xamb_plot[0,k]
 
@@ -84,8 +84,8 @@ def plot_single_frame(x_mpc, xamb_plot, xothers_plot, folder, CIRCLES="Ellipse",
     ax.set_ylim((ymin, ymax))
     ax.set_xlim((axlim_minx , axlim_maxx))
 
-    add_lanes(ax, x_mpc.world)
-    add_grass(ax, x_mpc.world, k)   
+    add_lanes(ax, world)
+    add_grass(ax, world, k)   
 
     if plot_range is None:
         plot_range = range(xamb_plot.shape[1])
