@@ -60,7 +60,7 @@ def get_frame(x, x_MPC, ax=None, car_name="red", alpha = 1.0):
     return ax    
 
 def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desired=None, xothers_desired=None,  
-                CIRCLES="Ellipse", parallelize=True, camera_speed = None, car_ids = None):
+                CIRCLES="Ellipse", parallelize=True, camera_speed = None, plot_range = None, car_ids = None):
     '''Plots the progression of all cars in one frame'''
     if camera_speed is None:
         camera_speed = x_mpc.max_v
@@ -88,11 +88,14 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desire
     add_lanes(ax, world)
     add_grass(ax, world, k)   
 
-    for k in range(xamb_plot.shape[1]):             
+    if plot_range is None:
+        plot_range = range(xamb_plot.shape[1])
+    for ki in range(len(plot_range)):
+        k = plot_range[ki]             
         if CIRCLES == "Ellipse" or CIRCLES == "Both":
             # Plot the ambulance as circles
             centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
-            alpha_k = 0.1 + float(k)/xamb_plot.shape[1] * (1-0.1)
+            alpha_k = 1 + float(ki/(plot_range.shape[1] - 1 + 0.000001)) * (.25 - 1)
             for ci in range(len(centers)):
                 xy_f = centers[ci]
                 circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius, color='red',alpha=alpha_k)
@@ -137,7 +140,6 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desire
         fig.savefig(folder + 'imgs/' '{:03d}.png'.format(k))
         plt.close(fig)        
 
-
 def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desired=None, xothers_desired=None,  
                 CIRCLES="Ellipse", parallelize=True, camera_speed = None):
     N = xamb_plot.shape[1]
@@ -151,7 +153,9 @@ def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desired=None, 
         for k in range(N):
             plot_multiple_cars( k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desired, xamb_desired, folder, world, camera_speed)     
     return None
-            
+
+
+
 def plot_multiple_cars(k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desired, xamb_desired, folder, world, camera_speed = None):
     ''' This only has info from x_mpc but not any individual ones'''
     if camera_speed is None:
