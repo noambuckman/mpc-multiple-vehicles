@@ -146,7 +146,7 @@ class IterativeBestResponseMPCMultiple:
                 if self.ambMPC:    
                     buffer_distance, dist = self.generate_collision_ellipse(response_circle_xy[0], response_circle_xy[1], 
                                                                             self.xamb_opt[0,k], self.xamb_opt[1,k], self.xamb_opt[2,k],
-                                                                            a_amb, b_amb, None)     
+                                                                            a_amb, b_amb, self.slack_amb[center_counter, k])     
                     self.opti.subject_to(dist >= 1)         
                     self.pairwise_distances += [dist]
                     distance_clipped = cas.fmax(buffer_distance, 0.00001)
