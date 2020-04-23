@@ -132,20 +132,21 @@ class IterativeBestResponseMPCMultiple:
                     initial_displacement = x0_other[i] - x0
                     initial_xy_distance = cas.sqrt(initial_displacement[0]**2 + initial_displacement[1]**2)
                     if initial_xy_distance <= 20: #collision avoidance distance for other cars 
-                        buffer_distance = self.generate_collision_ellipse(response_circle_xy[0], response_circle_xy[1], 
+                        buffer_distance, dist = self.generate_collision_ellipse(response_circle_xy[0], response_circle_xy[1], 
                                                         self.allother_x_opt[i][0,k], self.allother_x_opt[i][1,k], self.allother_x_opt[i][2,k],
                                                         alphas[i], betas[i], self.slack_vars_list[i][center_counter, k])
                         
                         # distance_clipped = cas.fmax(buffer_distance, -1)
+                        self.opti.subject_to(dist >= (1 - self.slack_vars_list[i][center_counter, k]))
                         distance_clipped = cas.fmax(buffer_distance, 0.00001)
                         self.collision_cost += 1/distance_clipped**self.k_CA_power      
-                    else:
-                        print("i=%s out of distance"%i)                       
+               
                 # Don't forget the ambulance
                 if self.ambMPC:    
-                    buffer_distance = self.generate_collision_ellipse(response_circle_xy[0], response_circle_xy[1], 
+                    buffer_distance, dist = self.generate_collision_ellipse(response_circle_xy[0], response_circle_xy[1], 
                                                                             self.xamb_opt[0,k], self.xamb_opt[1,k], self.xamb_opt[2,k],
                                                                             a_amb, b_amb, None)     
+                    self.opti.subject_to(dist >= 1)                                                                            
                     distance_clipped = cas.fmax(buffer_distance, 0.00001)
                     self.collision_cost += 1/distance_clipped**self.k_CA_power    
                 if self.WALL_CA:
@@ -163,11 +164,12 @@ class IterativeBestResponseMPCMultiple:
                         initial_displacement = x0_other[i] - x0_amb
                         initial_xy_distance = cas.sqrt(initial_displacement[0]**2 + initial_displacement[1]**2)
                         if initial_xy_distance <= 20: #collision avoidance distance for other cars                        
-                            buffer_distance = self.generate_collision_ellipse(ca_circle[0], ca_circle[1], 
+                            buffer_distance, dist = self.generate_collision_ellipse(ca_circle[0], ca_circle[1], 
                                                             self.allother_x_opt[i][0,k], self.allother_x_opt[i][1,k], self.allother_x_opt[i][2,k],
                                                             alphas[i], betas[i], self.slack_amb_other[i][ci, k])
                             
                             # distance_clipped = cas.fmax(buffer_distance, -1)
+                            self.opti.subject_to(dist >= (1 - self.slack_amb_other[i][ci, k]))
                             distance_clipped = cas.fmax(buffer_distance, 0.01)
                             self.collision_cost += 1/distance_clipped**self.k_CA_power     
                     if self.WALL_CA:
@@ -249,14 +251,13 @@ class IterativeBestResponseMPCMultiple:
         M = cas.vertcat(cas.horzcat(1/alpha_o**2, 0), cas.horzcat(0, 1/beta_o**2))
         dX = cas.vertcat(dx, dy)
         prod =    cas.mtimes([dX.T, R_o.T, M, R_o, dX])
-        self.opti.subject_to(prod >= (1 - slack))
 
         M_smaller = cas.vertcat(cas.horzcat(1/(0.5*alpha_o)**2, 0), cas.horzcat(0, 1/(.5*beta_o)**2))
         dist_prod =    cas.mtimes([dX.T, R_o.T, M_smaller, R_o, dX])
         # dist = dist_prod - 1
 
         # euc_dist = dx**2 + dy**2
-        return dist_prod
+        return dist_prod, prod
 
     def debug_callback(self, i, plot_range=[], file_name = False):
         xothers_plot = [self.opti.debug.value(xo) for xo in self.allother_x_opt]
