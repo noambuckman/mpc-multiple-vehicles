@@ -73,7 +73,7 @@ class IterativeBestResponseMPCMultiple:
         # self.slack1, self.slack2, self.slack3 = self.generate_slack_variables(slack, N)
 
         # We will do collision avoidance for ego vehicle with all other vehicles
-        self.slack_vars_list = self.generate_slack_variables(slack, N, len(self.otherMPClist), n_circles = self.responseMPC.n_circles)
+        self.slack_vars_list = self.generate_slack_variables(slack, N, len(self.otherMPClist), n_ego_circles = self.responseMPC.n_circles)
         
         if self.ambMPC:    
             self.slack_amb = self.generate_slack_variables(slack, N, 1)[0]
