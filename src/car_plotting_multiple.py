@@ -2,7 +2,6 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.offsetbox import (TextArea, DrawingArea, OffsetImage,
                                   AnnotationBbox)
-
 import datetime
 import os
 import numpy as np
@@ -61,7 +60,7 @@ def get_frame(x, x_MPC, ax=None, car_name="red", alpha = 1.0):
     return ax    
 
 def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desired=None, xothers_desired=None,  
-                CIRCLES=False, parallelize=True, camera_speed = None, car_ids = None):
+                CIRCLES="Ellipse", parallelize=True, camera_speed = None, car_ids = None):
     '''Plots the progression of all cars in one frame'''
     if camera_speed is None:
         camera_speed = x_mpc.max_v
@@ -90,26 +89,7 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desire
     add_grass(ax, world, k)   
 
     for k in range(xamb_plot.shape[1]):             
-        # if CIRCLES:
-        #     for i in range(len(xothers_plot)):
-        #         x1_plot = xothers_plot[i]
-        #         centers, radius = x_mpc.get_car_circles_np(x1_plot[:,k:k+1])
-        #         for ci in range(len(centers)):
-        #             xy_f = centers[ci]
-        #             circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius)
-        #             ax.add_patch(circle_patch_f)
-        #         # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2)
-        #         # ax.add_patch(circle_patch_r)
-
-
-        #     centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
-        #     for ci in range(len(centers)):
-        #         xy_f = centers[ci]
-        #         circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius, color='red')
-        #         ax.add_patch(circle_patch_f)
-        #     # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2, color='red')
-        #     # ax.add_patch(circle_patch_r)  
-        if CIRCLES:
+        if CIRCLES == "Ellipse" or CIRCLES == "Both":
             # Plot the ambulance as circles
             centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
             alpha_k = 0.1 + float(k)/xamb_plot.shape[1] * (1-0.1)
@@ -134,13 +114,11 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desire
                 a, b = x_mpc.ax, x_mpc.by
                 ellipse_patch = patches.Ellipse((x, y), 2*a, 2*b, angle=np.rad2deg(phi), fill=False, color='red', alpha=alpha_k)
                 ax.add_patch(ellipse_patch)
-                # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2)
-                # ax.add_patch(circle_patch_r)
 
 
             centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])                  
 
-        if not CIRCLES:
+        if CIRCLES == "Image" or CIRCLES == "Both":
             for i in range(len(xothers_plot)):
                 x1_plot = xothers_plot[i]
                 if car_ids is not None:
@@ -161,7 +139,7 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desire
 
 
 def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desired=None, xothers_desired=None,  
-                CIRCLES=False, parallelize=True, camera_speed = None):
+                CIRCLES="Ellipse", parallelize=True, camera_speed = None):
     N = xamb_plot.shape[1]
     # if CIRCLES:
     if parallelize:
@@ -174,7 +152,6 @@ def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desired=None, 
             plot_multiple_cars( k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desired, xamb_desired, folder, world, camera_speed)     
     return None
             
-
 def plot_multiple_cars(k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desired, xamb_desired, folder, world, camera_speed = None):
     ''' This only has info from x_mpc but not any individual ones'''
     if camera_speed is None:
@@ -202,26 +179,7 @@ def plot_multiple_cars(k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desir
     add_lanes(ax, world)
     add_grass(ax, world, k)   
           
-    # if CIRCLES:
-        # for i in range(len(xothers_plot)):
-        #     x1_plot = xothers_plot[i]
-        #     centers, radius = x_mpc.get_car_circles_np(x1_plot[:,k:k+1])
-        #     for ci in range(len(centers)):
-        #         xy_f = centers[ci]
-        #         circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius)
-        #         ax.add_patch(circle_patch_f)
-        #     # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2)
-        #     # ax.add_patch(circle_patch_r)
-
-
-        # centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
-        # for ci in range(len(centers)):
-        #     xy_f = centers[ci]
-        #     circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius, color='red')
-        #     ax.add_patch(circle_patch_f)
-        # # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2, color='red')
-        # # ax.add_patch(circle_patch_r)  
-    if CIRCLES:
+    if CIRCLES == "Ellipse" or CIRCLES == "Both":
         # Plot the ambulance as circles
         centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
         for ci in range(len(centers)):
@@ -241,7 +199,7 @@ def plot_multiple_cars(k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desir
 
         centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])                  
 
-    if not CIRCLES:
+    if CIRCLES == "Image" or CIRCLES == "Both":
         for i in range(len(xothers_plot)):
             x1_plot = xothers_plot[i]
             if (i%2)==0:
@@ -302,62 +260,3 @@ def add_lanes(ax, world):
     
 
 
-
-
-# def plot_three_circles(k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desired, xamb_desired, folder, world):
-#     figsize="LARGE"
-#     if figsize == "LARGE":
-#         figwidth_in=12.0
-#     else:
-#         figwidth_in=6.0
-#     ymax = world.y_max
-#     ymin = world.y_min        
-
-#     axlim_minx, axlim_maxx = xamb_plot[0,k] - 10, xamb_plot[0,k] + 10,    
-#     fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx ))
-#     fig, ax = plt.subplots(figsize=(figwidth_in, fig_height), dpi=144)
-#     ax.axis('square')
-#     ax.set_ylim((ymin, ymax))
-#     ax.set_xlim((axlim_minx , axlim_maxx))
- 
-#     add_lanes(ax, world)
-#     GRASS = True
-#     if GRASS:
-#         add_grass(ax, world, k)            
-
-
-#     xy_r, xy_f = x1_mpc.get_car_circles_np(x1_plot[:,k:k+1])
-#     circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=x1_mpc.min_dist/2)
-#     ax.add_patch(circle_patch_f)
-#     circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x1_mpc.min_dist/2)
-#     ax.add_patch(circle_patch_r)
-
-#     xy_r, xy_f = x2_mpc.get_car_circles_np(x2_plot[:,k:k+1])
-#     circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=x1_mpc.min_dist/2)
-#     ax.add_patch(circle_patch_f)
-#     circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x1_mpc.min_dist/2)
-#     ax.add_patch(circle_patch_r)
-
-
-#     xy_r, xy_f = xamb_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
-#     circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=x1_mpc.min_dist/2)
-#     ax.add_patch(circle_patch_f)
-#     circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x1_mpc.min_dist/2)
-#     ax.add_patch(circle_patch_r)    
-
-
-
-        
-#     # x1_desired, x2_desired, xamb_desired = None, None, None
-#     # if x1_desired is not None:
-#     #     ax.plot(x1_desired[0,:], x1_desired[1,:], '--',c='red')
-#     # if x2_desired is not None:
-#     #     ax.plot(x2_desired[0,:], x2_desired[1,:], '--',c="green")
-#     # if xamb_desired is not None:
-#     #     ax.plot(xamb_desired[0,:], xamb_desired[1,:], '--',c="red")
-#     fig = plt.gcf()
-#     fig.savefig(folder + 'imgs/' '{:03d}.png'.format(k))
-#     # plt.cla()
-#     # fig.clf()
-#     # ax.remove()
-#     plt.close(fig) 
