@@ -95,7 +95,10 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desire
         if CIRCLES == "Ellipse" or CIRCLES == "Both":
             # Plot the ambulance as circles
             centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
-            alpha_k = 1 + float(ki/(len(plot_range) - 1 + 0.000001)) * (.25 - 1)
+            if len(plot_range) == 1:
+                alpha_k = 1.0
+            else:
+                alpha_k = .25 + float(ki/(len(plot_range) - 1)) * (1 - .25)
             for ci in range(len(centers)):
                 xy_f = centers[ci]
                 circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius, color='red',alpha=alpha_k)
