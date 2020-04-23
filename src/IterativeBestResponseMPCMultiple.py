@@ -120,7 +120,8 @@ class IterativeBestResponseMPCMultiple:
         
         if self.ambMPC:
             a_amb, b_amb, delta, a, b = self.ambMPC.get_collision_ellipse(response_radius)
-        self.pairwise_distances = np.zeros(shape=(len(self.allother_x_opt), self.responseMPC.n_circles, N+1))
+
+        self.pairwise_distances = cas.SX.zeros(shape=(len(self.allother_x_opt), self.responseMPC.n_circles, N+1))
         # Collision Avoidance
         for k in range(N+1):
             # center_offset
