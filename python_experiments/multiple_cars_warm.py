@@ -269,7 +269,8 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             k_slack *= 10
             for k_warm in u_warm_profiles.keys():
                 u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]
-                amb_solved_flag, current_cost, max_slack, min_bri_ibr, xamb, xamb_des, uamb = solve_best_response(response_MPC, None, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, nonresponse_x0_list, slack, solve_amb, k_warm, u_warm, x_warm, x_des_warm, nonresponse_x_list, nonresponse_xd_list)
+                solve_amb, a_MPC = False, None
+                amb_solved_flag, current_cost, max_slack, min_bri_ibr, xamb, xamb_des, uamb = solve_best_response(response_MPC, a_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, nonresponse_x0_list, slack, solve_amb, k_warm, u_warm, x_warm, x_des_warm, nonresponse_x_list, nonresponse_xd_list)
                 if current_cost <= min_response_cost:
                     min_response_cost = current_cost
                     xamb_ibr, xamb_des_ibr, uamb_ibr = xamb, xamb_des, uamb
