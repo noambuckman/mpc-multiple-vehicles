@@ -409,7 +409,8 @@ def generate_warm_x(car_mpc, world, x0, average_v=None):
         x_des_warm = np.zeros(shape=(3, N + 1))        
         for k in range(N + 1):
             x_des_warm[:, k:k+1] = car_mpc.fd(x_warm[-1,k])
-        ux_warm_profles[k_warm] = [u_warm, x_warm, x_des_warm]
+        ux_warm_profiles[k_warm] = [u_warm, x_warm, x_des_warm]
+    
     return x_warm_profiles, ux_warm_profiles
 
 def generate_warm_u(N, car_mpc, car_x0):
