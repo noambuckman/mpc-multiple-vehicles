@@ -1,6 +1,7 @@
 import numpy as np
 
 import src.IterativeBestResponseMPCMultiple as mibr
+import src.MPC_Casadi as mpc
 
 
 def extend_last_mpc_ctrl(all_other_u_mpc, number_ctrl_pts_executed, N, all_other_MPC, all_other_x0):
