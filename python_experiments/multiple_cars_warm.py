@@ -23,7 +23,7 @@ svo_theta = np.pi/3.0
 random_seed = 3
 NEW = True
 if NEW:
-    optional_suffix = "cars"
+    optional_suffix = "6cars"
     subdir_name = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + optional_suffix
     folder = "results/" + subdir_name + "/"
     os.makedirs(folder)
@@ -40,7 +40,7 @@ if random_seed > 0:
 
 
 #######################################################################
-T = 5  # MPC Planning Horizon
+T = 8  # MPC Planning Horizon
 dt = 0.2
 N = int(T/dt) #Number of control intervals in MPC
 n_rounds_mpc = 8
@@ -189,9 +189,9 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                 if i_mpc == 0:
                     all_other_u_ibr[i] = np.zeros(shape=(2, N)) ## All vehicles constant velocity
                     if i%2==0:
-                        all_other_u_ibr[i][0,0] = 2 * np.pi/180  # This is a hack and should be explicit that it's lane change
+                        all_other_u_ibr[i][0,0] = -2 * np.pi/180  # This is a hack and should be explicit that it's lane change
                     else:
-                        all_other_u_ibr[i][0,0] = -2 * np.pi/180  # This is a hack and should be explicit that it's lane change                   
+                        all_other_u_ibr[i][0,0] = 2 * np.pi/180  # This is a hack and should be explicit that it's lane change                   
                 else:
 #                     all_other_u_ibr[i] = np.concatenate((all_other_u_mpc[i][:, number_ctrl_pts_executed:], np.tile(all_other_u_mpc[i][:,-1:],(1, number_ctrl_pts_executed))),axis=1) ##   
                     all_other_u_ibr[i] = np.concatenate((all_other_u_mpc[i][:, number_ctrl_pts_executed:], np.tile(np.zeros(shape=(2,1)),(1, number_ctrl_pts_executed))),axis=1) ##   
@@ -218,7 +218,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         x_warm_profiles = mibr.generate_warm_x(response_MPC, traffic_world,  response_x0, other_velocity)
         u_warm_profiles.update(x_warm_profiles) # combine into one
         #######################################################################
-        min_response_cost = np.infty
+        min_response_cost = 99999999
         k_slack, k_CA, k_CA_power, wall_CA = 1000000.0, 0.001, 4, True
         solve_again = True
         solve_number = 0
@@ -302,7 +302,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                     print("Infeasibility: k_warm %s"%k_warm)
                     # ibr_sub_it +=1  
 
-            k_max_slack = 0.1
+            k_max_slack = 0.01
             if max_slack > k_max_slack:
                 print("Max Slack is too large %.05f > thresh %.05f"%(max_slack, k_max_slack))
                 solve_again = True
@@ -315,8 +315,9 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         if solve_again:
             raise Exception("Slack variable is too high")
         print("Ambulance Solution:  mpc_i %d  ibr_round %d"%(i_mpc, i_rounds_ibr))    
-        cmplot.plot_single_frame(world, min_bri_ibr.responseMPC, xamb_ibr, nonresponse_x_list, None, CIRCLES="Ellipse", parallelize=True, camera_speed = None, plot_range = None, car_ids = None, xamb_desired=None, xothers_desired=None)
-        
+        cmplot.plot_single_frame(world, min_bri_ibr.responseMPC, xamb_ibr, nonresponse_x_list, None, CIRCLES="Ellipse", parallelize=True, camera_speed = None, plot_range = range(N+1)[:int(N/2)], car_ids = None, xamb_desired=None, xothers_desired=None)        
+        plt.show()
+        cmplot.plot_single_frame(world, min_bri_ibr.responseMPC, xamb_ibr, nonresponse_x_list, None, CIRCLES="Ellipse", parallelize=True, camera_speed = None, plot_range = range(N+1)[int(N/2):], car_ids = None, xamb_desired=None, xothers_desired=None)        
         plt.show()
                                         
         ########### SOLVE FOR THE OTHER VEHICLES ON THE ROAD
@@ -343,9 +344,8 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                 x_warm_profiles = mibr.generate_warm_x(response_MPC, traffic_world, response_x0, other_velocity)
                 u_warm_profiles.update(x_warm_profiles) # combine into one
                 
-                min_response_cost = np.infty
-                k_slack, k_CA, k_CA_power, wall_CA = 1000000.0, 0.001, 4, True
-
+                min_response_cost = 99999999
+                k_slack, k_CA, k_CA_power, wall_CA = 1000.0, 0.0001, 4, True
                 solve_again = True
                 while solve_again:
                     solve_again = False
