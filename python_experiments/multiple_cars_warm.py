@@ -218,7 +218,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         x_warm_profiles = mibr.generate_warm_x(response_MPC, traffic_world,  response_x0, other_velocity)
         u_warm_profiles.update(x_warm_profiles) # combine into one
         #######################################################################
-        min_response_cost = 99999999
+        min_response_cost = np.infty
         k_slack, k_CA, k_CA_power, wall_CA = 1000000.0, 0.001, 4, True
         solve_again = True
         solve_number = 0
@@ -302,7 +302,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                     print("Infeasibility: k_warm %s"%k_warm)
                     # ibr_sub_it +=1  
 
-            k_max_slack = 0.01
+            k_max_slack = 0.1
             if max_slack > k_max_slack:
                 print("Max Slack is too large %.05f > thresh %.05f"%(max_slack, k_max_slack))
                 solve_again = True
@@ -343,8 +343,9 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                 x_warm_profiles = mibr.generate_warm_x(response_MPC, traffic_world, response_x0, other_velocity)
                 u_warm_profiles.update(x_warm_profiles) # combine into one
                 
-                min_response_cost = 99999999
-                k_slack, k_CA, k_CA_power, wall_CA = 1000.0, 0.0001, 4, True
+                min_response_cost = np.infty
+                k_slack, k_CA, k_CA_power, wall_CA = 1000000.0, 0.001, 4, True
+
                 solve_again = True
                 while solve_again:
                     solve_again = False
