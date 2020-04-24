@@ -40,16 +40,16 @@ if random_seed > 0:
 
 
 #######################################################################
-T = 8  # MPC Planning Horizon
+T = 5  # MPC Planning Horizon
 dt = 0.2
 N = int(T/dt) #Number of control intervals in MPC
 n_rounds_mpc = 8
-percent_mpc_executed = .80 ## This is the percent of MPC that is executed
+percent_mpc_executed = .50 ## This is the percent of MPC that is executed
 number_ctrl_pts_executed =  int(np.floor(N*percent_mpc_executed))
 print("number ctrl pts:  %d"%number_ctrl_pts_executed)
 XAMB_ONLY = False
 PLOT_FLAG, SAVE_FLAG, PRINT_FLAG = False, False, False
-n_other = 6
+n_other = 5
 n_rounds_ibr = 3
 
 world = tw.TrafficWorld(2, 0, 1000)
@@ -72,6 +72,8 @@ all_other_u = []
 all_other_MPC = []
 all_other_x = [np.zeros(shape=(6, N+1)) for i in range(n_other)]
 next_x0 = 0
+next_x0_0 = 0
+next_x0_1 = 0
 for i in range(n_other):
     x1_MPC = mpc.MPC(dt)
     x1_MPC.n_circles = 3
@@ -99,13 +101,18 @@ for i in range(n_other):
 
     
 
-   
     ####Vehicle Initial Conditions
+    lane_offset = np.random.uniform(0, 1) * x1_MPC.L
     if i%2 == 0: 
         lane_number = 0
-        next_x0 += x1_MPC.L + 2*x1_MPC.min_dist
+        next_x0_0 += x1_MPC.L + 2*x1_MPC.min_dist + lane_offset
+        next_x0 = next_x0_0
     else:
         lane_number = 1
+        next_x0_1 += x1_MPC.L + 2*x1_MPC.min_dist + lane_offset
+        next_x0 = next_x0_1
+        
+        
     initial_speed = 0.75*x1_MPC.max_v
     traffic_world = world
     x1_MPC.fd = x1_MPC.gen_f_desired_lane(traffic_world, lane_number, True)
@@ -159,7 +166,6 @@ if SAVE_FLAG:
 #### SOLVE THE MPC #####################################################
 xamb_executed, all_other_x_executed = None, [] #This gets updated after each round of MPC
 uamb_mpc, all_other_u_mpc = None, []
-
 
 i_mpc_start = 0
 for i_mpc in range(i_mpc_start, n_rounds_mpc):
