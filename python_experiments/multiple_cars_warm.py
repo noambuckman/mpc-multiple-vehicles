@@ -126,7 +126,8 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             for k_warm in u_warm_profiles.keys():
                 u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]
                 solve_amb, a_MPC = False, None
-                amb_solved_flag, current_cost, max_slack, bri, xamb, xamb_des, uamb = helper.solve_best_response(response_MPC, a_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, nonresponse_x0_list, slack, solve_amb, k_warm, u_warm, x_warm, x_des_warm, nonresponse_x_list, nonresponse_xd_list)
+
+                amb_solved_flag, current_cost, max_slack, bri, xamb, xamb_des, uamb = helper.solve_best_response(response_MPC, a_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, nonresponse_x0_list, slack, solve_amb, k_warm, u_warm, x_warm, x_des_warm, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, )
                 if current_cost <= min_response_cost:
                     min_response_cost = current_cost
                     xamb_ibr, xamb_des_ibr, uamb_ibr = xamb, xamb_des, uamb
@@ -188,7 +189,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                     k_CA *= 10
                     for k_warm in u_warm_profiles.keys():
                         u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]              
-                        solved_flag, current_cost, max_slack, bri, x, x_des, u = helper.solve_best_response(response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, nonresponse_x0_list, slack, solve_amb, k_warm, u_warm, x_warm, x_des_warm, nonresponse_x_list, nonresponse_xd_list)
+                        solved_flag, current_cost, max_slack, bri, x, x_des, u = helper.solve_best_response(response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, nonresponse_x0_list, slack, solve_amb, k_warm, u_warm, x_warm, x_des_warm, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list)
 
                                 # print("  i_mpc %d n_round %d i %02d Cost %.02f Slack %.02f "%(i_mpc, i_rounds_ibr, i, bri.solution.value(bri.total_svo_cost), bri.solution.value(bri.slack_cost)))
                                 # print("  J_i %.03f,  J_j %.03f, Slack %.03f, CA  %.03f"%(bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.other_svo_cost), bri.solution.value(bri.k_slack*bri.slack_cost), bri.solution.value(bri.k_CA*bri.collision_cost)))
