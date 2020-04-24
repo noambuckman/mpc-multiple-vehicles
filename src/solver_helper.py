@@ -1,4 +1,5 @@
 import numpy as np
+import copy as cp
 
 import src.IterativeBestResponseMPCMultiple as mibr
 import src.MPC_Casadi as mpc
