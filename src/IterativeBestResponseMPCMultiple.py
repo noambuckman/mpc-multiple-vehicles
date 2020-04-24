@@ -402,9 +402,17 @@ def generate_warm_x(car_mpc, world, x0, average_v=None):
         x_up[1,:] = y
         x_warm_profiles[key] = x_up
     
-    return x_warm_profiles
+    ux_warm_profiles = {}
+    for k_warm in x_warm_profiles.keys():
+        u_warm = np.zeros((2, N))
+        x_warm = x_warm_profiles[k_warm]
+        x_des_warm = np.zeros(shape=(3, N + 1))        
+        for k in range(N + 1):
+            x_des_warm[:, k:k+1] = car_mpc.fd(x_warm[-1,k])
+        ux_warm_profles[k_warm] = [u_warm, x_warm, x_des_warm]
+    return x_warm_profiles, ux_warm_profiles
 
-def generate_warm_u(N, car_mpc):
+def generate_warm_u(N, car_mpc, car_x0):
     u0_warm_profiles = {}
     u1_warm_profiles = {}
     ## braking
@@ -450,4 +458,12 @@ def generate_warm_u(N, car_mpc):
         for u1_k in u1_warm_profiles.keys():
             u_k = u0_k + " " + u1_k
             u_warm_profiles[u_k] = u0_warm_profiles[u0_k] + u1_warm_profiles[u1_k]
-    return u_warm_profiles
+
+    # Generate x, x_des from the u_warm profiles
+    ux_warm_profiles = {}
+    for k_warm in u_warm_profiles.keys():
+        u_warm = u_warm_profiles[k_warm]
+        x_warm, x_des_warm = car_mpc.forward_simulate_all(car_x0.reshape(6,1), u_warm)
+        ux_warm_profiles[k_warm] = [u_warm, x_warm, x_des_warm]
+
+    return u_warm_profiles, ux_warm_profiles
