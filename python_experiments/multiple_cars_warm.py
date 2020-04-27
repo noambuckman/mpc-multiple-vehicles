@@ -151,75 +151,75 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         # plt.show()
                                         
         ########### SOLVE FOR THE OTHER VEHICLES ON THE ROAD
-        if not XAMB_ONLY:
-            for i in range(len(all_other_MPC)):
-                print("SOLVING AGENT %d"%i)
-                response_MPC = all_other_MPC[i]
-                response_x0 = all_other_x0[i]
-                nonresponse_MPC_list = all_other_MPC[:i] + all_other_MPC[i+1:]
-                nonresponse_x0_list = all_other_x0[:i] + all_other_x0[i+1:]
-                nonresponse_u_list = all_other_u_ibr[:i] + all_other_u_ibr[i+1:]
-                nonresponse_x_list = all_other_x_ibr[:i] + all_other_x_ibr[i+1:]
-                nonresponse_xd_list = all_other_x_des_ibr[:i] + all_other_x_des_ibr[i+1:]
+        for i in range(len(all_other_MPC)):
+            print("SOLVING AGENT %d"%i)
+            response_MPC = all_other_MPC[i]
+            response_x0 = all_other_x0[i]
+            nonresponse_MPC_list = all_other_MPC[:i] + all_other_MPC[i+1:]
+            nonresponse_x0_list = all_other_x0[:i] + all_other_x0[i+1:]
+            nonresponse_u_list = all_other_u_ibr[:i] + all_other_u_ibr[i+1:]
+            nonresponse_x_list = all_other_x_ibr[:i] + all_other_x_ibr[i+1:]
+            nonresponse_xd_list = all_other_x_des_ibr[:i] + all_other_x_des_ibr[i+1:]
 
-                ################# Generate the warm starts ###############################
-                u_warm_profiles, ux_warm_profiles = mibr.generate_warm_u(N, response_MPC, response_x0)
-                if i_rounds_ibr == 0 and i_mpc > 0:
-                    u_warm_profiles["previous"] = np.concatenate((all_other_u_mpc[i][:, number_ctrl_pts_executed:], np.tile(all_other_u_mpc[i][:,-1:],(1, number_ctrl_pts_executed))),axis=1) ##    
-                if i_rounds_ibr > 0:
-                    u_warm_profiles["previous"] = all_other_u_ibr[i]     
-                if (i_rounds_ibr == 0 and i_mpc > 0) or i_rounds_ibr > 0 :
-                    x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm)
-                    ux_warm_profiles["previous"] = [u_warm_profiles["previous"], x_warm, x_des_warm]
-                x_warm_profiles, x_ux_warm_profiles = mibr.generate_warm_x(response_MPC, world,  response_x0, np.median([x[4] for x in nonresponse_x0_list]))
-                ux_warm_profiles.update(x_ux_warm_profiles) # combine into one
+            ################# Generate the warm starts ###############################
+            u_warm_profiles, ux_warm_profiles = mibr.generate_warm_u(N, response_MPC, response_x0)
+            if i_rounds_ibr == 0 and i_mpc > 0:
+                u_warm_profiles["previous"] = np.concatenate((all_other_u_mpc[i][:, number_ctrl_pts_executed:], np.tile(all_other_u_mpc[i][:,-1:],(1, number_ctrl_pts_executed))),axis=1) ##    
+            if i_rounds_ibr > 0:
+                u_warm_profiles["previous"] = all_other_u_ibr[i]     
+            if (i_rounds_ibr == 0 and i_mpc > 0) or i_rounds_ibr > 0 :
+                x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm)
+                ux_warm_profiles["previous"] = [u_warm_profiles["previous"], x_warm, x_des_warm]
+            x_warm_profiles, x_ux_warm_profiles = mibr.generate_warm_x(response_MPC, world,  response_x0, np.median([x[4] for x in nonresponse_x0_list]))
+            ux_warm_profiles.update(x_ux_warm_profiles) # combine into one
 
-                k_solve_amb_min_distance, k_solve_amb_max_ibr = 30, 2
-                initial_distance_to_ambulance = np.sqrt((response_x0[0] - x0_amb[0])**2 + (response_x0[1] - x0_amb[1])**2)
-                if i_rounds_ibr < k_solve_amb_max_ibr and (initial_distance_to_ambulance < k_solve_amb_max_ibr):
-                    solve_amb = False
+            k_solve_amb_min_distance, k_solve_amb_max_ibr = 30, 2
+            initial_distance_to_ambulance = np.sqrt((response_x0[0] - x0_amb[0])**2 + (response_x0[1] - x0_amb[1])**2)
+            if i_rounds_ibr < k_solve_amb_max_ibr and (initial_distance_to_ambulance < k_solve_amb_max_ibr):
+                solve_amb = False
+            else:
+                solve_amb = True  
+
+            min_response_cost = np.infty
+            k_slack, k_CA, k_CA_power, wall_CA = 1000.0, 0.0001, 4, True
+            solve_again = True
+            while solve_again:
+                k_slack *= 10
+                k_CA *= 10
+                for k_warm in u_warm_profiles.keys():
+                    u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]          
+                    print("x0_amb", x0_amb)    
+                    solved_flag, current_cost, max_slack, bri, x, x_des, u = helper.solve_best_response(response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, x0_amb, nonresponse_x0_list, slack, solve_amb, k_warm, u_warm, x_warm, x_des_warm, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb_ibr, xamb_ibr, xamb_des_ibr, )
+
+                            # print("  i_mpc %d n_round %d i %02d Cost %.02f Slack %.02f "%(i_mpc, i_rounds_ibr, i, bri.solution.value(bri.total_svo_cost), bri.solution.value(bri.slack_cost)))
+                            # print("  J_i %.03f,  J_j %.03f, Slack %.03f, CA  %.03f"%(bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.other_svo_cost), bri.solution.value(bri.k_slack*bri.slack_cost), bri.solution.value(bri.k_CA*bri.collision_cost)))
+                            # print("  Dir:", subdir_name)
+                    if current_cost < min_response_cost:
+                        all_other_u_ibr[i], all_other_x_ibr[i], all_other_x_des_ibr[i]  = u, x, x_des
+                        other_solved_flag[i] = True
+                        min_response_cost = current_cost
+                        min_response_warm = k_warm
+                        min_bri = bri
+
+                if SAVE_FLAG:
+                    file_name = folder + "data/"+'%03d'%i_rounds_ibr
+                    mibr.save_state(file_name, xamb_ibr, uamb_ibr, xamb_des_ibr, all_other_x_ibr, all_other_u_ibr, all_other_x_des_ibr)
+                    mibr.save_costs(file_name, bri)
+                    
+                if max_slack >= k_max_slack:
+                    print("Max Slack is too large %.05f > thresh %.05f"%(max_slack, k_max_slack))
+                    solve_number += 1
                 else:
-                    solve_amb = True  
+                    solve_again = False
 
-                min_response_cost = np.infty
-                k_slack, k_CA, k_CA_power, wall_CA = 1000.0, 0.0001, 4, True
-                solve_again = True
-                while solve_again:
-                    k_slack *= 10
-                    k_CA *= 10
-                    for k_warm in u_warm_profiles.keys():
-                        u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]              
-                        solved_flag, current_cost, max_slack, bri, x, x_des, u = helper.solve_best_response(response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, x0_amb, nonresponse_x0_list, slack, solve_amb, k_warm, u_warm, x_warm, x_des_warm, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb_ibr, xamb_ibr, xamb_des_ibr, )
+            if not other_solved_flag[i]:
+                raise Exception("i did not converge to a solution")
+            if solve_again:
+                raise Exception("Slack variable is too high")     
 
-                                # print("  i_mpc %d n_round %d i %02d Cost %.02f Slack %.02f "%(i_mpc, i_rounds_ibr, i, bri.solution.value(bri.total_svo_cost), bri.solution.value(bri.slack_cost)))
-                                # print("  J_i %.03f,  J_j %.03f, Slack %.03f, CA  %.03f"%(bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.other_svo_cost), bri.solution.value(bri.k_slack*bri.slack_cost), bri.solution.value(bri.k_CA*bri.collision_cost)))
-                                # print("  Dir:", subdir_name)
-                        if current_cost < min_response_cost:
-                            all_other_u_ibr[i], all_other_x_ibr[i], all_other_x_des_ibr[i]  = u, x, x_des
-                            other_solved_flag[i] = True
-                            min_response_cost = current_cost
-                            min_response_warm = k_warm
-                            min_bri = bri
-
-                    if SAVE_FLAG:
-                        file_name = folder + "data/"+'%03d'%i_rounds_ibr
-                        mibr.save_state(file_name, xamb_ibr, uamb_ibr, xamb_des_ibr, all_other_x_ibr, all_other_u_ibr, all_other_x_des_ibr)
-                        mibr.save_costs(file_name, bri)
-                        
-                    if max_slack >= k_max_slack:
-                        print("Max Slack is too large %.05f > thresh %.05f"%(max_slack, k_max_slack))
-                        solve_number += 1
-                    else:
-                        solve_again = False
-
-                if not other_solved_flag[i]:
-                    raise Exception("i did not converge to a solution")
-                if solve_again:
-                    raise Exception("Slack variable is too high")     
-
-                print("Vehicle i=%d Solution:  mpc_i %d  ibr_round %d"%(i, i_mpc, i_rounds_ibr))    
-                cmplot.plot_single_frame(world, min_bri_ibr.responseMPC, all_other_x_ibr[i], [xamb_ibr] + nonresponse_x_list, None, CIRCLES="Ellipse", parallelize=True, camera_speed = None, plot_range = None, car_ids = None, xamb_desired=None, xothers_desired=None)
-                plt.show()                    
+            print("Vehicle i=%d Solution:  mpc_i %d  ibr_round %d"%(i, i_mpc, i_rounds_ibr))    
+            cmplot.plot_single_frame(world, min_bri_ibr.responseMPC, all_other_x_ibr[i], [xamb_ibr] + nonresponse_x_list, None, CIRCLES="Ellipse", parallelize=True, camera_speed = None, plot_range = None, car_ids = None, xamb_desired=None, xothers_desired=None)
+            plt.show()                    
 
     xamb_mpc = xamb_ibr
     xamb_des_mpc = xamb_des_ibr
