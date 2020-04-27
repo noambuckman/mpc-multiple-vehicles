@@ -30,7 +30,7 @@ def solve_best_response(response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_
     bri = mibr.IterativeBestResponseMPCMultiple(response_MPC, amb_MPC, nonresponse_MPC_list )
     bri.k_slack, bri.k_CA, bri.k_CA_power, bri.world, bri.wall_CA = k_slack, k_CA, k_CA_power, world, wall_CA
 
-    bri.generate_optimization(N, T, response_x0, None, nonresponse_x0_list,  0, slack=slack, solve_amb=solve_amb)
+    bri.generate_optimization(N, T, response_x0, amb_x0, nonresponse_x0_list,  0, slack=slack, solve_amb=solve_amb)
     bri.opti.set_initial(bri.u_opt, u_warm)            
     bri.opti.set_initial(bri.x_opt, x_warm)
     bri.opti.set_initial(bri.x_desired, x_des_warm)   
