@@ -112,7 +112,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         x_warm_profiles, x_ux_warm_profiles = mibr.generate_warm_x(response_MPC, world,  response_x0, np.median([x[4] for x in nonresponse_x0_list]))
         ux_warm_profiles.update(x_ux_warm_profiles) # combine into one
         ################# Solve the Best Response ############################
-        k_slack, k_CA, k_CA_power, wall_CA = 1000000.0, 0.001, 4, True
+        k_slack, k_CA, k_CA_power, wall_CA = 100000.0, 0.001, 4, True
         k_max_slack = 0.01
         if i_rounds_ibr == 0:
             slack = True
@@ -122,7 +122,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         while solve_again and solve_number < 4:
             min_response_cost = np.infty            
             k_CA_power *= 10
-            k_slack *= 10
+            # k_slack *= 10
             for k_warm in u_warm_profiles.keys():
                 u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]
                 solve_amb, a_MPC = False, None
@@ -146,7 +146,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         # if not amb_solved_flag:
         #     raise Exception("Ambulance did not converge to a solution")
         if solve_again:
-            raise Exception("Slack variable is too high or infeasible.  MaxS = %d"%max_slack_ibr)
+            raise Exception("Slack variable is too high or infeasible.  MaxS = %.05f > thresh %.05f"%max_slack_ibr, k_max_slack)
         # print("Ambulance Solution:  mpc_i %d  ibr_round %d"%(i_mpc, i_rounds_ibr))    
         # cmplot.plot_single_frame(world, min_bri_ibr.responseMPC, xamb_ibr, nonresponse_x_list, None, CIRCLES="Ellipse", parallelize=True, camera_speed = None, plot_range = range(N+1)[:int(N/2)], car_ids = None, xamb_desired=None, xothers_desired=None)        
         # plt.show()
@@ -184,10 +184,10 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                 solve_amb = True  
 
             min_response_cost = np.infty
-            k_slack, k_CA, k_CA_power, wall_CA = 1000.0, 0.0001, 4, True
+            k_slack, k_CA, k_CA_power, wall_CA = 100000.0, 0.001, 4, True
             solve_again = True
             while solve_again:
-                k_slack *= 10
+                # k_slack *= 10
                 k_CA *= 10
                 for k_warm in u_warm_profiles.keys():
                     u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]          
