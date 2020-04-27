@@ -94,7 +94,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             if i_mpc == 0:
                 all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = helper.pullover_guess(N, all_other_MPC, all_other_x0)  # This is a hack and should be explicit that it's lane change                   
             else:
-                all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = helper.extend_last_mpc_ctrl(all_other_u_mpc, number_ctrl_pts_executed, all_other_MPC, all_other_x0)  # This is a hack and should be explicit that it's lane change                   
+                all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = helper.extend_last_mpc_ctrl(all_other_u_mpc, number_ctrl_pts_executed, N, all_other_MPC, all_other_x0)  # This is a hack and should be explicit that it's lane change                   
         ########## Solve the Response MPC ##########
         response_MPC, response_x0 = amb_MPC, x0_amb
         nonresponse_MPC_list, nonresponse_x0_list = all_other_MPC, all_other_x0
