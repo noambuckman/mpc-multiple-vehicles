@@ -118,7 +118,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             slack = True
         else:
             slack = False 
-        solve_again, solve_number = True, 0
+        solve_again, solve_number, max_slack = True, 0, np.infty
         while solve_again and solve_number < 4:
             min_response_cost = np.infty            
             k_CA_power *= 10
@@ -127,7 +127,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                 u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]
                 solve_amb, a_MPC = False, None
 
-                amb_solved_flag, current_cost, max_slack, bri, xamb, xamb_des, uamb = helper.solve_best_response(response_MPC, a_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, x0_amb, nonresponse_x0_list, slack, solve_amb, k_warm, u_warm, x_warm, x_des_warm, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, )
+                temp, current_cost, max_slack, bri, xamb, xamb_des, uamb = helper.solve_best_response(response_MPC, a_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, x0_amb, nonresponse_x0_list, slack, solve_amb, k_warm, u_warm, x_warm, x_des_warm, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, )
                 if current_cost is None: #infeasible
                     pass
                 elif current_cost < min_response_cost:
@@ -135,17 +135,18 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                     xamb_ibr, xamb_des_ibr, uamb_ibr = xamb, xamb_des, uamb
                     max_slack_ibr = max_slack
                     min_bri_ibr = bri
+                    amb_solved_flag = True
 
-            if max_slack_ibr > k_max_slack:
+            if max_slack_ibr >= k_max_slack:
                 print("Max Slack is too large %.05f > thresh %.05f"%(max_slack_ibr, k_max_slack))
                 solve_again = True
                 solve_number += 1
             else:
                 solve_again = False
-        if not amb_solved_flag:
-            raise Exception("Ambulance did not converge to a solution")
+        # if not amb_solved_flag:
+        #     raise Exception("Ambulance did not converge to a solution")
         if solve_again:
-            raise Exception("Slack variable is too high")
+            raise Exception("Slack variable is too high or infeasible.  MaxS = %d"%max_slack_ibr)
         # print("Ambulance Solution:  mpc_i %d  ibr_round %d"%(i_mpc, i_rounds_ibr))    
         # cmplot.plot_single_frame(world, min_bri_ibr.responseMPC, xamb_ibr, nonresponse_x_list, None, CIRCLES="Ellipse", parallelize=True, camera_speed = None, plot_range = range(N+1)[:int(N/2)], car_ids = None, xamb_desired=None, xothers_desired=None)        
         # plt.show()
@@ -191,7 +192,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                 for k_warm in u_warm_profiles.keys():
                     u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]          
                     print("x0_amb", x0_amb)    
-                    solved_flag, current_cost, max_slack, bri, x, x_des, u = helper.solve_best_response(response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, x0_amb, nonresponse_x0_list, slack, solve_amb, k_warm, u_warm, x_warm, x_des_warm, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb_ibr, xamb_ibr, xamb_des_ibr, )
+                    temp_solved_flag, current_cost, max_slack, bri, x, x_des, u = helper.solve_best_response(response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, x0_amb, nonresponse_x0_list, slack, solve_amb, k_warm, u_warm, x_warm, x_des_warm, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb_ibr, xamb_ibr, xamb_des_ibr, )
 
                             # print("  i_mpc %d n_round %d i %02d Cost %.02f Slack %.02f "%(i_mpc, i_rounds_ibr, i, bri.solution.value(bri.total_svo_cost), bri.solution.value(bri.slack_cost)))
                             # print("  J_i %.03f,  J_j %.03f, Slack %.03f, CA  %.03f"%(bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.other_svo_cost), bri.solution.value(bri.k_slack*bri.slack_cost), bri.solution.value(bri.k_CA*bri.collision_cost)))
@@ -204,22 +205,23 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                         min_response_cost = current_cost
                         min_response_warm = k_warm
                         min_bri = bri
+                        max_slack_ibr = max_slack
 
                 if SAVE_FLAG:
                     file_name = folder + "data/"+'%03d'%i_rounds_ibr
                     mibr.save_state(file_name, xamb_ibr, uamb_ibr, xamb_des_ibr, all_other_x_ibr, all_other_u_ibr, all_other_x_des_ibr)
                     mibr.save_costs(file_name, bri)
                     
-                if max_slack >= k_max_slack:
-                    print("Max Slack is too large %.05f > thresh %.05f"%(max_slack, k_max_slack))
+                if max_slack_ibr >= k_max_slack:
+                    print("Max Slack is too large %.05f > thresh %.05f"%(max_slack_ibr, k_max_slack))
                     solve_number += 1
                 else:
                     solve_again = False
 
-            if not other_solved_flag[i]:
-                raise Exception("i did not converge to a solution")
+            # if not other_solved_flag[i]:
+            #     raise Exception("i did not converge to a solution")
             if solve_again:
-                raise Exception("Slack variable is too high")     
+                raise Exception("Slack variable is too high. Max Slack = %d"%max_slack_ibr)     
 
             print("Vehicle i=%d Solution:  mpc_i %d  ibr_round %d"%(i, i_mpc, i_rounds_ibr))    
             cmplot.plot_single_frame(world, min_bri_ibr.responseMPC, all_other_x_ibr[i], [xamb_ibr] + nonresponse_x_list, None, CIRCLES="Ellipse", parallelize=True, camera_speed = None, plot_range = None, car_ids = None, xamb_desired=None, xothers_desired=None)
