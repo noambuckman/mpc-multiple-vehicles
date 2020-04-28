@@ -29,7 +29,6 @@ for f in [folder, folder+"imgs/", folder+"data/", folder+"vids/", folder+"plots/
 print(folder)
 if random_seed > 0:
     np.random.seed(random_seed)
-
 #######################################################################
 T = 5  # MPC Planning Horizon
 dt = 0.2
@@ -80,7 +79,6 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
     other_solved_flag = [False for i in range(n_other)]
 
     for i_rounds_ibr in range(n_rounds_ibr):
-        print("Initial conditions MPC_i: %d IBR_i: %d x: %0.1f y:%0.1f"%(i_mpc, i_rounds_ibr, x0_amb[0], x0_amb[1]))
         ############# Generate (if needed) the control inputs of other vehicles
         if i_rounds_ibr == 0:
             if i_mpc == 0:
@@ -106,28 +104,46 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         ################# Solve the Best Response ############################
         k_slack, k_CA, k_CA_power, wall_CA = 10000.0, 0.001, 2, True
         k_max_slack = 0.01
-        if i_rounds_ibr == 0:
+        if i_rounds_ibr >= 0:
             slack = True
         else:
             slack = False 
-        solve_again, solve_number, max_slack = True, 0, np.infty
+        solve_again, solve_number, max_slack_ibr = True, 0, np.infty
         while solve_again and solve_number < 4:
             min_response_cost = np.infty            
             k_CA_power *= 10
             # k_slack *= 10
             for k_warm in u_warm_profiles.keys():
                 u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]
-                solve_amb, a_MPC = False, None
-
-                temp, current_cost, max_slack, bri, xamb, xamb_des, uamb = helper.solve_best_response(response_MPC, a_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, x0_amb, nonresponse_x0_list, slack, solve_amb, k_warm, u_warm, x_warm, x_des_warm, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, )
-                if current_cost is None: #infeasible
-                    pass
-                elif current_cost < min_response_cost:
-                    min_response_cost = current_cost
-                    xamb_ibr, xamb_des_ibr, uamb_ibr = xamb, xamb_des, uamb
-                    max_slack_ibr = max_slack
-                    min_bri_ibr = bri
-                    amb_solved_flag = True
+                temp, current_cost, max_slack, bri, xamb, xamb_des, uamb = helper.solve_best_response(response_MPC, None, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, x0_amb, nonresponse_x0_list, slack, False, k_warm, u_warm, x_warm, x_des_warm, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, )                
+                
+                print("MPC_i: %d IBR_i: %d Veh: Amb k_warm %s"%(i_mpc, i_rounds_ibr, k_warm))        
+                if current_cost >= np.infty:
+                    print("Convered to Locally Infeasible Solution")
+                else:
+                    for k in range(N+1):
+                        cmplot.plot_single_frame(world, response_MPC, x_warm, nonresponse_x_list, None, "Ellipse", parallelize=False, camera_speed = 0, plot_range = [k])                
+                        plt.show()
+                    if current_cost < min_response_cost:
+                        min_response_cost = current_cost
+                        xamb_ibr, xamb_des_ibr, uamb_ibr = xamb, xamb_des, uamb
+                        max_slack_ibr = max_slack
+                        min_bri_ibr = bri
+                        amb_solved_flag = True
+                        print("Saved min cost response: k_warm %s  min_cost: %0.03f  max_slack %.03f" % (k_warm, min_response_cost, max_slack_ibr))
+                if solve_number > 2:
+                    print("Debug:  Plotting Warm Start:  %s"%k_warm)
+                    for k in range(N+1):
+                        cmplot.plot_single_frame(world, response_MPC, x_warm, nonresponse_x_list, None, "Ellipse", parallelize=False, camera_speed = 0, plot_range = [k])                
+                        plt.show()
+                    if current_cost >= np.infty:
+                        x_plot = bri.opti.debug.value(bri.x_opt)
+                    else:
+                        x_plot = xamb
+                    print("Debug:  Plotting Solution/Debug")
+                    for k in range(N+1):
+                        cmplot.plot_single_frame(world, response_MPC, x_plot, nonresponse_x_list, None, "Ellipse", parallelize=False, camera_speed = 0, plot_range = [k])                
+                        plt.show()                                                    
 
             if max_slack_ibr >= k_max_slack:
                 print("Max Slack is too large %.05f > thresh %.05f"%(max_slack_ibr, k_max_slack))
@@ -175,22 +191,29 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             else:
                 solve_amb = True  
 
+            if i_rounds_ibr >= 0:
+                slack = True
+            else:
+                slack = False                 
+
             min_response_cost = np.infty
             k_slack, k_CA, k_CA_power, wall_CA = 100000.0, 0.001, 4, True
-            solve_again = True
-            while solve_again:
+            solve_again, solve_number, max_slack_ibr = True, 0, np.infty
+            while solve_again and solve_number < 4:
                 # k_slack *= 10
                 k_CA *= 10
                 for k_warm in u_warm_profiles.keys():
-                    u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]          
-                    print("x0_amb", x0_amb)    
+                    u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm] 
+
+                             
                     temp_solved_flag, current_cost, max_slack, bri, x, x_des, u = helper.solve_best_response(response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, x0_amb, nonresponse_x0_list, slack, solve_amb, k_warm, u_warm, x_warm, x_des_warm, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb_ibr, xamb_ibr, xamb_des_ibr, )
+                    print("MPC_i: %d IBR_i: %d Veh: %i k_warm %s"%(i_mpc, i_rounds_ibr, i, k_warm))        
 
                             # print("  i_mpc %d n_round %d i %02d Cost %.02f Slack %.02f "%(i_mpc, i_rounds_ibr, i, bri.solution.value(bri.total_svo_cost), bri.solution.value(bri.slack_cost)))
                             # print("  J_i %.03f,  J_j %.03f, Slack %.03f, CA  %.03f"%(bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.other_svo_cost), bri.solution.value(bri.k_slack*bri.slack_cost), bri.solution.value(bri.k_CA*bri.collision_cost)))
                             # print("  Dir:", subdir_name)
-                    if current_cost is None: #Infeasible solution
-                        pass
+                    if current_cost >= np.infty: #Infeasible solution
+                        print("Convered to Locally Infeasible Solution")
                     elif current_cost < min_response_cost:
                         all_other_u_ibr[i], all_other_x_ibr[i], all_other_x_des_ibr[i]  = u, x, x_des
                         other_solved_flag[i] = True
@@ -199,6 +222,27 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                         min_bri = bri
                         max_slack_ibr = max_slack
 
+
+                    if solve_number > 2:
+                        print("Debug:  Plotting Warm Start:  %s"%k_warm)
+                        for k in range(N+1):
+                            cmplot.plot_single_frame(world, response_MPC, x_warm, [xamb_ibr] + nonresponse_x_list, None, "Ellipse", parallelize=False, camera_speed = 0, plot_range = [k])                
+                            plt.show()
+                        if current_cost >= np.infty:
+                            x_plot = bri.opti.debug.value(bri.x_opt)
+                        else:
+                            x_plot = x
+                        print("Debug:  Plotting Solution/Debug")
+                        for k in range(N+1):
+                            cmplot.plot_single_frame(world, response_MPC, x_plot, [xamb_ibr] + nonresponse_x_list, None, "Ellipse", parallelize=False, camera_speed = 0, plot_range = [k])                
+                            plt.show() 
+                        print("Settings:  k_slack %.04f  k_CA %.04f  solve_amb? %d slack? %d"%(k_slack, k_CA, solve_amb, slack))
+                        if current_cost >= np.infty:
+                            print("Costs: Total Cost %.04f Vehicle-Only Cost:  %.04f Collision Cost %0.04f  Slack Cost %0.04f"%((current_cost, bri.debug.value(bri.response_svo_cost), bri.debug.value(bri.k_CA*bri.collision_cost), bri.debug.value(bri.k_slack*bri.slack_cost))))                 
+                        else:
+                            print("Costs: Total Cost %.04f Vehicle-Only Cost:  %.04f Collision Cost %0.04f  Slack Cost %0.04f"%((current_cost, bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.k_CA*bri.collision_cost), bri.solution.value(bri.k_slack*bri.slack_cost))))                 
+
+                        
                 if SAVE_FLAG:
                     file_name = folder + "data/"+'%03d'%i_rounds_ibr
                     mibr.save_state(file_name, xamb_ibr, uamb_ibr, xamb_des_ibr, all_other_x_ibr, all_other_u_ibr, all_other_x_des_ibr)
