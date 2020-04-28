@@ -119,18 +119,17 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                 
                 print("MPC_i: %d IBR_i: %d Veh: Amb k_warm %s"%(i_mpc, i_rounds_ibr, k_warm))        
                 if current_cost >= np.infty:
-                    print("Convered to Locally Infeasible Solution")
+                    print("Failed:  Converged to Locally Infeasible Solution")
                 else:
-                    for k in range(N+1):
-                        cmplot.plot_single_frame(world, response_MPC, x_warm, nonresponse_x_list, None, "Ellipse", parallelize=False, camera_speed = 0, plot_range = [k])                
-                        plt.show()
                     if current_cost < min_response_cost:
                         min_response_cost = current_cost
                         xamb_ibr, xamb_des_ibr, uamb_ibr = xamb, xamb_des, uamb
                         max_slack_ibr = max_slack
                         min_bri_ibr = bri
                         amb_solved_flag = True
-                        print("Saved min cost response: k_warm %s  min_cost: %0.03f  max_slack %.03f" % (k_warm, min_response_cost, max_slack_ibr))
+                        print("Converged:  Saved min cost response: k_warm %s  min_cost: %0.03f  max_slack %.03f" % (k_warm, min_response_cost, max_slack_ibr))
+                    else:
+                        print("Converged:  Cost (%0.03f) was higher than other warm (Current Min:  %0.03f)"%(current_cost, min_response_cost))
                 if solve_number > 2:
                     print("Debug:  Plotting Warm Start:  %s"%k_warm)
                     for k in range(N+1):
@@ -187,9 +186,9 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             k_solve_amb_min_distance, k_solve_amb_max_ibr = 30, 2
             initial_distance_to_ambulance = np.sqrt((response_x0[0] - x0_amb[0])**2 + (response_x0[1] - x0_amb[1])**2)
             if i_rounds_ibr < k_solve_amb_max_ibr and (initial_distance_to_ambulance < k_solve_amb_max_ibr):
-                solve_amb = False
+                solve_amb = True
             else:
-                solve_amb = True  
+                solve_amb = False  
 
             if i_rounds_ibr >= 0:
                 slack = True
@@ -213,7 +212,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                             # print("  J_i %.03f,  J_j %.03f, Slack %.03f, CA  %.03f"%(bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.other_svo_cost), bri.solution.value(bri.k_slack*bri.slack_cost), bri.solution.value(bri.k_CA*bri.collision_cost)))
                             # print("  Dir:", subdir_name)
                     if current_cost >= np.infty: #Infeasible solution
-                        print("Convered to Locally Infeasible Solution")
+                        print("Failed: Convered to Locally Infeasible Solution")
                     elif current_cost < min_response_cost:
                         all_other_u_ibr[i], all_other_x_ibr[i], all_other_x_des_ibr[i]  = u, x, x_des
                         other_solved_flag[i] = True
@@ -221,7 +220,9 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                         min_response_warm = k_warm
                         min_bri = bri
                         max_slack_ibr = max_slack
-
+                        print("Converged:  Saved min cost response: k_warm %s  min_cost: %0.03f  max_slack %.03f" % (k_warm, min_response_cost, max_slack_ibr))
+                    else:
+                        print("Converged:  Cost (%0.03f) was higher than other warm (Current Min:  %0.03f)"%(current_cost, min_response_cost))
 
                     if solve_number > 2:
                         print("Debug:  Plotting Warm Start:  %s"%k_warm)

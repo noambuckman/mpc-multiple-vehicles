@@ -62,7 +62,7 @@ def solve_best_response(response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_
             amb_solved_flag = True     
     except RuntimeError:
         print("Infeasibility: k_warm %s"%k_warm)
-        return False, np.infty, np.infty, None, None, None, None
+        return False, np.infty, np.infty, bri, None, None, None
         # ibr_sub_it +=1  
     return amb_solved_flag, current_cost, max_slack, min_bri_ibr, xamb_ibr, xamb_des_ibr, uamb_ibr 
 
