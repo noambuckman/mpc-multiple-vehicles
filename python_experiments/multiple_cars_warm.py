@@ -21,19 +21,11 @@ import src.solver_helper as helper
 svo_theta = np.pi/3.0
 # random_seed = args.random_seed[0]
 random_seed = 3
-NEW = True
-if NEW:
-    optional_suffix = "6cars"
-    subdir_name = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + optional_suffix
-    folder = "results/" + subdir_name + "/"
-    os.makedirs(folder)
-    os.makedirs(folder+"imgs/")
-    os.makedirs(folder+"data/")
-    os.makedirs(folder+"vids/")
-    os.makedirs(folder+"plots/")
-else:
-    subdir_name = "20200224-103456_real_dim_CA"
-    folder = "results/" + subdir_name + "/"
+optional_suffix = ""
+subdir_name = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + optional_suffix
+folder = "results/" + subdir_name + "/"
+for f in [folder, folder+"imgs/", folder+"data/", folder+"vids/", folder+"plots/"]:
+    os.makedirs(f)
 print(folder)
 if random_seed > 0:
     np.random.seed(random_seed)
