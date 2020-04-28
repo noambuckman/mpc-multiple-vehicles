@@ -155,8 +155,8 @@ class IterativeBestResponseMPCMultiple:
                     dist_btw_wall_bottom =  response_circle_xy[1] - (self.responseMPC.min_y + self.responseMPC.W/2.0) 
                     dist_btw_wall_top = (self.responseMPC.max_y - self.responseMPC.W/2.0) - response_circle_xy[1]
 
-                    self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_bottom, 0.01)**self.k_CA_power)
-                    self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_top, 0.01)**self.k_CA_power)
+                    self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_bottom, 0.0001)**self.k_CA_power)
+                    self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_top, 0.0001)**self.k_CA_power)
 
             if self.ambMPC and solve_amb: #Do collision avoidance btwn ambulance and other non-ego vehicles
                 ci=-1
@@ -172,14 +172,14 @@ class IterativeBestResponseMPCMultiple:
                             
                             # distance_clipped = cas.fmax(buffer_distance, -1)
                             self.opti.subject_to(dist >= (1 - self.slack_amb_other[i][ci, k]))
-                            distance_clipped = cas.fmax(buffer_distance, 0.01)
+                            distance_clipped = cas.fmax(buffer_distance, 0.0001)
                             self.collision_cost += 1/distance_clipped**self.k_CA_power     
                     if self.WALL_CA:
                         dist_btw_wall_bottom =  ca_circle[1] - (self.responseMPC.min_y + self.responseMPC.W/2.0) 
                         dist_btw_wall_top = (self.responseMPC.max_y - self.responseMPC.W/2.0) - ca_circle[1]
 
-                        self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_bottom, 0.01)**self.k_CA_power)
-                        self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_top, 0.01)**self.k_CA_power)                
+                        self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_bottom, 0.0001)**self.k_CA_power)
+                        self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_top, 0.0001)**self.k_CA_power)                
         
   
         ######## optimization  ##################################
