@@ -239,7 +239,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                             plt.show() 
                         print("Settings:  k_slack %.04f  k_CA %.04f  solve_amb? %d slack? %d"%(k_slack, k_CA, solve_amb, slack))
                         if current_cost >= np.infty:
-                            print("Costs: Total Cost %.04f Vehicle-Only Cost:  %.04f Collision Cost %0.04f  Slack Cost %0.04f"%((current_cost, bri.debug.value(bri.response_svo_cost), bri.debug.value(bri.k_CA*bri.collision_cost), bri.debug.value(bri.k_slack*bri.slack_cost))))                 
+                            print("Costs: Total Cost %.04f Vehicle-Only Cost:  %.04f Collision Cost %0.04f  Slack Cost %0.04f"%((current_cost, bri.opti.debug.value(bri.response_svo_cost), bri.opti.debug.value(bri.k_CA*bri.collision_cost), bri.opti.debug.value(bri.k_slack*bri.slack_cost))))                 
                         else:
                             print("Costs: Total Cost %.04f Vehicle-Only Cost:  %.04f Collision Cost %0.04f  Slack Cost %0.04f"%((current_cost, bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.k_CA*bri.collision_cost), bri.solution.value(bri.k_slack*bri.slack_cost))))                 
 
@@ -258,7 +258,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             # if not other_solved_flag[i]:
             #     raise Exception("i did not converge to a solution")
             if solve_again:
-                raise Exception("Slack variable is too high. Max Slack = %d"%max_slack_ibr)     
+                raise Exception("Slack variable is too high. Max Slack = %0.04f"%max_slack_ibr)     
 
             print("Vehicle i=%d Solution:  mpc_i %d  ibr_round %d"%(i, i_mpc, i_rounds_ibr))    
             cmplot.plot_single_frame(world, min_bri_ibr.responseMPC, all_other_x_ibr[i], [xamb_ibr] + nonresponse_x_list, None, CIRCLES="Ellipse", parallelize=True, camera_speed = None, plot_range = None, car_ids = None, xamb_desired=None, xothers_desired=None)
