@@ -89,7 +89,7 @@ def solve_best_response(response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_
         print("Infeasibility: k_warm %s"%k_warm)
         return False, np.infty, np.infty, None, None, None, None
         # ibr_sub_it +=1  
-    return amb_solved_flag, current_cost, max_slack, None, xamb_ibr, xamb_des_ibr, uamb_ibr 
+    return amb_solved_flag, current_cost, max_slack, min_bri_ibr, xamb_ibr, xamb_des_ibr, uamb_ibr 
 
 
             # print(" i_mpc %d n_round %d Amb Cost %.02f Slack %.02f "%(i_mpc, i_rounds_ibr, bri.solution.value(bri.total_svo_cost), bri.solution.value(bri.slack_cost)))
