@@ -118,7 +118,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                                                     response_x0, x0_amb, nonresponse_x0_list, slack, False, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, None, None, None)
             
             min_response_cost = min_solution[1]
-            xamb_ibr, xamb_des_ibr, uamb_ibr = min_solution[4], min_solution[5], min_solution[6]
+            xamb_ibr, xamb_des_ibr, uamb_ibr = min_solution[3], min_solution[4], min_solution[5]
             max_slack_ibr = min_solution[2]
             min_bri_ibr = None #<--- This used to be the bri at return so an error wil arise
             amb_solved_flag = True
