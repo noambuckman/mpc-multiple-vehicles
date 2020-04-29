@@ -8,8 +8,8 @@ import src.MPC_Casadi as mpc
 
 def warm_solve_subroutine(k_warm, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=None, xamb=None, xamb_des=None):
     u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]
-    temp, current_cost, max_slack, x, x_des, u = solve_best_response(response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, k_warm, u_warm, x_warm, x_des_warm, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb, xamb, xamb_des)                
-    return (temp, current_cost, max_slack, np.array(x), np.array(x_des), np.array(u))
+    temp, current_cost, max_slack, bri, x, x_des, u = solve_best_response(response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, k_warm, u_warm, x_warm, x_des_warm, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb, xamb, xamb_des)                
+    return (temp, current_cost, max_slack, x, x_des, u)
 
 
 def solve_warm_starts(parallelize, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=None, xamb=None, xamb_des=None):
@@ -87,9 +87,9 @@ def solve_best_response(response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_
             amb_solved_flag = True     
     except RuntimeError:
         print("Infeasibility: k_warm %s"%k_warm)
-        return False, np.infty, np.infty, bri, None, None, None
+        return False, np.infty, np.infty, None, None, None, None
         # ibr_sub_it +=1  
-    return amb_solved_flag, current_cost, max_slack, xamb_ibr, xamb_des_ibr, uamb_ibr 
+    return amb_solved_flag, current_cost, max_slack, None, xamb_ibr, xamb_des_ibr, uamb_ibr 
 
 
             # print(" i_mpc %d n_round %d Amb Cost %.02f Slack %.02f "%(i_mpc, i_rounds_ibr, bri.solution.value(bri.total_svo_cost), bri.solution.value(bri.slack_cost)))
