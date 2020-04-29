@@ -63,24 +63,16 @@ def solve_best_response(u_warm, x_warm, x_des_warm, response_MPC, amb_MPC, nonre
         bri.opti.set_value(bri.allother_x_desired[j], nonresponse_xd_list[j])
     try:
         bri.solve(uamb, nonresponse_u_list, solve_amb)
-        x1, u1, x1_des, _, _, _, _, _, _ = bri.get_solution()
-        min_slack = np.infty
-        if bri.solution.value(bri.slack_cost) < min_slack:
-            current_cost = bri.solution.value(bri.total_svo_cost)
-            max_slack = np.max([np.max(bri.solution.value(s)) for s in bri.slack_vars_list])                                                                         
-            uamb_ibr = u1
-            xamb_ibr = x1
-            xamb_des_ibr = x1_des
-            min_response_cost = current_cost
-            min_response_warm_ibr = None #<This used to return k_warm
-            min_bri_ibr = bri
-            amb_solved_flag = True     
+        x_ibr, u_ibr, x_des_ibr, _, _, _, _, _, _ = bri.get_solution()
+        current_cost = bri.solution.value(bri.total_svo_cost)
+        max_slack = np.max([np.max(bri.solution.value(s)) for s in bri.slack_vars_list])                                                                         
+        min_response_warm_ibr = None #<This used to return k_warm
+        min_bri_ibr = bri
+        return True, current_cost, max_slack, x_ibr, x_des_ibr, u_ibr
     except RuntimeError:
         # print("Infeasibility: k_warm %s"%k_warm)
         return False, np.infty, np.infty, None, None, None
         # ibr_sub_it +=1  
-    return amb_solved_flag, current_cost, max_slack, xamb_ibr, xamb_des_ibr, uamb_ibr 
-
 
 def solve_warm_starts(parallelize, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=None, xamb=None, xamb_des=None):
     warm_solve_partial  = functools.partial(solve_best_response, response_MPC=response_MPC, amb_MPC=amb_MPC, nonresponse_MPC_list=nonresponse_MPC_list, k_slack=k_slack, k_CA=k_CA, k_CA_power=k_CA_power, world=world, wall_CA=wall_CA, N=N, T=T, response_x0=response_x0, amb_x0=amb_x0, nonresponse_x0_list=nonresponse_x0_list, slack=slack, solve_amb=solve_amb, nonresponse_u_list=nonresponse_u_list, nonresponse_x_list=nonresponse_x_list, nonresponse_xd_list=nonresponse_xd_list, uamb=uamb, xamb=xamb, xamb_des=xamb_des)
