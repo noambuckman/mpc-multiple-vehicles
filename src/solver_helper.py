@@ -37,7 +37,7 @@ def pullover_guess(N, all_other_MPC, all_other_x0):
         all_other_x_ibr[i], all_other_x_des_ibr[i] = all_other_MPC[i].forward_simulate_all(all_other_x0[i].reshape(6,1), all_other_u_ibr[i])
     return all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr
 
-def solve_best_response(u_warm, x_warm, x_des_warm, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, k_warm, u_warm, x_warm, x_des_warm, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=None, xamb=None, xamb_des=None):
+def solve_best_response(u_warm, x_warm, x_des_warm, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=None, xamb=None, xamb_des=None):
     '''Create the iterative best response object and solve.  Assumes that it receives warm start profiles.
     This really should only require a u_warm, x_warm, x_des_warm and then one level above we generate those values'''
     
@@ -72,7 +72,7 @@ def solve_best_response(u_warm, x_warm, x_des_warm, ux_warm_profiles, response_M
             xamb_ibr = x1
             xamb_des_ibr = x1_des
             min_response_cost = current_cost
-            min_response_warm_ibr = k_warm
+            min_response_warm_ibr = None #<This used to return k_warm
             min_bri_ibr = bri
             amb_solved_flag = True     
     except RuntimeError:

@@ -110,11 +110,10 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             slack = False 
         solve_again, solve_number, max_slack_ibr = True, 0, np.infty
         while solve_again and solve_number < 4:
-            min_response_cost = np.infty            
             k_CA_power *= 10
             # k_slack *= 10
-
-            min_solution = helper.solve_warm_starts(True, ux_warm_profiles, response_MPC, None, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, 
+            parallelize_solving = True
+            min_solution = helper.solve_warm_starts(parallelize_solving, ux_warm_profiles, response_MPC, None, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, 
                                                     response_x0, x0_amb, nonresponse_x0_list, slack, False, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, None, None, None)
             
             min_response_cost = min_solution[1]
@@ -188,7 +187,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             if i_rounds_ibr > 0:
                 u_warm_profiles["previous"] = all_other_u_ibr[i]     
             if (i_rounds_ibr == 0 and i_mpc > 0) or i_rounds_ibr > 0 :
-                x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm)
+                x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm_profiles["previous"])
                 ux_warm_profiles["previous"] = [u_warm_profiles["previous"], x_warm, x_des_warm]
             x_warm_profiles, x_ux_warm_profiles = mibr.generate_warm_x(response_MPC, world,  response_x0, np.median([x[4] for x in nonresponse_x0_list]))
             ux_warm_profiles.update(x_ux_warm_profiles) # combine into one
@@ -211,7 +210,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             while solve_again and solve_number < 4:
                 # k_slack *= 10
                 k_CA *= 10
-                min_cost_solution = helper.solve_warm_starts(True, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=None, xamb=None, xamb_des=None)
+                min_cost_solution = helper.solve_warm_starts(True, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, x0_amb, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=None, xamb=None, xamb_des=None)
 #                 for k_warm in u_warm_profiles.keys():
 #                     u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]     
 #                     temp_solved_flag, current_cost, max_slack, bri, x, x_des, u = helper.solve_best_response(response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, x0_amb, nonresponse_x0_list, slack, solve_amb, k_warm, u_warm, x_warm, x_des_warm, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb_ibr, xamb_ibr, xamb_des_ibr, )
@@ -256,7 +255,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                 if SAVE_FLAG:
                     file_name = folder + "data/"+'%03d'%i_rounds_ibr
                     mibr.save_state(file_name, xamb_ibr, uamb_ibr, xamb_des_ibr, all_other_x_ibr, all_other_u_ibr, all_other_x_des_ibr)
-                    mibr.save_costs(file_name, bri)
+                    # mibr.save_costs(file_name, bri)
                     
                 if max_slack_ibr >= k_max_slack:
                     print("Max Slack is too large %.05f > thresh %.05f"%(max_slack_ibr, k_max_slack))
@@ -279,7 +278,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
     all_other_u_mpc = all_other_u_ibr
     all_other_x_mpc = all_other_x_ibr
     all_other_x_des_mpc = all_other_x_des_ibr
-    bri_mpc = min_bri
+    bri_mpc = None
     file_name = folder + "data/"+'r%02d%03d'%(i_mpc, i_rounds_ibr)
 
     all_other_x_executed = [np.zeros(shape=(6,number_ctrl_pts_executed+1)) for i in range(n_other)]
