@@ -201,7 +201,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             while solve_again and solve_number < 4:
                 # k_slack *= 10
                 k_CA *= 10
-                for k_warm in u_warm_profiles.keys():
+                for k_warm in ux_warm_profiles.keys():
                     u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm] 
 
                              
