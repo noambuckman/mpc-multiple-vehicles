@@ -211,7 +211,10 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                 # k_slack *= 10
                 k_CA *= 10
                 min_cost_solution = helper.solve_warm_starts(True, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, x0_amb, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=None, xamb=None, xamb_des=None)
-#                 for k_warm in u_warm_profiles.keys():
+#                 
+# 
+# 
+# for k_warm in u_warm_profiles.keys():
 #                     u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]     
 #                     temp_solved_flag, current_cost, max_slack, bri, x, x_des, u = helper.solve_best_response(response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, x0_amb, nonresponse_x0_list, slack, solve_amb, k_warm, u_warm, x_warm, x_des_warm, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb_ibr, xamb_ibr, xamb_des_ibr, )
 #                     print("MPC_i: %d IBR_i: %d Veh: %i k_warm %s"%(i_mpc, i_rounds_ibr, i, k_warm))        
