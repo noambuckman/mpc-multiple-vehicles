@@ -1,8 +1,33 @@
 import numpy as np
 import copy as cp
+import multiprocessing, functools
 
 import src.IterativeBestResponseMPCMultiple as mibr
 import src.MPC_Casadi as mpc
+
+
+def warm_solve_subroutine(k_warm, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=None, xamb=None, xamb_des=None):
+    u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]
+    temp, current_cost, max_slack, bri, x, x_des, u = solve_best_response(response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, k_warm, u_warm, x_warm, x_des_warm, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb, xamb, xamb_des)                
+    return (temp, current_cost, max_slack, bri, x, x_des, u)
+
+
+def solve_warm_starts(parallelize, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=None, xamb=None, xamb_des=None):
+    
+    if parallelize:
+        pool = multiprocessing.Pool(processes=8)
+        warm_solve_partial  = functools.partial(warm_solve_subroutine, ux_warm_profiles=ux_warm_profiles, response_MPC=response_MPC, amb_MPC=amb_MPC, nonresponse_MPC_list=nonresponse_MPC_list, k_slack=k_slack, k_CA=k_CA, k_CA_power=k_CA_power, world=world, wall_CA=wall_CA, N=N, T=T, response_x0=response_x0, amb_x0=amb_x0, nonresponse_x0_list=nonresponse_x0_list, slack=slack, solve_amb=solve_amb, nonresponse_u_list=nonresponse_u_list, nonresponse_x_list=nonresponse_x_list, nonresponse_xd_list=nonresponse_xd_list, uamb=uamb, xamb=xamb, xamb_des=xamb_des)
+        solve_costs_solutions  =  pool.map(warm_solve_partial, ux_warm_profiles.keys()) #will apply k=1...N to plot_partial
+    else:
+        solve_costs_solutions = []
+        for k_warm in ux_warm_profiles.keys():
+            solve_costs_solutions += [ux_warm_profiles[k_warm]]
+
+    min_cost_solution = min(solve_costs_solutions, key=lambda r:r[1])  
+
+    return min_cost_solution  
+
+
 
 
 def extend_last_mpc_ctrl(all_other_u_mpc, number_ctrl_pts_executed, N, all_other_MPC, all_other_x0):
