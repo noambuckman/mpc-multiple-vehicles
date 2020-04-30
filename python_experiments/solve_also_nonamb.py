@@ -121,6 +121,14 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             slack = True
         else:
             slack = False 
+
+        k_solve_amb_max_ibr = 2
+        
+        if i_rounds_ibr < k_solve_amb_max_ibr:
+            solve_amb = True
+        else:
+            solve_amb = False
+
         solve_again, solve_number, max_slack_ibr = True, 0, np.infty
         while solve_again and solve_number < 4:
             solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr = helper.solve_warm_starts(8, ux_warm_profiles, response_MPC, fake_amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, 
@@ -162,7 +170,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             x_warm_profiles, x_ux_warm_profiles = mibr.generate_warm_x(response_MPC, world,  response_x0, np.median([x[4] for x in nonresponse_x0_list]))
             ux_warm_profiles.update(x_ux_warm_profiles) # combine into one
 
-            k_solve_amb_min_distance, k_solve_amb_max_ibr = 30, 2
+            k_solve_amb_min_distance = 30
             initial_distance_to_ambulance = np.sqrt((response_x0[0] - amb_x0[0])**2 + (response_x0[1] - amb_x0[1])**2)
             if i_rounds_ibr < k_solve_amb_max_ibr and (initial_distance_to_ambulance < k_solve_amb_max_ibr):
                 solve_amb = True
