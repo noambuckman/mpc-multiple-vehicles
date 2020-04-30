@@ -203,7 +203,8 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             #     mibr.save_state(file_name, xamb_ibr, uamb_ibr, xamb_des_ibr, all_other_x_ibr, all_other_u_ibr, all_other_x_des_ibr)
             #     # mibr.save_costs(file_name, bri)             
 
-            print("Vehicle i=%d Solution:  mpc_i %d  ibr_round %d"%(i, i_mpc, i_rounds_ibr))    
+            print("Vehicle i=%d Solution:  mpc_i %d  ibr_round %d"%(i, i_mpc, i_rounds_ibr)) 
+            print("Dir: %s"%folder)   
             cmplot.plot_single_frame(world, response_MPC, all_other_x_ibr[i], [xamb_ibr] + nonresponse_x_list, None, CIRCLES="Ellipse", parallelize=True, camera_speed = None, plot_range = None, car_ids = None, xamb_desired=None, xothers_desired=None)
             plt.show()                    
 
