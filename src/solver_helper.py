@@ -80,6 +80,7 @@ def solve_warm_starts(parallelize, ux_warm_profiles, response_MPC, amb_MPC, nonr
     if parallelize:
         pool = multiprocessing.Pool(processes=8, maxtasksperchild=1)
         solve_costs_solutions  =  pool.starmap(warm_solve_partial, ux_warm_profiles.values()) #will apply k=1...N to plot_partial
+        pool.terminate()
     else:
         solve_costs_solutions = []
         for k_warm in ux_warm_profiles.keys():
