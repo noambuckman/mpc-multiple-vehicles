@@ -84,7 +84,7 @@ def solve_warm_starts(parallelize, ux_warm_profiles, response_MPC, amb_MPC, nonr
     else:
         solve_costs_solutions = []
         for k_warm in ux_warm_profiles.keys():
-            solve_costs_solutions += warm_solve_partial(*ux_warm_profiles[k_warm])
+            solve_costs_solutions += [warm_solve_partial(*ux_warm_profiles[k_warm])]
 
     min_cost_solution = min(solve_costs_solutions, key=lambda r:r[1])  
 
