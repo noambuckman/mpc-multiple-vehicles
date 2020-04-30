@@ -33,7 +33,7 @@ if random_seed > 0:
 T = 5  # MPC Planning Horizon
 dt = 0.2
 N = int(T/dt) #Number of control intervals in MPC
-n_rounds_mpc = 8
+n_rounds_mpc = 25
 percent_mpc_executed = .50 ## This is the percent of MPC that is executed
 number_ctrl_pts_executed =  int(np.floor(N*percent_mpc_executed))
 print("number ctrl pts:  %d"%number_ctrl_pts_executed)
