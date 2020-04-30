@@ -226,7 +226,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
     mean_amb_v = np.mean(xamb_executed[4,:])
     im_dir = folder + '%02d/'%i_mpc
     os.makedirs(im_dir+"imgs/")    
-    cmplot.plot_cars(world, amb_MPC, xamb_executed[:,:actual_t+number_ctrl_pts_executed+1], [x[:,:actual_t+number_ctrl_pts_executed+1] for x in all_other_x_executed], 
+    cmplot.plot_cars(world, amb_MPC, actual_xamb[:,:actual_t+number_ctrl_pts_executed+1], [x[:,:actual_t+number_ctrl_pts_executed+1] for x in actual_xothers], 
                         im_dir, None, None, "Both", True, np.min(xamb_executed[4,:actual_t+number_ctrl_pts_executed+1]))
     plt.show()
     plt.plot(xamb_mpc[4,:],'--')
