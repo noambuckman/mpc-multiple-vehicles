@@ -250,7 +250,7 @@ mean_amb_v = np.median(actual_xamb[4,:])
 min_amb_v = np.min(actual_xamb[4,:])
 print("Min Speed", min_amb_v, mean_amb_v)
 print("Plotting all")
-cmplot.plot_cars(world, bri_mpc.responseMPC, actual_xamb, actual_xothers, folder, None, None, False, False, min_amb_v)
+cmplot.plot_cars(world, response_MPC, actual_xamb, actual_xothers, folder, None, None, False, False, min_amb_v)
 
 file_name = folder + "data/"+'a%02d%03d'%(i_mpc, i_rounds_ibr)
 print("Saving to...  ", file_name)
