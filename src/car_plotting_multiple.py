@@ -59,7 +59,7 @@ def get_frame(x, x_MPC, ax=None, car_name="red", alpha = 1.0):
     ax.add_artist(ab)        
     return ax    
 
-def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, CIRCLES="Ellipse", parallelize=True, camera_speed = None, plot_range = None, car_ids = None, xamb_desired=None, xothers_desired=None):
+def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_shape="Ellipse", parallelize=True, camera_speed = None, plot_range = None, car_ids = None, xamb_desired=None, xothers_desired=None):
     '''Plots the progression of all cars in one frame'''
     if camera_speed is None:
         camera_speed = x_mpc.max_v
@@ -91,7 +91,7 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, CIRCLES="El
         plot_range = range(xamb_plot.shape[1])
     for ki in range(len(plot_range)):
         k = plot_range[ki]             
-        if CIRCLES == "Ellipse" or CIRCLES == "Both":
+        if car_plot_shape.lower() == "ellipse" or car_plot_shape.lower() == "both" or car_plot_shape.lower() == "ellipses":
             # Plot the ambulance as circles
             centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
             if len(plot_range) == 1:
@@ -123,7 +123,7 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, CIRCLES="El
 
             centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])                  
 
-        if CIRCLES == "Image" or CIRCLES == "Both":
+        if car_plot_shape.lower() == "image" or car_plot_shape.lower() == "both":
             for i in range(len(xothers_plot)):
                 x1_plot = xothers_plot[i]
                 if car_ids is not None:
@@ -142,26 +142,29 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, CIRCLES="El
         fig.savefig(folder + 'imgs/' '{:03d}.png'.format(k))
         plt.close(fig)        
 
-def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desired=None, xothers_desired=None,  
-                CIRCLES="Ellipse", parallelize=True, camera_speed = None):
+def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder,   
+                car_plot_shape="ellipse", parallelize=True, camera_speed = None, 
+                xamb_desired=None, xothers_desired=None):
     N = xamb_plot.shape[1]
-    # if CIRCLES:
+    # if car_plot_shape:
     if psutil.virtual_memory().percent >= 90.0:
         raise Exception("Virtual Memory is too high, exiting to save computer")    
     if parallelize:
         pool = multiprocessing.Pool(processes=4)
-        plot_partial = functools.partial(plot_multiple_cars, x_mpc=x_mpc, xothers_plot=xothers_plot, xamb_plot=xamb_plot, CIRCLES=CIRCLES, xothers_desired=xothers_desired, xamb_desired=xamb_desired,
+        plot_partial = functools.partial(plot_multiple_cars, x_mpc=x_mpc, xothers_plot=xothers_plot, xamb_plot=xamb_plot, car_plot_shape=car_plot_shape, xothers_desired=xothers_desired, xamb_desired=xamb_desired,
                                          folder=folder, world=world, camera_speed = camera_speed)
         pool.map(plot_partial, range(N)) #will apply k=1...N to plot_partial
         pool.terminate()
     else:
         for k in range(N):
-            plot_multiple_cars( k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desired, xamb_desired, folder, world, camera_speed)     
+            plot_multiple_cars( k, x_mpc, xothers_plot, xamb_plot, car_plot_shape, xothers_desired, xamb_desired, folder, world, camera_speed)     
     return None
 
 
 
-def plot_multiple_cars(k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desired, xamb_desired, folder, world, camera_speed = None):
+def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder, 
+                        car_plot_shape="Ellipse", camera_speed = None, 
+                        xamb_desired=None, xothers_desired=None ):
     ''' This only has info from x_mpc but not any individual ones'''
     if camera_speed is None:
         camera_speed = x_mpc.max_v
@@ -188,7 +191,7 @@ def plot_multiple_cars(k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desir
     add_lanes(ax, world)
     add_grass(ax, world, k)   
           
-    if CIRCLES.lower() == "ellipse" or CIRCLES.lower() == "both" or CIRCLES == True or CIRCLES.lower() == "ellipses":
+    if car_plot_shape.lower() == "ellipse" or car_plot_shape.lower() == "both" or car_plot_shape == True or car_plot_shape.lower() == "ellipses":
         # Plot the ambulance as circles
         centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
         for ci in range(len(centers)):
@@ -208,7 +211,7 @@ def plot_multiple_cars(k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desir
 
         centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])                  
 
-    if CIRCLES == "Image" or CIRCLES == "Both" or CIRCLES == False:
+    if car_plot_shape == "Image" or car_plot_shape == "Both" or car_plot_shape == False:
         for i in range(len(xothers_plot)):
             x1_plot = xothers_plot[i]
             if (i%2)==0:

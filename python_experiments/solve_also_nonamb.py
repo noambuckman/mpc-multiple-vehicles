@@ -174,7 +174,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
 
             k_solve_amb_min_distance = 30
             initial_distance_to_ambulance = np.sqrt((response_x0[0] - amb_x0[0])**2 + (response_x0[1] - amb_x0[1])**2)
-            if i_rounds_ibr < k_solve_amb_max_ibr and (initial_distance_to_ambulance < k_solve_amb_max_ibr):
+            if i_rounds_ibr < k_solve_amb_max_ibr and (initial_distance_to_ambulance < k_solve_amb_min_distance):
                 solve_amb = True
             else:
                 solve_amb = False  
@@ -254,7 +254,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
     os.makedirs(im_dir+"imgs/")    
     print("min camera speed", np.min(xamb_executed[4,:actual_t+number_ctrl_pts_executed+1]))
     cmplot.plot_cars(world, amb_MPC, actual_xamb[:,:actual_t+number_ctrl_pts_executed+1], [x[:,:actual_t+number_ctrl_pts_executed+1] for x in actual_xothers], 
-                        im_dir, None, None, "Ellipses", True, np.min(xamb_executed[4,:actual_t+number_ctrl_pts_executed+1]))
+                        im_dir, None, None, "Ellipse", True, np.min(xamb_executed[4,:actual_t+number_ctrl_pts_executed+1]))
     plt.show()
     plt.plot(xamb_mpc[4,:],'--')
     plt.plot(xamb_mpc[4,:] * np.cos(xamb_mpc[2,:]))
