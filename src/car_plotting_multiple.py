@@ -11,7 +11,7 @@ from scipy import ndimage
 import multiprocessing
 import functools
 import src.TrafficWorld as tw
-
+import psutil
 
 PROJECT_PATH = '/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-multiple-vehicles/'
 
@@ -146,6 +146,8 @@ def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desired=None, 
                 CIRCLES="Ellipse", parallelize=True, camera_speed = None):
     N = xamb_plot.shape[1]
     # if CIRCLES:
+    if psutil.virtual_memory().percent >= 90.0:
+        raise Exception("Virtual Memory is too high, exiting to save computer")    
     if parallelize:
         pool = multiprocessing.Pool(processes=4)
         plot_partial = functools.partial(plot_multiple_cars, x_mpc=x_mpc, xothers_plot=xothers_plot, xamb_plot=xamb_plot, CIRCLES=CIRCLES, xothers_desired=xothers_desired, xamb_desired=xamb_desired,
