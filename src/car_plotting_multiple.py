@@ -188,7 +188,7 @@ def plot_multiple_cars(k, x_mpc, xothers_plot, xamb_plot, CIRCLES, xothers_desir
     add_lanes(ax, world)
     add_grass(ax, world, k)   
           
-    if CIRCLES == "Ellipse" or CIRCLES == "Both" or CIRCLES == True:
+    if CIRCLES.lower() == "ellipse" or CIRCLES.lower() == "both" or CIRCLES == True or CIRCLES.lower() == "ellipses":
         # Plot the ambulance as circles
         centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
         for ci in range(len(centers)):
