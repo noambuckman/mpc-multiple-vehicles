@@ -253,7 +253,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
     im_dir = folder + '%02d/'%i_mpc
     os.makedirs(im_dir+"imgs/")    
     cmplot.plot_cars(world, amb_MPC, actual_xamb[:,:actual_t+number_ctrl_pts_executed+1], [x[:,:actual_t+number_ctrl_pts_executed+1] for x in actual_xothers], 
-                        im_dir, None, None, "Both", True, np.min(xamb_executed[4,:actual_t+number_ctrl_pts_executed+1]))
+                        im_dir, None, None, "Ellipses", True, np.min(xamb_executed[4,:actual_t+number_ctrl_pts_executed+1]))
     plt.show()
     plt.plot(xamb_mpc[4,:],'--')
     plt.plot(xamb_mpc[4,:] * np.cos(xamb_mpc[2,:]))
