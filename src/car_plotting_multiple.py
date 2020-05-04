@@ -147,7 +147,7 @@ def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder, xamb_desired=None, 
     N = xamb_plot.shape[1]
     # if CIRCLES:
     if parallelize:
-        pool = multiprocessing.Pool(processes=8)
+        pool = multiprocessing.Pool(processes=4)
         plot_partial = functools.partial(plot_multiple_cars, x_mpc=x_mpc, xothers_plot=xothers_plot, xamb_plot=xamb_plot, CIRCLES=CIRCLES, xothers_desired=xothers_desired, xamb_desired=xamb_desired,
                                          folder=folder, world=world, camera_speed = camera_speed)
         pool.map(plot_partial, range(N)) #will apply k=1...N to plot_partial
