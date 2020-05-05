@@ -215,8 +215,8 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
 
             print("Vehicle i=%d Solution:  mpc_i %d  ibr_round %d"%(i, i_mpc, i_rounds_ibr)) 
             print("Dir: %s"%folder)   
-            cmplot.plot_single_frame(world, response_MPC, all_other_x_ibr[i], [xamb_ibr] + nonresponse_x_list, None, "Ellipse", parallelize=True, camera_speed = None, plot_range = None, car_ids = None, xamb_desired=None, xothers_desired=None)
-            plt.show()                    
+            # cmplot.plot_single_frame(world, response_MPC, all_other_x_ibr[i], [xamb_ibr] + nonresponse_x_list, None, "Ellipse", parallelize=True, camera_speed = None, plot_range = None, car_ids = None, xamb_desired=None, xothers_desired=None)
+            # plt.show()                    
 
     xamb_mpc, xamb_des_mpc, uamb_mpc = xamb_ibr, xamb_des_ibr, uamb_ibr
     all_other_u_mpc, all_other_x_mpc, all_other_x_des_mpc = all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr
@@ -262,17 +262,17 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
     end_frame = actual_t+number_ctrl_pts_executed+1
     start_frame = max(0, end_frame - 20)
     cmplot.plot_cars(world, amb_MPC, actual_xamb[:,start_frame:end_frame], [x[:,start_frame:end_frame] for x in actual_xothers], im_dir, "ellipse", True, 0)                        
-    plt.show()
-    plt.plot(xamb_mpc[4,:],'--')
-    plt.plot(xamb_mpc[4,:] * np.cos(xamb_mpc[2,:]))
-    plt.ylabel("Velocity / Vx (full mpc)")
-    plt.hlines(35*0.447,0,xamb_mpc.shape[1])
-    plt.show()
-    plt.plot(uamb_mpc[1,:],'o')
-    plt.hlines(amb_MPC.max_v_u,0,uamb_mpc.shape[1])
-    plt.hlines(amb_MPC.min_v_u,0,uamb_mpc.shape[1])
-    plt.ylabel("delta_u_v")
-    plt.show()
+    # plt.show()
+    # plt.plot(xamb_mpc[4,:],'--')
+    # plt.plot(xamb_mpc[4,:] * np.cos(xamb_mpc[2,:]))
+    # plt.ylabel("Velocity / Vx (full mpc)")
+    # plt.hlines(35*0.447,0,xamb_mpc.shape[1])
+    # plt.show()
+    # plt.plot(uamb_mpc[1,:],'o')
+    # plt.hlines(amb_MPC.max_v_u,0,uamb_mpc.shape[1])
+    # plt.hlines(amb_MPC.min_v_u,0,uamb_mpc.shape[1])
+    # plt.ylabel("delta_u_v")
+    # plt.show()
 print("Solver Done!  Runtime: %.1d"%(time.time()-t_start_time))
 
 final_t = actual_t+number_ctrl_pts_executed+1
@@ -284,7 +284,7 @@ mean_amb_v = np.median(actual_xamb[4,:])
 min_amb_v = np.min(actual_xamb[4,:])
 print("Min Speed", min_amb_v, mean_amb_v)
 print("Plotting all")
-cmplot.plot_cars(world, response_MPC, actual_xamb, actual_xothers, folder, None, None, False, False, min_amb_v)
+cmplot.plot_cars(world, response_MPC, actual_xamb, actual_xothers, folder, None, None, False, False, 0)
 
 file_name = folder + "data/"+'a%02d%03d'%(i_mpc, i_rounds_ibr)
 print("Saving to...  ", file_name)
