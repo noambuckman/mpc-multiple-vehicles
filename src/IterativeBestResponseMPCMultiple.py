@@ -291,7 +291,22 @@ class IterativeBestResponseMPCMultiple:
         for i in range(len(self.car1_costs_list)):
             print(" %.04f : %s"%(self.opti.debug.value(self.car1_costs_list[i]),self.car1_cost_titles[i]))        
 
-
+    def plot_collision_slack_cost(self):
+        '''Make a function that plots the contours for collision and slack
+        '''
+        x_e = np.array([0, 100]) # these need to be corrected from world
+        y_e = np.array([-5, 5]) #these need to be corrected from world
+        X, Y = np.meshgrid(x_e, y_e)
+        for i in range(len(self.allother_x_opt)):
+            x_o, y_o, phi_o, alpha_o, beta_o = (2, 1, 0, 1, 1) ### This is a test pose, we need to get it from our optimization
+                        # R_o = cas.vertcat(cas.horzcat(cas.cos(phi_o), cas.sin(phi_o)), cas.horzcat(-cas.sin(phi_o), cas.cos(phi_o)))
+            R_o = np.array([[np.cos(phi_o), np.sin(phi_o)],[-np.sin(phi_o), np.cos(phi_o)]])
+                        # M = cas.vertcat(cas.horzcat(1/alpha_o**2, 0), cas.horzcat(0, 1/beta_o**2))
+            M = np.array([[1/alpha_o**2, 0],[0, 1/beta_o**2]])
+            dx = X - x_o
+            dy = Y - y_o          
+            dX = np.stack((dx, dy), axis=2)
+            prod =    cas.mtimes([dX.T, R_o.T, M, R_o, dX])
 
 
 
@@ -471,3 +486,5 @@ def generate_warm_u(N, car_mpc, car_x0):
         ux_warm_profiles[k_warm] = [u_warm, x_warm, x_des_warm]
 
     return u_warm_profiles, ux_warm_profiles
+
+

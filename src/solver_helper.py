@@ -92,6 +92,7 @@ def solve_warm_starts(number_processes, ux_warm_profiles, response_MPC, amb_MPC,
     if debug_flag:
         for ki in range(len(solve_costs_solutions)):
             debug_list = solve_costs_solutions[6]
+            print(debug_list)
             if len(debug_list) == 0:
                 print("Infeasible")
             else:
