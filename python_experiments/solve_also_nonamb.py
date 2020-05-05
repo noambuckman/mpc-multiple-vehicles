@@ -115,7 +115,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         x_warm_profiles, x_ux_warm_profiles = mibr.generate_warm_x(response_MPC, world,  response_x0, np.median([x[4] for x in nonresponse_x0_list]))
         ux_warm_profiles.update(x_ux_warm_profiles) # combine into one
         ################# Solve the Best Response ############################
-        k_slack, k_CA, k_CA_power, wall_CA = 10000.0, 0.001, 2, True
+        k_slack_d, k_CA_d, k_CA_power_d, wall_CA_d = 1000000, 0.001, 4, True
         k_max_slack = 0.01
         if i_rounds_ibr >= 0:
             slack = True
@@ -131,11 +131,13 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
 
         solve_again, solve_number, max_slack_ibr, debug_flag = True, 0, np.infty, False
         while solve_again and solve_number < 4:
+            k_slack = k_slack_d * solve_number
+            k_CA = k_CA_d * 1
             if solve_number > 2:
                 debug_flag = True
             if psutil.virtual_memory().percent >= 90.0:
                 raise Exception("Virtual Memory is too high, exiting to save computer")
-            solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, debug_list = helper.solve_warm_starts(8, ux_warm_profiles, response_MPC, fake_amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, 
+            solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, debug_list = helper.solve_warm_starts(8, ux_warm_profiles, response_MPC, fake_amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power_d, world, wall_CA_d, N, T, 
                                                     response_x0, fake_amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=fake_amb_u, xamb=fake_amb_x, xamb_des=fake_amb_xd, debug_flag=debug_flag)
             if max_slack_ibr <= k_max_slack:
                 solve_again = False
@@ -145,7 +147,6 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                 amb_solved_flag = True
             else:
                 print("Max Slack is too large %.05f > thresh %.05f"%(max_slack_ibr, k_max_slack))
-                k_CA *= 10
                 solve_again = True
                 solve_number += 1
         if solve_again:
@@ -186,14 +187,15 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             else:
                 slack = False                 
 
-            k_slack, k_CA, k_CA_power, wall_CA = 100000.0, 0.001, 4, True
             solve_again, solve_number, max_slack_ibr, debug_flag = True, 0, np.infty, False
             while solve_again and solve_number < 4:
+                k_slack = k_slack_d * solve_number
+                k_CA = k_CA_d * 1                
                 if solve_number>2:
                     debug_flag = True
                 if psutil.virtual_memory().percent >= 90.0:
                     raise Exception("Virtual Memory is too high, exiting to save computer")                
-                solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, debug_list = helper.solve_warm_starts(8, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb_ibr, xamb_ibr, xamb_des_ibr, debug_flag)
+                solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, debug_list = helper.solve_warm_starts(8, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power_d, world, wall_CA_d, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb_ibr, xamb_ibr, xamb_des_ibr, debug_flag)
                 if max_slack_ibr <= k_max_slack:
                     all_other_x_ibr[i], all_other_x_des_ibr[i], all_other_u_ibr[i] = x_ibr, x_des_ibr, u_ibr
                     other_solved_flag[i] = True
