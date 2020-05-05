@@ -115,14 +115,14 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         x_warm_profiles, x_ux_warm_profiles = mibr.generate_warm_x(response_MPC, world,  response_x0, np.median([x[4] for x in nonresponse_x0_list]))
         ux_warm_profiles.update(x_ux_warm_profiles) # combine into one
         ################# Solve the Best Response ############################
-        k_slack_d, k_CA_d, k_CA_power_d, wall_CA_d = 1000000, 0.001, 4, True
+        k_slack_d, k_CA_d, k_CA_power_d, wall_CA_d = 1000000, 0.1, 4, True
         k_max_slack = 0.01
         if i_rounds_ibr >= 0:
             slack = True
         else:
             slack = False 
 
-        k_solve_amb_max_ibr = 2
+        k_solve_amb_max_ibr = 5
         
         if i_rounds_ibr < k_solve_amb_max_ibr:
             solve_amb = True

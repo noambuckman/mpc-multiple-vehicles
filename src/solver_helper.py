@@ -161,7 +161,7 @@ def initialize_cars(n_other, N, dt, world, svo_theta):
             next_x0_1 += x1_MPC.L + 2*x1_MPC.min_dist + lane_offset
             next_x0 = next_x0_1
 
-        initial_speed = 0.75 * x1_MPC.max_v
+        initial_speed = 0.9 * x1_MPC.max_v
         x1_MPC.fd = x1_MPC.gen_f_desired_lane(world, lane_number, True)
         x0 = np.array([next_x0, world.get_lane_centerline_y(lane_number), 0, 0, initial_speed, 0]).T
         all_other_MPC += [x1_MPC]
