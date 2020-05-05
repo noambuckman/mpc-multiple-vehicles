@@ -129,12 +129,14 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         else:
             solve_amb = False
 
-        solve_again, solve_number, max_slack_ibr = True, 0, np.infty
+        solve_again, solve_number, max_slack_ibr, debug_flag = True, 0, np.infty, False
         while solve_again and solve_number < 4:
+            if solve_number > 2:
+                debug_flag = True
             if psutil.virtual_memory().percent >= 90.0:
                 raise Exception("Virtual Memory is too high, exiting to save computer")
-            solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr = helper.solve_warm_starts(8, ux_warm_profiles, response_MPC, fake_amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, 
-                                                    response_x0, fake_amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=fake_amb_u, xamb=fake_amb_x, xamb_des=fake_amb_xd)
+            solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, debug_list = helper.solve_warm_starts(8, ux_warm_profiles, response_MPC, fake_amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, 
+                                                    response_x0, fake_amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=fake_amb_u, xamb=fake_amb_x, xamb_des=fake_amb_xd, debug_flag=debug_flag)
             if max_slack_ibr <= k_max_slack:
                 solve_again = False
                 xamb_ibr = x_ibr
@@ -185,11 +187,13 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                 slack = False                 
 
             k_slack, k_CA, k_CA_power, wall_CA = 100000.0, 0.001, 4, True
-            solve_again, solve_number, max_slack_ibr = True, 0, np.infty
+            solve_again, solve_number, max_slack_ibr, debug_flag = True, 0, np.infty, False
             while solve_again and solve_number < 4:
+                if solve_number>2:
+                    debug_flag = True
                 if psutil.virtual_memory().percent >= 90.0:
                     raise Exception("Virtual Memory is too high, exiting to save computer")                
-                solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr = helper.solve_warm_starts(8, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb_ibr, xamb_ibr, xamb_des_ibr)
+                solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, debug_list = helper.solve_warm_starts(8, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb_ibr, xamb_ibr, xamb_des_ibr, debug_flag)
                 if max_slack_ibr <= k_max_slack:
                     all_other_x_ibr[i], all_other_x_des_ibr[i], all_other_u_ibr[i] = x_ibr, x_des_ibr, u_ibr
                     other_solved_flag[i] = True
@@ -209,7 +213,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
 
             print("Vehicle i=%d Solution:  mpc_i %d  ibr_round %d"%(i, i_mpc, i_rounds_ibr)) 
             print("Dir: %s"%folder)   
-            cmplot.plot_single_frame(world, response_MPC, all_other_x_ibr[i], [xamb_ibr] + nonresponse_x_list, None, CIRCLES="Ellipse", parallelize=True, camera_speed = None, plot_range = None, car_ids = None, xamb_desired=None, xothers_desired=None)
+            cmplot.plot_single_frame(world, response_MPC, all_other_x_ibr[i], [xamb_ibr] + nonresponse_x_list, None, "Ellipse", parallelize=True, camera_speed = None, plot_range = None, car_ids = None, xamb_desired=None, xothers_desired=None)
             plt.show()                    
 
     xamb_mpc, xamb_des_mpc, uamb_mpc = xamb_ibr, xamb_des_ibr, uamb_ibr
@@ -255,8 +259,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
     print("min camera speed", np.min(xamb_executed[4,:actual_t+number_ctrl_pts_executed+1]))
     end_frame = actual_t+number_ctrl_pts_executed+1
     start_frame = max(0, end_frame - 20)
-    cmplot.plot_cars(world, amb_MPC, actual_xamb[:,start_frame:end_frame], [x[:,start_frame:end_frame] for x in actual_xothers], 
-                        im_dir, None, None, "Ellipse", True, 0)
+    cmplot.plot_cars(world, amb_MPC, actual_xamb[:,start_frame:end_frame], [x[:,start_frame:end_frame] for x in actual_xothers], im_dir, "ellipse", True, 0)                        
     plt.show()
     plt.plot(xamb_mpc[4,:],'--')
     plt.plot(xamb_mpc[4,:] * np.cos(xamb_mpc[2,:]))

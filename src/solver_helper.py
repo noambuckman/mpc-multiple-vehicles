@@ -13,7 +13,9 @@ import src.MPC_Casadi as mpc
 
 
 
-
+def get_min_dist_i(ambulance_x0, all_other_x0):
+    all_dist_sqrd = [(ambulance_x0[0]-x0[0])**2 + (ambulance_x0[1]-x0[1])**2 for x0 in all_other_x0]
+    return np.argmin(all_dist_sqrd)
 
 
 def extend_last_mpc_ctrl(all_other_u_mpc, number_ctrl_pts_executed, N, all_other_MPC, all_other_x0):
@@ -68,13 +70,14 @@ def solve_best_response(u_warm, x_warm, x_des_warm, response_MPC, amb_MPC, nonre
         max_slack = np.max([np.max(bri.solution.value(s)) for s in bri.slack_vars_list])                                                                         
         min_response_warm_ibr = None #<This used to return k_warm
         min_bri_ibr = bri
-        return True, current_cost, max_slack, x_ibr, x_des_ibr, u_ibr
+        debug_list = [current_cost, bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.k_CA*bri.collision_cost), bri.solution.value(bri.k_slack*bri.slack_cost)]
+        return True, current_cost, max_slack, x_ibr, x_des_ibr, u_ibr, debug_list
     except RuntimeError:
         # print("Infeasibility: k_warm %s"%k_warm)
-        return False, np.infty, np.infty, None, None, None
+        return False, np.infty, np.infty, None, None, None, []
         # ibr_sub_it +=1  
 
-def solve_warm_starts(number_processes, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=None, xamb=None, xamb_des=None):
+def solve_warm_starts(number_processes, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=None, xamb=None, xamb_des=None, debug_flag=False):
     warm_solve_partial  = functools.partial(solve_best_response, response_MPC=response_MPC, amb_MPC=amb_MPC, nonresponse_MPC_list=nonresponse_MPC_list, k_slack=k_slack, k_CA=k_CA, k_CA_power=k_CA_power, world=world, wall_CA=wall_CA, N=N, T=T, response_x0=response_x0, amb_x0=amb_x0, nonresponse_x0_list=nonresponse_x0_list, slack=slack, solve_amb=solve_amb, nonresponse_u_list=nonresponse_u_list, nonresponse_x_list=nonresponse_x_list, nonresponse_xd_list=nonresponse_xd_list, uamb=uamb, xamb=xamb, xamb_des=xamb_des)
     
     if number_processes>1:
@@ -85,6 +88,15 @@ def solve_warm_starts(number_processes, ux_warm_profiles, response_MPC, amb_MPC,
         solve_costs_solutions = []
         for k_warm in ux_warm_profiles.keys():
             solve_costs_solutions += [warm_solve_partial(*ux_warm_profiles[k_warm])]
+
+    if debug_flag:
+        for ki in range(len(solve_costs_solutions)):
+            debug_list = solve_costs_solutions[6]
+            if len(debug_list) == 0:
+                print("Infeasible")
+            else:
+                print("Costs: Total Cost %.04f Vehicle-Only Cost:  %.04f Collision Cost %0.04f  Slack Cost %0.04f"%(tuple(debug_list)))                 
+
 
     min_cost_solution = min(solve_costs_solutions, key=lambda r:r[1])  
 
