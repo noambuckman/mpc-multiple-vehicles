@@ -157,7 +157,7 @@ def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder,
         pool.terminate()
     else:
         for k in range(N):
-            plot_multiple_cars( k, x_mpc, xothers_plot, xamb_plot, car_plot_shape, xothers_desired, xamb_desired, folder, world, camera_speed)     
+            plot_multiple_cars( k, world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_shape, camera_speed, xamb_desired, xothers_desired)     
     return None
 
 
