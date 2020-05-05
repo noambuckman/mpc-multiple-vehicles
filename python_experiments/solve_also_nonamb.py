@@ -20,7 +20,7 @@ import src.solver_helper as helper
 ##########################################################
 svo_theta = np.pi/3.0
 # random_seed = args.random_seed[0]
-random_seed = 3
+random_seed = 6
 optional_suffix = ""
 subdir_name = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + optional_suffix
 folder = "results/" + subdir_name + "/"
@@ -33,13 +33,13 @@ if random_seed > 0:
 T = 4  # MPC Planning Horizon
 dt = 0.2
 N = int(T/dt) #Number of control intervals in MPC
-n_rounds_mpc = 25
-percent_mpc_executed = .10 ## This is the percent of MPC that is executed
+n_rounds_mpc = 50
+percent_mpc_executed = .25 ## This is the percent of MPC that is executed
 number_ctrl_pts_executed =  int(np.floor(N*percent_mpc_executed))
 print("number ctrl pts:  %d"%number_ctrl_pts_executed)
 XAMB_ONLY = False
 PLOT_FLAG, SAVE_FLAG, PRINT_FLAG = False, False, False
-n_other = 3
+n_other = 4
 n_rounds_ibr = 3
 world = tw.TrafficWorld(2, 0, 1000)
     # large_world = tw.TrafficWorld(2, 0, 1000, 5.0)
