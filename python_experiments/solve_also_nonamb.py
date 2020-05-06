@@ -1,16 +1,12 @@
-import time, datetime, argparse
-import os, sys
+import time, datetime, argparse, os, sys, pickle, psutil
 import numpy as np
 np.set_printoptions(precision=2)
 import matplotlib.pyplot as plt
+import casadi as cas
 import copy as cp
-import pickle
-import psutil
 PROJECT_PATHS = ['/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-multiple-vehicles/', '/Users/noambuckman/mpc-multiple-vehicles/']
 for p in PROJECT_PATHS:
     sys.path.append(p)
-
-import casadi as cas
 import src.MPC_Casadi as mpc
 import src.TrafficWorld as tw
 import src.IterativeBestResponseMPCMultiple as mibr
@@ -38,7 +34,7 @@ percent_mpc_executed = .25 ## This is the percent of MPC that is executed
 number_ctrl_pts_executed =  int(np.floor(N*percent_mpc_executed))
 print("number ctrl pts:  %d"%number_ctrl_pts_executed)
 XAMB_ONLY = False
-PLOT_FLAG, SAVE_FLAG, PRINT_FLAG = False, False, False
+PLOT_FLAG, SAVE_FLAG, PRINT_FLAG = False, True, False
 n_other = 4
 n_rounds_ibr = 3
 world = tw.TrafficWorld(2, 0, 1000)
@@ -114,7 +110,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             ux_warm_profiles["previous"] = [u_warm_profiles["previous"], x_warm, x_des_warm]
         x_warm_profiles, x_ux_warm_profiles = mibr.generate_warm_x(response_MPC, world,  response_x0, np.median([x[4] for x in nonresponse_x0_list]))
         ux_warm_profiles.update(x_ux_warm_profiles) # combine into one
-        ################# Solve the Best Response ############################
+        ################# Solve the Ambulance Best Response ############################
         k_slack_d, k_CA_d, k_CA_power_d, wall_CA_d = 1000000, 0.1, 4, True
         k_max_slack = 0.01
         if i_rounds_ibr >= 0:
@@ -152,7 +148,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         if solve_again:
             raise Exception("Slack variable is too high or infeasible.  MaxS = %.05f > thresh %.05f"%(max_slack_ibr, k_max_slack))
                                         
-        ################# SOLVE FOR THE OTHER VEHICLES ON THE ROAD ############################
+        ################# SOLVE BEST RESPONSE FOR THE OTHER VEHICLES ON THE ROAD ############################
         for i in range(len(all_other_MPC)):
             print("SOLVING AGENT %d"%i)
             response_MPC = all_other_MPC[i]
@@ -218,10 +214,11 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             # cmplot.plot_single_frame(world, response_MPC, all_other_x_ibr[i], [xamb_ibr] + nonresponse_x_list, None, "Ellipse", parallelize=True, camera_speed = None, plot_range = None, car_ids = None, xamb_desired=None, xothers_desired=None)
             # plt.show()                    
 
+    ################ SAVE THE BEST RESPONSE SOLUTION FOR THE CURRENT PLANNING HORIZONG/MPC ITERATION ###########################
+
     xamb_mpc, xamb_des_mpc, uamb_mpc = xamb_ibr, xamb_des_ibr, uamb_ibr
     all_other_u_mpc, all_other_x_mpc, all_other_x_des_mpc = all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr
     bri_mpc = None
-    file_name = folder + "data/"+'r%02d%03d'%(i_mpc, i_rounds_ibr)
 
     all_other_x_executed = [np.zeros(shape=(6,number_ctrl_pts_executed+1)) for i in range(n_other)]
     all_other_u_executed = [np.zeros(shape=(2,number_ctrl_pts_executed)) for i in range(n_other)]
@@ -235,59 +232,33 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         actual_xothers[i][:,actual_t:actual_t+number_ctrl_pts_executed+1], actual_uothers[i][:,actual_t:actual_t+number_ctrl_pts_executed] = all_other_x_executed[i], all_other_u_executed[i]
 
     ### SAVE STATES AND PLOT
+    file_name = folder + "data/"+'mpc_%02d'%(i_mpc)
+    print(" MPC Done:  Rd %02d / %02d"%(i_mpc, n_rounds_mpc))
     if SAVE_FLAG:
         mibr.save_state(file_name, xamb_mpc, uamb_mpc, xamb_des_mpc, all_other_x_mpc, all_other_u_mpc, all_other_x_des_mpc)
-        mibr.save_costs(file_name, bri_mpc)        
-    # print(" MPC Done:  Rd %02d / %02d"%(i_mpc, n_rounds_mpc))
-    # print(" Full MPC Solution", xamb_mpc[0:2,:])
-    # print(" Executed MPC", xamb_mpc[0:2,:number_ctrl_pts_executed+1])
-    # print(" Solution Costs...")
-    # for cost in bri_mpc.car1_costs_list:
-    #     print("%.04f"%bri_mpc.solution.value(cost))
-    # print(bri_mpc.solution.value(bri_mpc.k_CA * bri_mpc.collision_cost), bri_mpc.solution.value(bri_mpc.collision_cost))
-    # print(bri_mpc.solution.value(bri_mpc.k_slack * bri_mpc.slack_cost), bri_mpc.solution.value(bri_mpc.slack_cost))
-    print(" Save to...", file_name)
-        
-    # plot_range = range(number_ctrl_pts_executed+1)
-    
-    # for k in range(xamb_executed.shape[1]):
-    #     cmplot.plot_multiple_cars( k, bri_mpc.responseMPC, all_other_x_executed, xamb_executed, True, None, None, None, bri_mpc.world, 0)     
-    #     plt.show()
+        print("MPC Solution Save to...", file_name)
+        # mibr.save_costs(file_name, bri_mpc)        
 
-
+      
     mean_amb_v = np.mean(xamb_executed[4,:])
     im_dir = folder + '%02d/'%i_mpc
     os.makedirs(im_dir+"imgs/")    
-    print("min camera speed", np.min(xamb_executed[4,:actual_t+number_ctrl_pts_executed+1]))
     end_frame = actual_t+number_ctrl_pts_executed+1
     start_frame = max(0, end_frame - 20)
-    cmplot.plot_cars(world, amb_MPC, actual_xamb[:,start_frame:end_frame], [x[:,start_frame:end_frame] for x in actual_xothers], im_dir, "ellipse", True, 0)                        
-    # plt.show()
-    # plt.plot(xamb_mpc[4,:],'--')
-    # plt.plot(xamb_mpc[4,:] * np.cos(xamb_mpc[2,:]))
-    # plt.ylabel("Velocity / Vx (full mpc)")
-    # plt.hlines(35*0.447,0,xamb_mpc.shape[1])
-    # plt.show()
-    # plt.plot(uamb_mpc[1,:],'o')
-    # plt.hlines(amb_MPC.max_v_u,0,uamb_mpc.shape[1])
-    # plt.hlines(amb_MPC.min_v_u,0,uamb_mpc.shape[1])
-    # plt.ylabel("delta_u_v")
-    # plt.show()
+    cmplot.plot_cars(world, amb_MPC, actual_xamb[:,start_frame:end_frame], [x[:,start_frame:end_frame] for x in actual_xothers], im_dir, "both", True, 0)                        
+     
 print("Solver Done!  Runtime: %.1d"%(time.time()-t_start_time))
-
+######################## SAVE THE FINAL STATE OF THE VEHICLES
 final_t = actual_t+number_ctrl_pts_executed+1
 actual_xamb = actual_xamb[:,:actual_t+number_ctrl_pts_executed+1]
 for i in range(len(actual_xothers)):
     actual_xothers[i] = actual_xothers[i][:,:actual_t+number_ctrl_pts_executed+1]
 
-mean_amb_v = np.median(actual_xamb[4,:])
-min_amb_v = np.min(actual_xamb[4,:])
-print("Min Speed", min_amb_v, mean_amb_v)
 print("Plotting all")
 cmplot.plot_cars(world, response_MPC, actual_xamb, actual_xothers, folder, None, None, False, False, 0)
 
-file_name = folder + "data/"+'a%02d%03d'%(i_mpc, i_rounds_ibr)
-print("Saving to...  ", file_name)
+file_name = folder + "data/"+'all%02d'%(i_mpc)
+print("Saving Actual Positions to...  ", file_name)
 mibr.save_state(file_name, actual_xamb, uamb_mpc, xamb_des_mpc, actual_xothers, all_other_u_mpc, all_other_x_des_mpc)
 
 
@@ -372,3 +343,26 @@ mibr.save_state(file_name, actual_xamb, uamb_mpc, xamb_des_mpc, actual_xothers, 
 #                             print("Costs: Total Cost %.04f Vehicle-Only Cost:  %.04f Collision Cost %0.04f  Slack Cost %0.04f"%((current_cost, bri.opti.debug.value(bri.response_svo_cost), bri.opti.debug.value(bri.k_CA*bri.collision_cost), bri.opti.debug.value(bri.k_slack*bri.slack_cost))))                 
 #                         else:
 #                             print("Costs: Total Cost %.04f Vehicle-Only Cost:  %.04f Collision Cost %0.04f  Slack Cost %0.04f"%((current_cost, bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.k_CA*bri.collision_cost), bri.solution.value(bri.k_slack*bri.slack_cost))))                 
+
+    # plt.show()
+    # plt.plot(xamb_mpc[4,:],'--')
+    # plt.plot(xamb_mpc[4,:] * np.cos(xamb_mpc[2,:]))
+    # plt.ylabel("Velocity / Vx (full mpc)")
+    # plt.hlines(35*0.447,0,xamb_mpc.shape[1])
+    # plt.show()
+    # plt.plot(uamb_mpc[1,:],'o')
+    # plt.hlines(amb_MPC.max_v_u,0,uamb_mpc.shape[1])
+    # plt.hlines(amb_MPC.min_v_u,0,uamb_mpc.shape[1])
+    # plt.ylabel("delta_u_v")
+    # plt.show()
+
+    # for cost in bri_mpc.car1_costs_list:
+    #     print("%.04f"%bri_mpc.solution.value(cost))
+    # print(bri_mpc.solution.value(bri_mpc.k_CA * bri_mpc.collision_cost), bri_mpc.solution.value(bri_mpc.collision_cost))
+    # print(bri_mpc.solution.value(bri_mpc.k_slack * bri_mpc.slack_cost), bri_mpc.solution.value(bri_mpc.slack_cost))
+        
+    # plot_range = range(number_ctrl_pts_executed+1)
+    
+    # for k in range(xamb_executed.shape[1]):
+    #     cmplot.plot_multiple_cars( k, bri_mpc.responseMPC, all_other_x_executed, xamb_executed, True, None, None, None, bri_mpc.world, 0)     
+    #     plt.show() 

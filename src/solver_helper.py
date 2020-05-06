@@ -86,7 +86,7 @@ def solve_warm_starts(number_processes, ux_warm_profiles, response_MPC, amb_MPC,
         pool.terminate()
     else:
         solve_costs_solutions = []
-        for k_warm in ux_warm_profiles.keys():
+        for k_warm in ux_warm_profiles:
             solve_costs_solutions += [warm_solve_partial(*ux_warm_profiles[k_warm])]
 
     if debug_flag:
