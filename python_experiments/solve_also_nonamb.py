@@ -42,19 +42,17 @@ world = tw.TrafficWorld(2, 0, 1000)
 #########################################################################
 
 all_other_x0, all_other_MPC, amb_MPC, amb_x0 = helper.initialize_cars(n_other, N, dt, world, svo_theta)
-if SAVE_FLAG:
-    pickle.dump(all_other_MPC[0], open(folder + "data/"+"mpc%d"%i + ".p",'wb'))
-    pickle.dump(amb_MPC, open(folder + "data/"+"mpcamb" + ".p",'wb'))
 
 t_start_time = time.time()
-actual_xamb = np.zeros((6, n_rounds_mpc*number_ctrl_pts_executed + 1))
-actual_uamb = np.zeros((2, n_rounds_mpc*number_ctrl_pts_executed))
+actual_xamb, actual_uamb = np.zeros((6, n_rounds_mpc*number_ctrl_pts_executed + 1)), np.zeros((2, n_rounds_mpc*number_ctrl_pts_executed)) 
 actual_xothers = [np.zeros((6, n_rounds_mpc*number_ctrl_pts_executed + 1)) for i in range(n_other)]
 actual_uothers = [np.zeros((2, n_rounds_mpc*number_ctrl_pts_executed)) for i in range(n_other)]
     
 xamb_executed, all_other_x_executed = None, [] #This gets updated after each round of MPC
 uamb_mpc, all_other_u_mpc = None, []
-
+if SAVE_FLAG:
+    pickle.dump(all_other_MPC[0], open(folder + "data/"+"mpc%d"%i + ".p",'wb'))
+    pickle.dump(amb_MPC, open(folder + "data/"+"mpcamb" + ".p",'wb'))
 i_mpc_start = 0                 
 for i_mpc in range(i_mpc_start, n_rounds_mpc):
     min_slack = np.infty
@@ -65,14 +63,10 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         for i in range(len(all_other_x0)):
             all_other_x0[i] = all_other_x_executed[i][:, number_ctrl_pts_executed]        
 
-    uamb_ibr = None
-    xamb_ibr = None
-    xamb_des_ibr = None
+    uamb_ibr, xamb_ibr, xamb_des_ibr = None, None, None
     all_other_u_ibr = [None for i in range(n_other)]    
     all_other_x_ibr = [None for i in range(n_other)]
     all_other_x_des_ibr = [None for i in range(n_other)]
-    amb_solved_flag = False
-    other_solved_flag = [False for i in range(n_other)]
 
     for i_rounds_ibr in range(n_rounds_ibr):
         ############# Generate (if needed) the control inputs of other vehicles
@@ -113,18 +107,10 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         ################# Solve the Ambulance Best Response ############################
         k_slack_d, k_CA_d, k_CA_power_d, wall_CA_d = 1000000, 0.1, 4, True
         k_max_slack = 0.01
-        if i_rounds_ibr >= 0:
-            slack = True
-        else:
-            slack = False 
-
         k_solve_amb_max_ibr = 5
-        
-        if i_rounds_ibr < k_solve_amb_max_ibr:
-            solve_amb = True
-        else:
-            solve_amb = False
-
+        k_max_round_with_slack = np.infty
+        slack = True if i_rounds_ibr <= k_max_round_with_slack else False
+        solve_amb = True if i_rounds_ibr < k_solve_amb_max_ibr else False
         solve_again, solve_number, max_slack_ibr, debug_flag = True, 0, np.infty, False
         while solve_again and solve_number < 4:
             k_slack = k_slack_d * solve_number
@@ -136,11 +122,8 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, debug_list = helper.solve_warm_starts(8, ux_warm_profiles, response_MPC, fake_amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power_d, world, wall_CA_d, N, T, 
                                                     response_x0, fake_amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=fake_amb_u, xamb=fake_amb_x, xamb_des=fake_amb_xd, debug_flag=debug_flag)
             if max_slack_ibr <= k_max_slack:
+                xamb_ibr, xamb_des_ibr, uamb_ibr = x_ibr, x_des_ibr, u_ibr
                 solve_again = False
-                xamb_ibr = x_ibr
-                xamb_des_ibr = x_des_ibr
-                uamb_ibr = u_ibr
-                amb_solved_flag = True
             else:
                 print("Max Slack is too large %.05f > thresh %.05f"%(max_slack_ibr, k_max_slack))
                 solve_again = True
@@ -151,8 +134,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         ################# SOLVE BEST RESPONSE FOR THE OTHER VEHICLES ON THE ROAD ############################
         for i in range(len(all_other_MPC)):
             print("SOLVING AGENT %d"%i)
-            response_MPC = all_other_MPC[i]
-            response_x0 = all_other_x0[i]
+            response_MPC, response_x0 = all_other_MPC[i], all_other_x0[i]
             nonresponse_MPC_list = all_other_MPC[:i] + all_other_MPC[i+1:]
             nonresponse_x0_list = all_other_x0[:i] + all_other_x0[i+1:]
             nonresponse_u_list = all_other_u_ibr[:i] + all_other_u_ibr[i+1:]
@@ -170,23 +152,16 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                 ux_warm_profiles["previous"] = [u_warm_profiles["previous"], x_warm, x_des_warm]
             x_warm_profiles, x_ux_warm_profiles = mibr.generate_warm_x(response_MPC, world,  response_x0, np.median([x[4] for x in nonresponse_x0_list]))
             ux_warm_profiles.update(x_ux_warm_profiles) # combine into one
-
+       
+            solve_again, solve_number, max_slack_ibr, debug_flag, = True, 0, np.infty, False,
+            
             k_solve_amb_min_distance = 30
-            initial_distance_to_ambulance = np.sqrt((response_x0[0] - amb_x0[0])**2 + (response_x0[1] - amb_x0[1])**2)
-            if i_rounds_ibr < k_solve_amb_max_ibr and (initial_distance_to_ambulance < k_solve_amb_min_distance):
-                solve_amb = True
-            else:
-                solve_amb = False  
-
-            if i_rounds_ibr >= 0:
-                slack = True
-            else:
-                slack = False                 
-
-            solve_again, solve_number, max_slack_ibr, debug_flag = True, 0, np.infty, False
+            initial_distance_to_ambulance = np.sqrt((response_x0[0] - amb_x0[0])**2 + (response_x0[1] - amb_x0[1])**2)       
+            solve_amb = True if (i_rounds_ibr < k_solve_amb_max_ibr and (initial_distance_to_ambulance < k_solve_amb_min_distance)) else False     
+            slack = True if i_rounds_ibr <= k_max_round_with_slack else False
             while solve_again and solve_number < 4:
                 k_slack = k_slack_d * solve_number
-                k_CA = k_CA_d * 1                
+                k_CA = k_CA_d * 10**solve_number                
                 if solve_number>2:
                     debug_flag = True
                 if psutil.virtual_memory().percent >= 90.0:
@@ -194,13 +169,11 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                 solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, debug_list = helper.solve_warm_starts(8, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power_d, world, wall_CA_d, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb_ibr, xamb_ibr, xamb_des_ibr, debug_flag)
                 if max_slack_ibr <= k_max_slack:
                     all_other_x_ibr[i], all_other_x_des_ibr[i], all_other_u_ibr[i] = x_ibr, x_des_ibr, u_ibr
-                    other_solved_flag[i] = True
                     solve_again = False
                 else:
                     print("Max Slack is too large %.05f > thresh %.05f"%(max_slack_ibr, k_max_slack))
                     solve_again = True
                     solve_number += 1
-                    k_CA *= 10
                     
             if solve_again:
                 raise Exception("Slack variable is too high. Max Slack = %0.04f"%max_slack_ibr)    
