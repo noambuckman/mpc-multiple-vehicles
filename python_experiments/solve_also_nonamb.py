@@ -52,7 +52,7 @@ actual_uothers = [np.zeros((2, n_rounds_mpc*number_ctrl_pts_executed)) for i in 
 xamb_executed, all_other_x_executed = None, [] #This gets updated after each round of MPC
 uamb_mpc, all_other_u_mpc = None, []
 if SAVE_FLAG:
-    pickle.dump(all_other_MPC[0], open(folder + "data/"+"mpc%d"%i + ".p",'wb'))
+    pickle.dump(all_other_MPC[0], open(folder + "data/"+"mpcother" + ".p",'wb'))
     pickle.dump(amb_MPC, open(folder + "data/"+"mpcamb" + ".p",'wb'))
 i_mpc_start = 0                 
 for i_mpc in range(i_mpc_start, n_rounds_mpc):
