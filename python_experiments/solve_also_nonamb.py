@@ -29,8 +29,8 @@ number_ctrl_pts_executed =  int(np.floor(N*percent_mpc_executed))
 print("number ctrl pts:  %d"%number_ctrl_pts_executed)
 XAMB_ONLY = False
 PLOT_FLAG, SAVE_FLAG, PRINT_FLAG = False, True, False
-n_other = 10
-n_rounds_ibr = 3
+n_other = 8
+n_rounds_ibr = 5
 world = tw.TrafficWorld(2, 0, 1000)
     # large_world = tw.TrafficWorld(2, 0, 1000, 5.0)
 #########################################################################
@@ -108,14 +108,14 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         ################# Solve the Ambulance Best Response ############################
         k_slack_d, k_CA_d, k_CA_power_d, wall_CA_d = 1000000, 0.1, 4, True
         k_max_slack = 0.01
-        k_solve_amb_max_ibr = 5
+        k_solve_amb_max_ibr = 2
         k_max_round_with_slack = np.infty
         slack = True if i_rounds_ibr <= k_max_round_with_slack else False
         solve_amb = True if i_rounds_ibr < k_solve_amb_max_ibr else False
         solve_again, solve_number, max_slack_ibr, debug_flag = True, 0, np.infty, False
         while solve_again and solve_number < 4:
             k_slack = k_slack_d * solve_number
-            k_CA = k_CA_d * 1
+            k_CA = k_CA_d * 10**solve_number
             if solve_number > 2:
                 debug_flag = True
             if psutil.virtual_memory().percent >= 90.0:
