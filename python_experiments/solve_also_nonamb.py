@@ -29,7 +29,7 @@ number_ctrl_pts_executed =  int(np.floor(N*percent_mpc_executed))
 print("number ctrl pts:  %d"%number_ctrl_pts_executed)
 XAMB_ONLY = False
 PLOT_FLAG, SAVE_FLAG, PRINT_FLAG = False, True, False
-n_other = 8
+n_other = 11
 n_rounds_ibr = 5
 world = tw.TrafficWorld(2, 0, 1000)
     # large_world = tw.TrafficWorld(2, 0, 1000, 5.0)
@@ -219,7 +219,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
     os.makedirs(im_dir+"imgs/")    
     end_frame = actual_t+number_ctrl_pts_executed+1
     start_frame = max(0, end_frame - 20)
-    cmplot.plot_cars(world, amb_MPC, actual_xamb[:,start_frame:end_frame], [x[:,start_frame:end_frame] for x in actual_xothers], im_dir, "both", True, 0)                        
+    cmplot.plot_cars(world, amb_MPC, actual_xamb[:,start_frame:end_frame], [x[:,start_frame:end_frame] for x in actual_xothers], im_dir, "ellipse", True, 0)                        
      
 print("Solver Done!  Runtime: %.1d"%(time.time()-t_start_time))
 ######################## SAVE THE FINAL STATE OF THE VEHICLES
