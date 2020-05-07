@@ -86,7 +86,8 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_sh
 
     add_lanes(ax, world)
     add_grass(ax, world, k)   
-
+    if car_plot_shape.lower() not in ["ellipse", "both", "ellipses", "image"]:
+        raise Exception("Incorrect car_plot_shape")
     if plot_range is None:
         plot_range = range(xamb_plot.shape[1])
     for ki in range(len(plot_range)):
@@ -190,8 +191,9 @@ def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder,
 
     add_lanes(ax, world)
     add_grass(ax, world, k)   
-          
-    if car_plot_shape.lower() == "ellipse" or car_plot_shape.lower() == "both" or car_plot_shape == True or car_plot_shape.lower() == "ellipses":
+    if car_plot_shape.lower() not in ["ellipse", "both", "ellipses", "image"]:
+        raise Exception("Incorrect car_plot_shape")
+    if car_plot_shape.lower() == "ellipse" or car_plot_shape.lower() == "both" or car_plot_shape.lower() == "ellipses":
         # Plot the ambulance as circles
         centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
         for ci in range(len(centers)):
@@ -211,7 +213,7 @@ def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder,
 
         centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])                  
 
-    if car_plot_shape == "Image" or car_plot_shape == "Both" or car_plot_shape == False:
+    if car_plot_shape.lower() == "image" or car_plot_shape.lower() == "both":
         for i in range(len(xothers_plot)):
             x1_plot = xothers_plot[i]
             if (i%2)==0:
