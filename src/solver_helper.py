@@ -165,7 +165,7 @@ def initialize_cars(n_other, N, dt, world, svo_theta, random_lane=False, x_varia
             next_x0 = next_x0_1
 
         if list_of_positions: #list of positions overrides everything
-            next_x0, lane_number = list_of_positions[i]
+            lane_number, next_x0 = list_of_positions[i]
             
         initial_speed = 0.9 * x1_MPC.max_v
         x1_MPC.fd = x1_MPC.gen_f_desired_lane(world, lane_number, True)
