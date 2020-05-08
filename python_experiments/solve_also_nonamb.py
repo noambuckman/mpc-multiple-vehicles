@@ -29,7 +29,7 @@ number_ctrl_pts_executed =  int(np.floor(N*percent_mpc_executed))
 print("number ctrl pts:  %d"%number_ctrl_pts_executed)
 XAMB_ONLY = False
 PLOT_FLAG, SAVE_FLAG, PRINT_FLAG = False, True, False
-n_other = 11
+n_other = 10
 n_rounds_ibr = 5
 world = tw.TrafficWorld(2, 0, 1000)
     # large_world = tw.TrafficWorld(2, 0, 1000, 5.0)

@@ -118,7 +118,8 @@ def solve_warm_starts(number_processes, ux_warm_profiles, response_MPC, amb_MPC,
 
 
 
-def initialize_cars(n_other, N, dt, world, svo_theta):
+def initialize_cars(n_other, N, dt, world, svo_theta, random_lane=False, x_variance = 1.0, list_of_positions = None):
+    '''x_variance is in terms of number of min_dist'''
     ## Create the Cars in this Problem
     all_other_x0 = []
     all_other_u = []
@@ -151,16 +152,21 @@ def initialize_cars(n_other, N, dt, world, svo_theta):
         x1_MPC.strict_wall_constraint = True
 
         ####Vehicle Initial Conditions
-        lane_offset = np.random.uniform(0, 1) * x1_MPC.L
-        if i%2 == 0: 
-            lane_number = 0
+        lane_offset = np.random.uniform(0, 1) * x_variance * 2 * x1_MPC.min_dist
+        if random_lane:
+            lane_number = np.random.randint(2)
+        else:
+            lane_number = 0 if i%2==0 else 1
+        if lane_number == 0: 
             next_x0_0 += x1_MPC.L + 2*x1_MPC.min_dist + lane_offset
             next_x0 = next_x0_0
         else:
-            lane_number = 1
             next_x0_1 += x1_MPC.L + 2*x1_MPC.min_dist + lane_offset
             next_x0 = next_x0_1
 
+        if list_of_positions: #list of positions overrides everything
+            next_x0, lane_number = list_of_positions[i]
+            
         initial_speed = 0.9 * x1_MPC.max_v
         x1_MPC.fd = x1_MPC.gen_f_desired_lane(world, lane_number, True)
         x0 = np.array([next_x0, world.get_lane_centerline_y(lane_number), 0, 0, initial_speed, 0]).T
