@@ -29,8 +29,8 @@ number_ctrl_pts_executed =  int(np.floor(N*percent_mpc_executed))
 print("number ctrl pts:  %d"%number_ctrl_pts_executed)
 XAMB_ONLY = False
 PLOT_FLAG, SAVE_FLAG, PRINT_FLAG = False, True, False
-n_other = 10
-n_rounds_ibr = 5
+n_other = 8
+n_rounds_ibr = 4
 world = tw.TrafficWorld(2, 0, 1000)
     # large_world = tw.TrafficWorld(2, 0, 1000, 5.0)
 #########################################################################
@@ -41,8 +41,21 @@ for f in [folder, folder+"imgs/", folder+"data/", folder+"vids/", folder+"plots/
     os.makedirs(f)
 print(folder)
 
+position_list = [
+    (0, 20),
+    (0, 35),
+    (1, 40),
+    (0, 60),
+    (1, 60),
+    (0, 80),
+    (1, 85),
+    (1, 100),
+    # (1, 123),
+    # (0, 120),
+]
 
-all_other_x0, all_other_MPC, amb_MPC, amb_x0 = helper.initialize_cars(n_other, N, dt, world, svo_theta)
+
+all_other_x0, all_other_MPC, amb_MPC, amb_x0 = helper.initialize_cars(n_other, N, dt, world, svo_theta, False, False, position_list)
 
 t_start_time = time.time()
 actual_xamb, actual_uamb = np.zeros((6, n_rounds_mpc*number_ctrl_pts_executed + 1)), np.zeros((2, n_rounds_mpc*number_ctrl_pts_executed)) 
