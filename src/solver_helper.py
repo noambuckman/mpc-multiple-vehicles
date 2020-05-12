@@ -118,7 +118,7 @@ def solve_warm_starts(number_processes, ux_warm_profiles, response_MPC, amb_MPC,
 
 
 
-def initialize_cars(n_other, N, dt, world, svo_theta, no_grass = Fasle, random_lane=False, x_variance = 1.0, list_of_positions = None):
+def initialize_cars(n_other, N, dt, world, svo_theta, no_grass = False, random_lane=False, x_variance = 1.0, list_of_positions = None):
     '''x_variance is in terms of number of min_dist'''
     ## Create the Cars in this Problem
     all_other_x0 = []
