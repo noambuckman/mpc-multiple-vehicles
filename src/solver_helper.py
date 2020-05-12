@@ -118,7 +118,7 @@ def solve_warm_starts(number_processes, ux_warm_profiles, response_MPC, amb_MPC,
 
 
 
-def initialize_cars(n_other, N, dt, world, svo_theta, random_lane=False, x_variance = 1.0, list_of_positions = None):
+def initialize_cars(n_other, N, dt, world, svo_theta, no_grass = Fasle, random_lane=False, x_variance = 1.0, list_of_positions = None):
     '''x_variance is in terms of number of min_dist'''
     ## Create the Cars in this Problem
     all_other_x0 = []
@@ -149,6 +149,9 @@ def initialize_cars(n_other, N, dt, world, svo_theta, random_lane=False, x_varia
 
         x1_MPC.min_y = world.y_min        
         x1_MPC.max_y = world.y_max    
+        if no_grass:
+                x1_MPC.min_y += world.grass_width
+                x1_MPC.max_y -= world.grass_width        
         x1_MPC.strict_wall_constraint = True
 
         ####Vehicle Initial Conditions
@@ -193,10 +196,9 @@ def initialize_cars(n_other, N, dt, world, svo_theta, random_lane=False, x_varia
     amb_MPC.max_v = 35 * 0.447 # m/s
     amb_MPC.k_phi_error = 0.1
     amb_MPC.k_phi_dot = 0.01
-    NO_GRASS = False
     amb_MPC.min_y = world.y_min        
     amb_MPC.max_y = world.y_max
-    if NO_GRASS:
+    if no_grass:
         amb_MPC.min_y += world.grass_width
         amb_MPC.max_y -= world.grass_width
     amb_MPC.fd = amb_MPC.gen_f_desired_lane(world, 0, True)
