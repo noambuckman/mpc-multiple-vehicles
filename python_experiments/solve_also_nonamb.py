@@ -94,7 +94,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         nonresponse_MPC_list, nonresponse_x0_list = all_other_MPC, all_other_x0
         nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list = all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr
 
-        fake_amb_i = helper.get_min_dist_i(amb_x0, all_other_x0)
+        fake_amb_i = helper.get_min_dist_i(amb_x0, all_other_x0, )
         nonresponse_MPC_list = all_other_MPC[:fake_amb_i] + all_other_MPC[fake_amb_i+1:]
         nonresponse_x0_list = all_other_x0[:fake_amb_i] + all_other_x0[fake_amb_i+1:]
         nonresponse_u_list = all_other_u_ibr[:fake_amb_i] + all_other_u_ibr[fake_amb_i+1:]
