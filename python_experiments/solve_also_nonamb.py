@@ -106,6 +106,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         fake_amb_x= all_other_x_ibr[fake_amb_i] 
         fake_amb_xd = all_other_x_des_ibr[fake_amb_i]    
         solve_amb = True  
+        i = -1
 
         ################# Generate the warm starts ###############################
         u_warm_profiles, ux_warm_profiles = mibr.generate_warm_u(N, response_MPC, response_x0)
@@ -131,7 +132,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             k_CA = k_CA_d * 10**solve_number
             if solve_number > 2:
                 debug_flag = True
-            if psutil.virtual_memory().percent >= 90.0:
+            if psutil.virtual_memory().percent >= 90.0:1
                 raise Exception("Virtual Memory is too high, exiting to save computer")
             solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, debug_list = helper.solve_warm_starts(8, ux_warm_profiles, response_MPC, fake_amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power_d, world, wall_CA_d, N, T, 
                                                     response_x0, fake_amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=fake_amb_u, xamb=fake_amb_x, xamb_des=fake_amb_xd, debug_flag=debug_flag)

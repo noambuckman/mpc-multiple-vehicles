@@ -13,8 +13,12 @@ import src.MPC_Casadi as mpc
 
 
 
-def get_min_dist_i(ambulance_x0, all_other_x0):
-    all_dist_sqrd = [(ambulance_x0[0]-x0[0])**2 + (ambulance_x0[1]-x0[1])**2 for x0 in all_other_x0]
+def get_min_dist_i(ambulance_x0, all_other_x0, restrict_greater=False):
+    if restrict_greater:
+        all_dist_sqrd = [(ambulance_x0[0]-x0[0])**2 + (ambulance_x0[1]-x0[1])**2 for x0 in all_other_x0 if x0[0]>ambulance_x0]
+    else:
+        all_dist_sqrd = [(ambulance_x0[0]-x0[0])**2 + (ambulance_x0[1]-x0[1])**2 for x0 in all_other_x0]
+
     return np.argmin(all_dist_sqrd)
 
 
