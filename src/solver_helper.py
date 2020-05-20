@@ -14,10 +14,13 @@ import src.MPC_Casadi as mpc
 
 
 def get_min_dist_i(ambulance_x0, all_other_x0, restrict_greater=False):
+    all_dist_sqrd = [(ambulance_x0[0]-x0[0])**2 + (ambulance_x0[1]-x0[1])**2 for x0 in all_other_x0]
+    
     if restrict_greater:
-        all_dist_sqrd = [(ambulance_x0[0]-x0[0])**2 + (ambulance_x0[1]-x0[1])**2 for x0 in all_other_x0 if x0[0]>ambulance_x0[0] else 999999999]
-    else:
-        all_dist_sqrd = [(ambulance_x0[0]-x0[0])**2 + (ambulance_x0[1]-x0[1])**2 for x0 in all_other_x0]
+        for i in range(len(all_other_x0)):
+            if all_other_x0[i][0] < ambulance_x0[0]:
+                all_dist_sqrd[i] = 999999999
+    
     if len(all_dist_sqrd) == 0:
         return []
     else:
