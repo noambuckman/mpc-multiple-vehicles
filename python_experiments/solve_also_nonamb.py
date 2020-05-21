@@ -34,7 +34,7 @@ n_rounds_ibr = 4
 world = tw.TrafficWorld(2, 0, 1000)
     # large_world = tw.TrafficWorld(2, 0, 1000, 5.0)
 #########################################################################
-optional_suffix = str(n_other) + "agents"
+optional_suffix = str(n_other) + "nograss"
 subdir_name = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + optional_suffix
 folder = "results/" + subdir_name + "/"
 for f in [folder, folder+"imgs/", folder+"data/", folder+"vids/", folder+"plots/"]:
