@@ -80,7 +80,8 @@ def solve_best_response(u_warm, x_warm, x_des_warm, response_MPC, amb_MPC, nonre
         min_response_warm_ibr = None #<This used to return k_warm
         min_bri_ibr = bri
         debug_list = [current_cost, bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.k_CA*bri.collision_cost), bri.solution.value(bri.k_slack*bri.slack_cost)]
-        return True, current_cost, max_slack, x_ibr, x_des_ibr, u_ibr, debug_list
+        solved = True
+        return solved, current_cost, max_slack, x_ibr, x_des_ibr, u_ibr, debug_list
     except RuntimeError:
         # print("Infeasibility: k_warm %s"%k_warm)
         return False, np.infty, np.infty, None, None, None, []

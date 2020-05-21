@@ -20,10 +20,10 @@ random_seed = 9
 if random_seed > 0:
     np.random.seed(random_seed)
 #######################################################################
-T = 4  # MPC Planning Horizon
-dt = 0.2
+T = 5  # MPC Planning Horizon
+dt = 0.1
 N = int(T/dt) #Number of control intervals in MPC
-n_rounds_mpc = 30
+n_rounds_mpc = 50
 percent_mpc_executed = .25 ## This is the percent of MPC that is executed
 number_ctrl_pts_executed =  int(np.floor(N*percent_mpc_executed))
 print("number ctrl pts:  %d"%number_ctrl_pts_executed)
@@ -93,6 +93,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         response_MPC, response_x0 = amb_MPC, amb_x0
         nonresponse_MPC_list, nonresponse_x0_list = all_other_MPC, all_other_x0
         nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list = all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr
+        k_solve_amb_max_ibr = 2
 
         fake_amb_i = helper.get_min_dist_i(amb_x0, all_other_x0, )
         nonresponse_MPC_list = all_other_MPC[:fake_amb_i] + all_other_MPC[fake_amb_i+1:]
@@ -122,7 +123,6 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         ################# Solve the Ambulance Best Response ############################
         k_slack_d, k_CA_d, k_CA_power_d, wall_CA_d = 1000000, 0.1, 4, True
         k_max_slack = 0.01
-        k_solve_amb_max_ibr = 2
         k_max_round_with_slack = np.infty
         slack = True if i_rounds_ibr <= k_max_round_with_slack else False
         solve_amb = True if i_rounds_ibr < k_solve_amb_max_ibr else False
@@ -132,10 +132,15 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             k_CA = k_CA_d * 10**solve_number
             if solve_number > 2:
                 debug_flag = True
-            if psutil.virtual_memory().percent >= 90.0:1
+            if psutil.virtual_memory().percent >= 90.0:
                 raise Exception("Virtual Memory is too high, exiting to save computer")
-            solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, debug_list = helper.solve_warm_starts(8, ux_warm_profiles, response_MPC, fake_amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power_d, world, wall_CA_d, N, T, 
-                                                    response_x0, fake_amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=fake_amb_u, xamb=fake_amb_x, xamb_des=fake_amb_xd, debug_flag=debug_flag)
+            solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, debug_list = helper.solve_warm_starts(16, ux_warm_profiles, 
+                                                                                                            response_MPC, fake_amb_MPC, nonresponse_MPC_list, 
+                                                                                                            k_slack, k_CA, k_CA_power_d, world, wall_CA_d, N, T, 
+                                                                                                            response_x0, fake_amb_x0, nonresponse_x0_list, 
+                                                                                                            slack, solve_amb, 
+                                                                                                            nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, 
+                                                                                                            uamb=fake_amb_u, xamb=fake_amb_x, xamb_des=fake_amb_xd, debug_flag=debug_flag)
             if max_slack_ibr <= k_max_slack:
                 xamb_ibr, xamb_des_ibr, uamb_ibr = x_ibr, x_des_ibr, u_ibr
                 solve_again = False
@@ -181,7 +186,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                     debug_flag = True
                 if psutil.virtual_memory().percent >= 90.0:
                     raise Exception("Virtual Memory is too high, exiting to save computer")                
-                solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, debug_list = helper.solve_warm_starts(8, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power_d, world, wall_CA_d, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb_ibr, xamb_ibr, xamb_des_ibr, debug_flag)
+                solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, debug_list = helper.solve_warm_starts(16, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power_d, world, wall_CA_d, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb_ibr, xamb_ibr, xamb_des_ibr, debug_flag)
                 if max_slack_ibr <= k_max_slack:
                     all_other_x_ibr[i], all_other_x_des_ibr[i], all_other_u_ibr[i] = x_ibr, x_des_ibr, u_ibr
                     solve_again = False
