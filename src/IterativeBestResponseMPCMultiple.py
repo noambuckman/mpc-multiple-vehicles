@@ -78,18 +78,18 @@ class IterativeBestResponseMPCMultiple:
         for slack_var in self.slack_vars_list:
             for i in range(slack_var.shape[0]):
                 for j in range(slack_var.shape[1]):
-                    self.slack_cost += cas.fabs(slack_var[i,j]**2)
+                    self.slack_cost += slack_var[i,j]**2
         
         if self.ambMPC:    
             self.slack_amb = self.generate_slack_variables(slack, N, 1, n_ego_circles = self.responseMPC.n_circles)[0]
-            self.slack_cost += cas.fabs(cas.sumsqr(self.slack_amb))            
+            self.slack_cost += cas.sumsqr(self.slack_amb)            
 
         if solve_amb:    
             self.slack_amb_other = self.generate_slack_variables(slack, N, len(self.otherMPClist), n_ego_circles = self.responseMPC.n_circles)
             for slack_var in self.slack_amb_other:
                 for i in range(slack_var.shape[0]):
                     for j in range(slack_var.shape[1]):
-                        self.slack_cost += cas.fabs(slack_var[i,j]**2)
+                        self.slack_cost += slack_var[i,j]**2
         
         self.response_svo_cost = np.cos(self.responseMPC.theta_iamb)*self.car1_costs
         self.other_svo_cost = np.sin(self.responseMPC.theta_iamb)*self.amb_costs
@@ -138,7 +138,7 @@ class IterativeBestResponseMPCMultiple:
                     if initial_xy_distance <= 50: #collision avoidance distance for other cars 
                         buffer_distance, dist = self.generate_collision_ellipse(response_circle_xy[0], response_circle_xy[1], 
                                                         self.allother_x_opt[i][0,k], self.allother_x_opt[i][1,k], self.allother_x_opt[i][2,k],
-                                                        alphas[i], betas[i], self.slack_vars_list[i][center_counter, k])
+                                                        alphas[i], betas[i], None)
                         self.pairwise_distances += [dist]
                         # distance_clipped = cas.fmax(buffer_distance, -1)
                         self.opti.subject_to(dist >= (1 - self.slack_vars_list[i][center_counter, k]))
@@ -149,7 +149,7 @@ class IterativeBestResponseMPCMultiple:
                 if self.ambMPC:    
                     buffer_distance, dist = self.generate_collision_ellipse(response_circle_xy[0], response_circle_xy[1], 
                                                                             self.xamb_opt[0,k], self.xamb_opt[1,k], self.xamb_opt[2,k],
-                                                                            a_amb, b_amb, self.slack_amb[center_counter, k])     
+                                                                            a_amb, b_amb, None)     
                     self.opti.subject_to(dist >= 1 - self.slack_amb[center_counter, k] )         
                     self.pairwise_distances += [dist]
                     distance_clipped = cas.fmax(buffer_distance, 0.00001)
@@ -171,7 +171,7 @@ class IterativeBestResponseMPCMultiple:
                         if initial_xy_distance <= 50: #collision avoidance distance for other cars                        
                             buffer_distance, dist = self.generate_collision_ellipse(ca_circle[0], ca_circle[1], 
                                                             self.allother_x_opt[i][0,k], self.allother_x_opt[i][1,k], self.allother_x_opt[i][2,k],
-                                                            alphas[i], betas[i], self.slack_amb_other[i][ci, k])
+                                                            alphas[i], betas[i], None)
                             
                             # distance_clipped = cas.fmax(buffer_distance, -1)
                             self.opti.subject_to(dist >= (1 - self.slack_amb_other[i][ci, k]))
