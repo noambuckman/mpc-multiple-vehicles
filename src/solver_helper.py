@@ -79,8 +79,8 @@ def solve_best_response(u_warm, x_warm, x_des_warm, response_MPC, amb_MPC, nonre
         max_slack = np.max([np.max(bri.solution.value(s)) for s in bri.slack_vars_list])                                                                         
         min_response_warm_ibr = None #<This used to return k_warm
         min_bri_ibr = bri
-        debug_list = [current_cost, bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.k_CA*bri.collision_cost), bri.solution.value(bri.k_slack*bri.slack_cost), 
-                        [bri.solution.value(s) for s in bri.slack_vars_list]]
+        debug_list = [current_cost, bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.k_CA*bri.collision_cost), bri.solution.value(bri.k_slack*bri.slack_cost), [bri.solution.value(s) for s in bri.slack_vars_list]]
+        debug_list = [bri.solution.value(s) for s in bri.slack_vars_list]
         solved = True
         return solved, current_cost, max_slack, x_ibr, x_des_ibr, u_ibr, debug_list
     except RuntimeError:
