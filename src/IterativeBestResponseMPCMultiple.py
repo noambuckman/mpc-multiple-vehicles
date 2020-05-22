@@ -75,7 +75,12 @@ class IterativeBestResponseMPCMultiple:
         # We will do collision avoidance for ego vehicle with all other vehicles
         self.slack_vars_list = self.generate_slack_variables(slack, N, len(self.otherMPClist), n_ego_circles = self.responseMPC.n_circles)
         
-        self.slack_cost = 0
+        self.slack_cost = 0       
+        for agent_i in range(len(self.slack_vars_list)):
+            for ci in range(self.slack_var.shape[0]):
+                for t in range(self.slack_var.shape[1]):
+                    self.slack_cost += self.slack_vars_list[agent_i][ci,t]**2
+
         if self.ambMPC:    
             self.slack_amb = self.generate_slack_variables(slack, N, 1, n_ego_circles = self.responseMPC.n_circles)[0]
             self.slack_cost += cas.sumsqr(self.slack_amb)            
@@ -182,16 +187,6 @@ class IterativeBestResponseMPCMultiple:
         
   
         ######## optimization  ##################################
-        self.slack_cost = 0
-        for slack_var in self.slack_vars_list:
-            for i in range(slack_var.shape[0]):
-                for j in range(slack_var.shape[1]):
-                    self.slack_cost += slack_var[i,j]**2 
-        self.slack_cost = 0       
-        for agent_i in range(len(self.slack_vars_list)):
-            for ci in range(slack_var.shape[0]):
-                for t in range(slack_var.shape[1]):
-                    self.slack_cost += self.slack_vars_list[agent_i][ci,t]**2
         self.total_svo_cost = self.response_svo_cost + self.other_svo_cost + self.k_slack * self.slack_cost + self.k_CA * self.collision_cost
         # self.total_svo_cost = self.k_slack * self.slack_cost + self.k_CA * self.collision_cost
         self.opti.minimize(self.total_svo_cost)    
