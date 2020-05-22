@@ -107,7 +107,8 @@ def solve_warm_starts(number_processes, ux_warm_profiles, response_MPC, amb_MPC,
             if len(debug_list) == 0:
                 print("Infeasible")
             else:
-                print("Costs: Total Cost %.04f Vehicle-Only Cost:  %.04f Collision Cost %0.04f  Slack Cost %0.04f"%(tuple(debug_list)))                 
+                print("Feasible")
+                # print("Costs: Total Cost %.04f Vehicle-Only Cost:  %.04f Collision Cost %0.04f  Slack Cost %0.04f"%(tuple(debug_list)))                 
 
 
     min_cost_solution = min(solve_costs_solutions, key=lambda r:r[1])  
