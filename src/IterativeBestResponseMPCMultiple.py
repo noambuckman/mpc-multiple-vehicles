@@ -186,9 +186,12 @@ class IterativeBestResponseMPCMultiple:
         for slack_var in self.slack_vars_list:
             for i in range(slack_var.shape[0]):
                 for j in range(slack_var.shape[1]):
-                    self.slack_cost += slack_var[i,j]**2        
-        
-        
+                    self.slack_cost += slack_var[i,j]**2 
+        self.slack_cost = 0       
+        for agent_i in range(len(self.slack_vars_list)):
+            for ci in range(slack_var.shape[0]):
+                for t in range(slack_var.shape[1]):
+                    self.slack_cost += self.slack_vars_list[agent_i][ci,t]**2
         self.total_svo_cost = self.response_svo_cost + self.other_svo_cost + self.k_slack * self.slack_cost + self.k_CA * self.collision_cost
         # self.total_svo_cost = self.k_slack * self.slack_cost + self.k_CA * self.collision_cost
         self.opti.minimize(self.total_svo_cost)    
