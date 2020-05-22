@@ -135,7 +135,7 @@ class IterativeBestResponseMPCMultiple:
                 for i in range(len(self.allother_x_opt)):
                     initial_displacement = x0_other[i] - x0
                     initial_xy_distance = cas.sqrt(initial_displacement[0]**2 + initial_displacement[1]**2)
-                    if initial_xy_distance <= 20: #collision avoidance distance for other cars 
+                    if initial_xy_distance <= 50: #collision avoidance distance for other cars 
                         buffer_distance, dist = self.generate_collision_ellipse(response_circle_xy[0], response_circle_xy[1], 
                                                         self.allother_x_opt[i][0,k], self.allother_x_opt[i][1,k], self.allother_x_opt[i][2,k],
                                                         alphas[i], betas[i], self.slack_vars_list[i][center_counter, k])
@@ -168,7 +168,7 @@ class IterativeBestResponseMPCMultiple:
                     for i in range(len(self.allother_x_opt)):
                         initial_displacement = x0_other[i] - x0_amb
                         initial_xy_distance = cas.sqrt(initial_displacement[0]**2 + initial_displacement[1]**2)
-                        if initial_xy_distance <= 20: #collision avoidance distance for other cars                        
+                        if initial_xy_distance <= 50: #collision avoidance distance for other cars                        
                             buffer_distance, dist = self.generate_collision_ellipse(ca_circle[0], ca_circle[1], 
                                                             self.allother_x_opt[i][0,k], self.allother_x_opt[i][1,k], self.allother_x_opt[i][2,k],
                                                             alphas[i], betas[i], self.slack_amb_other[i][ci, k])
