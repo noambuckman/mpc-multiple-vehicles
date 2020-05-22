@@ -82,6 +82,7 @@ class IterativeBestResponseMPCMultiple:
         
         if self.ambMPC:    
             self.slack_amb = self.generate_slack_variables(slack, N, 1, n_ego_circles = self.responseMPC.n_circles)[0]
+            pass
             self.slack_cost += cas.sumsqr(self.slack_amb)            
 
         if solve_amb:    
@@ -89,6 +90,7 @@ class IterativeBestResponseMPCMultiple:
             for slack_var in self.slack_amb_other:
                 for i in range(slack_var.shape[0]):
                     for j in range(slack_var.shape[1]):
+                        pass
                         self.slack_cost += slack_var[i,j]**2
         
         self.response_svo_cost = np.cos(self.responseMPC.theta_iamb)*self.car1_costs
