@@ -79,7 +79,7 @@ class IterativeBestResponseMPCMultiple:
         for agent_i in range(len(self.slack_vars_list)):
             for ci in range(self.slack_vars_list[agent_i].shape[0]):
                 for t in range(self.slack_vars_list[agent_i].shape[1]):
-                    self.slack_cost += self.slack_vars_list[agent_i][ci,t]**2
+                    self.slack_cost += cas.fmax(0.000001,self.slack_vars_list[agent_i][ci,t])**2
 
         if self.ambMPC:    
             self.slack_amb = self.generate_slack_variables(slack, N, 1, n_ego_circles = self.responseMPC.n_circles)[0]
@@ -90,7 +90,7 @@ class IterativeBestResponseMPCMultiple:
             for slack_var in self.slack_amb_other:
                 for i in range(slack_var.shape[0]):
                     for j in range(slack_var.shape[1]):
-                        self.slack_cost += slack_var[i,j]**2
+                        self.slack_cost += cas.fmax(0.000001, slack_var[i,j])**2
         
         self.response_svo_cost = np.cos(self.responseMPC.theta_iamb)*self.car1_costs
         self.other_svo_cost = np.sin(self.responseMPC.theta_iamb)*self.amb_costs
