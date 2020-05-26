@@ -111,13 +111,15 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
 
         ################# Generate the warm starts ###############################
         u_warm_profiles, ux_warm_profiles = mibr.generate_warm_u(N, response_MPC, response_x0)
-        if i_rounds_ibr == 0 and i_mpc > 0:
-            u_warm_profiles["previous"] = np.concatenate((uamb_mpc[:, number_ctrl_pts_executed:], np.tile(uamb_mpc[:,-1:],(1, number_ctrl_pts_executed))),axis=1) ##    
+        if i_mpc > 0:
+            u_warm_profiles["previous_mpc"] = np.concatenate((uamb_mpc[:, number_ctrl_pts_executed:], np.tile(uamb_mpc[:,-1:],(1, number_ctrl_pts_executed))),axis=1) ##    
+            x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm_profiles["previous_mpc"])
+            ux_warm_profiles["previous_mpc"] = [u_warm_profiles["previous_mpc"], x_warm, x_des_warm]
         if i_rounds_ibr > 0:
-            u_warm_profiles["previous"] = uamb_ibr    
-        if (i_rounds_ibr == 0 and i_mpc > 0) or i_rounds_ibr > 0 :
-            x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm_profiles["previous"])
-            ux_warm_profiles["previous"] = [u_warm_profiles["previous"], x_warm, x_des_warm]
+            u_warm_profiles["previous_ibr"] = uamb_ibr  
+            x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm_profiles["previous_ibr"])
+            ux_warm_profiles["previous_ibr"] = [u_warm_profiles["previous_ibr"], x_warm, x_des_warm]
+
         x_warm_profiles, x_ux_warm_profiles = mibr.generate_warm_x(response_MPC, world,  response_x0, np.median([x[4] for x in nonresponse_x0_list]))
         ux_warm_profiles.update(x_ux_warm_profiles) # combine into one
         ################# Solve the Ambulance Best Response ############################
@@ -163,13 +165,16 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
 
             ################# Generate the warm starts ###############################
             u_warm_profiles, ux_warm_profiles = mibr.generate_warm_u(N, response_MPC, response_x0)
-            if i_rounds_ibr == 0 and i_mpc > 0:
-                u_warm_profiles["previous"] = np.concatenate((all_other_u_mpc[i][:, number_ctrl_pts_executed:], np.tile(all_other_u_mpc[i][:,-1:],(1, number_ctrl_pts_executed))),axis=1) ##    
+            if i_mpc > 0:
+                u_warm_profiles["previous_mpc"] = np.concatenate((all_other_u_mpc[i][:, number_ctrl_pts_executed:], np.tile(all_other_u_mpc[i][:,-1:],(1, number_ctrl_pts_executed))),axis=1) ##    
+                x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm_profiles["previous_mpc"])
+                ux_warm_profiles["previous_mpc"] = [u_warm_profiles["previous_mpc"], x_warm, x_des_warm]            
+            
             if i_rounds_ibr > 0:
-                u_warm_profiles["previous"] = all_other_u_ibr[i]     
-            if (i_rounds_ibr == 0 and i_mpc > 0) or i_rounds_ibr > 0 :
-                x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm_profiles["previous"])
-                ux_warm_profiles["previous"] = [u_warm_profiles["previous"], x_warm, x_des_warm]
+                u_warm_profiles["previous_ibr"] = all_other_u_ibr[i]  
+                x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm_profiles["previous_ibr"])
+                ux_warm_profiles["previous_ibr"] = [u_warm_profiles["previous_ibr"], x_warm, x_des_warm]
+
             x_warm_profiles, x_ux_warm_profiles = mibr.generate_warm_x(response_MPC, world,  response_x0, np.median([x[4] for x in nonresponse_x0_list]))
             ux_warm_profiles.update(x_ux_warm_profiles) # combine into one
        

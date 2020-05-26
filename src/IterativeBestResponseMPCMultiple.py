@@ -277,11 +277,15 @@ class IterativeBestResponseMPCMultiple:
             save_state(file_name, xamb_plot, uamb_plot, None, xothers_plot, uothers_plot, None)
 
         if len(plot_range)>0:
-            CIRCLES=True
-            for k in plot_range:
-                cmplot.plot_multiple_cars( k, self.responseMPC, xothers_plot, xamb_plot, CIRCLES, None, None, None, self.world, 0)     
-                plt.plot(xamb_plot[0,:], xamb_plot[1,:],'o')
-                plt.show()
+
+            cmplot.plot_cars(self.world, self.responseMPC, xamb_plot, xothers_plot, 
+                 None, "ellipse", False, 0)
+            plt.show()            
+            # CIRCLES=True
+            # for k in plot_range:
+            #     cmplot.plot_multiple_cars( k, self.responseMPC, xothers_plot, xamb_plot, CIRCLES, None, None, None, self.world, 0)     
+            #     plt.plot(xamb_plot[0,:], xamb_plot[1,:],'o')
+            #     plt.show()
             plt.plot(xamb_plot[4,:],'--')
             plt.plot(xamb_plot[4,:] * np.cos(xamb_plot[2,:]))
             plt.ylabel("Velocity / Vx")
