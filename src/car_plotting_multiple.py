@@ -211,6 +211,8 @@ def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder,
             ax.add_patch(ellipse_patch)
             # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2)
             # ax.add_patch(circle_patch_r)
+            if car_labels is not None:
+                ax.annotate(str(car_labels[i]), xy=(x,y))
 
 
         centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])                  
