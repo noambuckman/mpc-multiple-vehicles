@@ -144,7 +144,7 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_sh
         plt.close(fig)        
 
 def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder,   
-                car_plot_shape="ellipse", parallelize=True, camera_speed = None, 
+                car_plot_shape="ellipse", parallelize=True, camera_speed = None, car_labels = None,
                 xamb_desired=None, xothers_desired=None):
     N = xamb_plot.shape[1]
     # if car_plot_shape:
@@ -153,18 +153,18 @@ def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder,
     if parallelize:
         pool = multiprocessing.Pool(processes=4)
         plot_partial = functools.partial(plot_multiple_cars, x_mpc=x_mpc, xothers_plot=xothers_plot, xamb_plot=xamb_plot, car_plot_shape=car_plot_shape, xothers_desired=xothers_desired, xamb_desired=xamb_desired,
-                                         folder=folder, world=world, camera_speed = camera_speed)
+                                         folder=folder, world=world, camera_speed = camera_speed, car_labels=car_labels)
         pool.map(plot_partial, range(N)) #will apply k=1...N to plot_partial
         pool.terminate()
     else:
         for k in range(N):
-            plot_multiple_cars( k, world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_shape, camera_speed, xamb_desired, xothers_desired)     
+            plot_multiple_cars( k, world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_shape, camera_speed, car_labels, xamb_desired, xothers_desired)     
     return None
 
 
 
 def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder, 
-                        car_plot_shape="Ellipse", camera_speed = None, 
+                        car_plot_shape="Ellipse", camera_speed = None, car_labels = None,
                         xamb_desired=None, xothers_desired=None ):
     ''' This only has info from x_mpc but not any individual ones'''
     if camera_speed is None:
@@ -200,6 +200,7 @@ def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder,
             xy_f = centers[ci]
             circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius, color='red')
             ax.add_patch(circle_patch_f)
+        ax.annotate('Response', xy=(xamb_plot[0,k:k+1], xamb_plot[1,k:k+1]))
 
         for i in range(len(xothers_plot)):
             x1_plot = xothers_plot[i]
