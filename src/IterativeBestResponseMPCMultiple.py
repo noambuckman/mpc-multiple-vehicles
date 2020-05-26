@@ -269,7 +269,7 @@ class IterativeBestResponseMPCMultiple:
         xothers_plot = [self.opti.debug.value(xo) for xo in self.allother_x_opt]
         xamb_plot = self.opti.debug.value(self.x_opt)
         if self.opti.ambMPC:
-            xothers_plot = [self.opti.debug.value(self.xamb_opt)]
+            xothers_plot += [self.opti.debug.value(self.xamb_opt)]
         max_x = np.max(xamb_plot[0,:])
         # plot_range = range(xamb_plot.shape[1])
         # plot_range = [xamb_plot.shape[1] - 1]
