@@ -200,7 +200,8 @@ def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder,
             xy_f = centers[ci]
             circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius, color='red')
             ax.add_patch(circle_patch_f)
-        ax.annotate('Response', xy=(xamb_plot[0,k:k+1], xamb_plot[1,k:k+1]))
+        if car_labels is not None:
+            ax.annotate('Response', xy=(xamb_plot[0,k:k+1], xamb_plot[1,k:k+1]))
 
         for i in range(len(xothers_plot)):
             x1_plot = xothers_plot[i]
