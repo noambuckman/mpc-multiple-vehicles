@@ -31,6 +31,7 @@ PLOT_FLAG, SAVE_FLAG, PRINT_FLAG = False, True, False
 n_other = 13
 n_rounds_ibr = 4
 world = tw.TrafficWorld(2, 0, 1000)
+n_processors = 16
     # large_world = tw.TrafficWorld(2, 0, 1000, 5.0)
 #########################################################################
 optional_suffix = str(n_other) + "nograss"
@@ -161,7 +162,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                 debug_flag = True
             if psutil.virtual_memory().percent >= 90.0:
                 raise Exception("Virtual Memory is too high, exiting to save computer")
-            solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, debug_list = helper.solve_warm_starts(1, ux_warm_profiles, response_MPC, fake_amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power_d, world, wall_CA_d, N, T, response_x0, fake_amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=fake_amb_u, xamb=fake_amb_x, xamb_des=fake_amb_xd, debug_flag=debug_flag)
+            solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, debug_list = helper.solve_warm_starts(n_processors, ux_warm_profiles, response_MPC, fake_amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power_d, world, wall_CA_d, N, T, response_x0, fake_amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=fake_amb_u, xamb=fake_amb_x, xamb_des=fake_amb_xd, debug_flag=debug_flag)
             if max_slack_ibr <= k_max_slack:
                 xamb_ibr, xamb_des_ibr, uamb_ibr = x_ibr, x_des_ibr, u_ibr
                 solve_again = False
@@ -216,7 +217,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                     debug_flag = True
                 if psutil.virtual_memory().percent >= 90.0:
                     raise Exception("Virtual Memory is too high, exiting to save computer")                
-                solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, debug_list = helper.solve_warm_starts(1, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power_d, world, wall_CA_d, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb_ibr, xamb_ibr, xamb_des_ibr, debug_flag)
+                solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, debug_list = helper.solve_warm_starts(n_processors, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power_d, world, wall_CA_d, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb_ibr, xamb_ibr, xamb_des_ibr, debug_flag)
                 if max_slack_ibr <= k_max_slack:
                     all_other_x_ibr[i], all_other_x_des_ibr[i], all_other_u_ibr[i] = x_ibr, x_des_ibr, u_ibr
                     solve_again = False
