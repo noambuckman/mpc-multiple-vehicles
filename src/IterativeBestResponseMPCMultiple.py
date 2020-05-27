@@ -147,14 +147,14 @@ class IterativeBestResponseMPCMultiple:
                         self.collision_cost += 1/distance_clipped**self.k_CA_power      
                
                 # Don't forget the ambulance
-                if self.ambMPC:    
+                if self.ambMPC:     
                     buffer_distance, dist = self.generate_collision_ellipse(response_circle_xy[0], response_circle_xy[1], 
                                                                             self.xamb_opt[0,k], self.xamb_opt[1,k], self.xamb_opt[2,k],
                                                                             a_amb, b_amb, None)     
                     self.opti.subject_to(dist >= 1 - self.slack_amb[center_counter, k] )         
                     self.pairwise_distances += [dist]
                     distance_clipped = cas.fmax(buffer_distance, 0.00001)
-                    self.collision_cost += 1/distance_clipped**self.k_CA_power    
+                    self.collision_cost += 1/distance_clipped**self.k_CA_power  
                 if self.WALL_CA:
                     dist_btw_wall_bottom =  response_circle_xy[1] - (self.responseMPC.min_y + self.responseMPC.W/2.0) 
                     dist_btw_wall_top = (self.responseMPC.max_y - self.responseMPC.W/2.0) - response_circle_xy[1]

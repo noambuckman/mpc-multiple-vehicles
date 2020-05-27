@@ -21,15 +21,14 @@ if random_seed > 0:
     np.random.seed(random_seed)
 #######################################################################
 T = 5  # MPC Planning Horizon
-dt = 0.1
+dt = 0.2
 N = int(T/dt) #Number of control intervals in MPC
-n_rounds_mpc = 50
-percent_mpc_executed = .25 ## This is the percent of MPC that is executed
+n_rounds_mpc = 75
+percent_mpc_executed = .10 ## This is the percent of MPC that is executed
 number_ctrl_pts_executed =  int(np.floor(N*percent_mpc_executed))
 print("number ctrl pts:  %d"%number_ctrl_pts_executed)
-XAMB_ONLY = False
 PLOT_FLAG, SAVE_FLAG, PRINT_FLAG = False, True, False
-n_other = 8
+n_other = 13
 n_rounds_ibr = 4
 world = tw.TrafficWorld(2, 0, 1000)
     # large_world = tw.TrafficWorld(2, 0, 1000, 5.0)
@@ -50,9 +49,14 @@ position_list = [
     (0, 80),
     (1, 85),
     (1, 100),
-    # (1, 123),
-    # (0, 120),
+    (1, 123),
+    (0, 120),
+    (0, 145),
+    (0, 160),
+    (0, 200)
 ]
+if len(position_list) != n_other:
+    raise Exception("number of vehicles don't match n_other")
 
 
 all_other_x0, all_other_MPC, amb_MPC, amb_x0 = helper.initialize_cars(n_other, N, dt, world, svo_theta, True, False, False, position_list)
@@ -68,22 +72,45 @@ if SAVE_FLAG:
     pickle.dump(all_other_MPC[0], open(folder + "data/"+"mpcother" + ".p",'wb'))
     pickle.dump(amb_MPC, open(folder + "data/"+"mpcamb" + ".p",'wb'))
 i_mpc_start = 0                 
+# i_mpc_start = 64 
+# number_ctrl_pts_executed = 1
+preloaded_data = True
 for i_mpc in range(i_mpc_start, n_rounds_mpc):
+
+
+
     min_slack = np.infty
-    actual_t = i_mpc * number_ctrl_pts_executed
+#     actual_t = i_mpc * number_ctrl_pts_executed
     ###### Update the initial conditions for all vehicles
-    if i_mpc > 0:
+    if i_mpc > 0 and not preloaded_data:
         amb_x0 = xamb_executed[:, number_ctrl_pts_executed] 
         for i in range(len(all_other_x0)):
-            all_other_x0[i] = all_other_x_executed[i][:, number_ctrl_pts_executed]        
+            all_other_x0[i] = all_other_x_executed[i][:, number_ctrl_pts_executed]
+    preloaded_data = False
+
+
+    vehicles_index_in_mpc = []
+    vehicles_index_constant_v = []
+    for i in range(n_other):
+        initial_distance = np.sqrt((amb_x0[0]-all_other_x0[i][0])**2 + (amb_x0[1]-all_other_x0[i][1])**2)
+        if initial_distance <= 120:
+            vehicles_index_in_mpc += [i]
+        else:
+            vehicles_index_constant_v += [i]    
+    vehicles_index_in_mpc = [j for j in range(n_other)] ## Default
 
     uamb_ibr, xamb_ibr, xamb_des_ibr = None, None, None
     all_other_u_ibr = [None for i in range(n_other)]    
     all_other_x_ibr = [None for i in range(n_other)]
     all_other_x_des_ibr = [None for i in range(n_other)]
+    for j in vehicles_index_constant_v:
+        all_other_u_ibr[i] = np.zeros((2,N)) #constant v control inputs
+        all_other_x_ibr[i], all_other_x_des_ibr[i] = all_other_MPC[i].forward_simulate_all(all_other_x0[i].reshape(6,1), u_const) 
+        
+
 
     for i_rounds_ibr in range(n_rounds_ibr):
-        ############# Generate (if needed) the control inputs of other vehicles
+        ############# Generate (if needed) the control inputs of other vehicles        
         if i_rounds_ibr == 0:
             if i_mpc == 0:
                 all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = helper.pullover_guess(N, all_other_MPC, all_other_x0)  # This is a hack and should be explicit that it's lane change                   
@@ -93,9 +120,8 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         response_MPC, response_x0 = amb_MPC, amb_x0
         nonresponse_MPC_list, nonresponse_x0_list = all_other_MPC, all_other_x0
         nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list = all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr
-        k_solve_amb_max_ibr = 2
 
-        fake_amb_i = helper.get_min_dist_i(amb_x0, all_other_x0, )
+        fake_amb_i = helper.get_min_dist_i(amb_x0, all_other_x0, True)
         nonresponse_MPC_list = all_other_MPC[:fake_amb_i] + all_other_MPC[fake_amb_i+1:]
         nonresponse_x0_list = all_other_x0[:fake_amb_i] + all_other_x0[fake_amb_i+1:]
         nonresponse_u_list = all_other_u_ibr[:fake_amb_i] + all_other_u_ibr[fake_amb_i+1:]
@@ -108,41 +134,38 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         fake_amb_xd = all_other_x_des_ibr[fake_amb_i]    
         solve_amb = True  
         i = -1
-
         ################# Generate the warm starts ###############################
         u_warm_profiles, ux_warm_profiles = mibr.generate_warm_u(N, response_MPC, response_x0)
         if i_mpc > 0:
             u_warm_profiles["previous_mpc"] = np.concatenate((uamb_mpc[:, number_ctrl_pts_executed:], np.tile(uamb_mpc[:,-1:],(1, number_ctrl_pts_executed))),axis=1) ##    
-            x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm_profiles["previous_mpc"])
+            x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm_profiles["previous_mpc"]) 
             ux_warm_profiles["previous_mpc"] = [u_warm_profiles["previous_mpc"], x_warm, x_des_warm]
         if i_rounds_ibr > 0:
-            u_warm_profiles["previous_ibr"] = uamb_ibr  
-            x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm_profiles["previous_ibr"])
-            ux_warm_profiles["previous_ibr"] = [u_warm_profiles["previous_ibr"], x_warm, x_des_warm]
-
+            u_warm_profiles["previous_ibr"] = uamb_ibr    
+            x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm_profiles["previous_ibr"]) 
+            ux_warm_profiles["previous_ibr"] = [u_warm_profiles["previous_ibr"], x_warm, x_des_warm]            
+            
         x_warm_profiles, x_ux_warm_profiles = mibr.generate_warm_x(response_MPC, world,  response_x0, np.median([x[4] for x in nonresponse_x0_list]))
         ux_warm_profiles.update(x_ux_warm_profiles) # combine into one
         ################# Solve the Ambulance Best Response ############################
         k_slack_d, k_CA_d, k_CA_power_d, wall_CA_d = 1000000, 0.1, 4, True
+        
         k_max_slack = 0.01
+        k_solve_amb_max_ibr = 3
+        k_max_solve_number = 3
         k_max_round_with_slack = np.infty
         slack = True if i_rounds_ibr <= k_max_round_with_slack else False
         solve_amb = True if i_rounds_ibr < k_solve_amb_max_ibr else False
         solve_again, solve_number, max_slack_ibr, debug_flag = True, 0, np.infty, False
-        while solve_again and solve_number < 4:
+        while solve_again and solve_number < k_max_solve_number:
+            print("SOLVING AMBULANCE:  Attempt %d / %d"%(solve_number+1, k_max_solve_number)) 
             k_slack = k_slack_d * solve_number
             k_CA = k_CA_d * 10**solve_number
-            if solve_number > 2:
+            if solve_number > 2 or True:
                 debug_flag = True
             if psutil.virtual_memory().percent >= 90.0:
                 raise Exception("Virtual Memory is too high, exiting to save computer")
-            solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, debug_list = helper.solve_warm_starts(16, ux_warm_profiles, 
-                                                                                                            response_MPC, fake_amb_MPC, nonresponse_MPC_list, 
-                                                                                                            k_slack, k_CA, k_CA_power_d, world, wall_CA_d, N, T, 
-                                                                                                            response_x0, fake_amb_x0, nonresponse_x0_list, 
-                                                                                                            slack, solve_amb, 
-                                                                                                            nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, 
-                                                                                                            uamb=fake_amb_u, xamb=fake_amb_x, xamb_des=fake_amb_xd, debug_flag=debug_flag)
+            solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, debug_list = helper.solve_warm_starts(16, ux_warm_profiles, response_MPC, fake_amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power_d, world, wall_CA_d, N, T, response_x0, fake_amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=fake_amb_u, xamb=fake_amb_x, xamb_des=fake_amb_xd, debug_flag=debug_flag)
             if max_slack_ibr <= k_max_slack:
                 xamb_ibr, xamb_des_ibr, uamb_ibr = x_ibr, x_des_ibr, u_ibr
                 solve_again = False
@@ -150,12 +173,15 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                 print("Max Slack is too large %.05f > thresh %.05f"%(max_slack_ibr, k_max_slack))
                 solve_again = True
                 solve_number += 1
+#             raise Exception("Test")
         if solve_again:
             raise Exception("Slack variable is too high or infeasible.  MaxS = %.05f > thresh %.05f"%(max_slack_ibr, k_max_slack))
-                                        
+        print("Ambulance Plot Max Slack %0.04f"%max_slack_ibr)
+        end_frame = actual_t+number_ctrl_pts_executed+1
+        cmplot.plot_cars(world, amb_MPC, xamb_ibr[:,:], [x[:,:] for x in all_other_x_ibr], None, "ellipse", False, 0)                        
+        plt.show()                                              
         ################# SOLVE BEST RESPONSE FOR THE OTHER VEHICLES ON THE ROAD ############################
-        for i in range(len(all_other_MPC)):
-            print("SOLVING AGENT %d"%i)
+        for i in vehicles_index_in_mpc:
             response_MPC, response_x0 = all_other_MPC[i], all_other_x0[i]
             nonresponse_MPC_list = all_other_MPC[:i] + all_other_MPC[i+1:]
             nonresponse_x0_list = all_other_x0[:i] + all_other_x0[i+1:]
@@ -164,7 +190,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             nonresponse_xd_list = all_other_x_des_ibr[:i] + all_other_x_des_ibr[i+1:]
 
             ################# Generate the warm starts ###############################
-            u_warm_profiles, ux_warm_profiles = mibr.generate_warm_u(N, response_MPC, response_x0)
+            u_warm_profiles, ux_warm_profiles = mibr.generate_warm_u(N, response_MPC, response_x0)            
             if i_mpc > 0:
                 u_warm_profiles["previous_mpc"] = np.concatenate((all_other_u_mpc[i][:, number_ctrl_pts_executed:], np.tile(all_other_u_mpc[i][:,-1:],(1, number_ctrl_pts_executed))),axis=1) ##    
                 x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm_profiles["previous_mpc"])
@@ -174,7 +200,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                 u_warm_profiles["previous_ibr"] = all_other_u_ibr[i]  
                 x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm_profiles["previous_ibr"])
                 ux_warm_profiles["previous_ibr"] = [u_warm_profiles["previous_ibr"], x_warm, x_des_warm]
-
+            
             x_warm_profiles, x_ux_warm_profiles = mibr.generate_warm_x(response_MPC, world,  response_x0, np.median([x[4] for x in nonresponse_x0_list]))
             ux_warm_profiles.update(x_ux_warm_profiles) # combine into one
        
@@ -182,12 +208,15 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             
             k_solve_amb_min_distance = 30
             initial_distance_to_ambulance = np.sqrt((response_x0[0] - amb_x0[0])**2 + (response_x0[1] - amb_x0[1])**2)       
-            solve_amb = True if (i_rounds_ibr < k_solve_amb_max_ibr and (initial_distance_to_ambulance < k_solve_amb_min_distance)) else False     
+            solve_amb = True if (i_rounds_ibr < k_solve_amb_max_ibr and 
+                                  initial_distance_to_ambulance < k_solve_amb_min_distance and 
+                                 response_x0[0]>amb_x0[0]-0) else False     
             slack = True if i_rounds_ibr <= k_max_round_with_slack else False
-            while solve_again and solve_number < 4:
+            while solve_again and solve_number < k_max_solve_number:
+                print("SOLVING Agent %d:  Attempt %d / %d"%(i, solve_number+1, k_max_solve_number))        
                 k_slack = k_slack_d * solve_number
                 k_CA = k_CA_d * 10**solve_number                
-                if solve_number>2:
+                if solve_number > 2:
                     debug_flag = True
                 if psutil.virtual_memory().percent >= 90.0:
                     raise Exception("Virtual Memory is too high, exiting to save computer")                
@@ -199,7 +228,10 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                     print("Max Slack is too large %.05f > thresh %.05f"%(max_slack_ibr, k_max_slack))
                     solve_again = True
                     solve_number += 1
-                    
+                    if (solve_number == k_max_solve_number) and solve_amb:
+                        print("Re-solving without ambulance")
+                        solve_number = 0   
+                        solve_amb = False
             if solve_again:
                 raise Exception("Slack variable is too high. Max Slack = %0.04f"%max_slack_ibr)    
             # if SAVE_FLAG:
@@ -209,6 +241,11 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
 
             print("Vehicle i=%d Solution:  mpc_i %d  ibr_round %d"%(i, i_mpc, i_rounds_ibr)) 
             print("Dir: %s"%folder)   
+            end_frame = actual_t+number_ctrl_pts_executed+1
+            start_frame = max(0, end_frame - 20)
+#             cmplot.plot_cars(world, amb_MPC, xamb_ibr[:,:], [x[:,:] for x in all_other_x_ibr], None, "ellipse", False, 0)                        
+            cmplot.plot_cars(world, amb_MPC,  all_other_x_ibr[i], [xamb_ibr] + nonresponse_x_list, None, "ellipse", False, 0)                        
+            plt.show()
             # cmplot.plot_single_frame(world, response_MPC, all_other_x_ibr[i], [xamb_ibr] + nonresponse_x_list, None, "Ellipse", parallelize=True, camera_speed = None, plot_range = None, car_ids = None, xamb_desired=None, xothers_desired=None)
             # plt.show()                    
 
@@ -222,12 +259,13 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
     all_other_u_executed = [np.zeros(shape=(2,number_ctrl_pts_executed)) for i in range(n_other)]
 
     ### SAVE EXECUTED MPC SOLUTION TO HISTORY
-    actual_t = i_mpc * number_ctrl_pts_executed
+#     actual_t = i_mpc * number_ctrl_pts_executed
     xamb_executed, uamb_executed = xamb_mpc[:,:number_ctrl_pts_executed+1], uamb_mpc[:,:number_ctrl_pts_executed]
     actual_xamb[:,actual_t:actual_t+number_ctrl_pts_executed+1], actual_uamb[:,actual_t:actual_t+number_ctrl_pts_executed] = xamb_executed, uamb_executed
     for i in range(len(all_other_x_mpc)):
         all_other_x_executed[i], all_other_u_executed[i] = all_other_x_mpc[i][:,:number_ctrl_pts_executed+1], all_other_u_mpc[i][:,:number_ctrl_pts_executed]
         actual_xothers[i][:,actual_t:actual_t+number_ctrl_pts_executed+1], actual_uothers[i][:,actual_t:actual_t+number_ctrl_pts_executed] = all_other_x_executed[i], all_other_u_executed[i]
+    actual_t += number_ctrl_pts_executed
 
     ### SAVE STATES AND PLOT
     file_name = folder + "data/"+'mpc_%02d'%(i_mpc)
@@ -258,7 +296,6 @@ cmplot.plot_cars(world, response_MPC, actual_xamb, actual_xothers, folder, None,
 file_name = folder + "data/"+'all%02d'%(i_mpc)
 print("Saving Actual Positions to...  ", file_name)
 mibr.save_state(file_name, actual_xamb, uamb_mpc, xamb_des_mpc, actual_xothers, all_other_u_mpc, all_other_x_des_mpc)
-
 
             # for k_warm in u_warm_profiles.keys():
             #     u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]
