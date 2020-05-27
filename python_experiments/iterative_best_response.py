@@ -70,8 +70,9 @@ actual_uothers = [np.zeros((2, n_rounds_mpc*number_ctrl_pts_executed)) for i in 
 xamb_executed, all_other_x_executed = None, [] #This gets updated after each round of MPC
 uamb_mpc, all_other_u_mpc = None, []
 if SAVE_FLAG:
-    pickle.dump(all_other_MPC[0], open(folder + "data/"+"mpcother" + ".p",'wb'))
-    pickle.dump(amb_MPC, open(folder + "data/"+"mpcamb" + ".p",'wb'))
+    pass
+    # pickle.dump(all_other_MPC[0], open(folder + "data/"+"mpcother" + ".p",'wb'))
+    # pickle.dump(amb_MPC, open(folder + "data/"+"mpcamb" + ".p",'wb'))
 
 preloaded_data = True
 
@@ -130,7 +131,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         solve_amb = True  
         i = -1
         ################# Generate the warm starts ###############################
-        u_warm_profiles, ux_warm_profiles = fake_amb_MPC.generate_warm_u(N, response_MPC, response_x0)
+        u_warm_profiles, ux_warm_profiles = mpc.generate_warm_u(N, response_MPC, response_x0)
         if i_mpc > 0:
             u_warm_profiles["previous_mpc"] = np.concatenate((uamb_mpc[:, number_ctrl_pts_executed:], np.tile(uamb_mpc[:,-1:],(1, number_ctrl_pts_executed))),axis=1) ##    
             x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm_profiles["previous_mpc"]) 
