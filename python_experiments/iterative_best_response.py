@@ -34,7 +34,7 @@ world = tw.TrafficWorld(2, 0, 1000)
 n_processors = 1
     # large_world = tw.TrafficWorld(2, 0, 1000, 5.0)
 #########################################################################
-optional_suffix = str(n_other) + "nograss"
+optional_suffix = str(n_    other) + "nograss"
 subdir_name = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + optional_suffix
 folder = "results/" + subdir_name + "/"
 for f in [folder, folder+"imgs/", folder+"data/", folder+"vids/", folder+"plots/"]:
