@@ -2,8 +2,8 @@ import numpy as np
 import copy as cp
 import multiprocessing, functools
 
-import src.IterativeBestResponseMPCMultiple as mibr
-import src.MPC_Casadi as mpc
+import src.multiagent_mpc as mpc
+import src.vehicle as vehicle
 
 
 # def warm_solve_subroutine(k_warm, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=None, xamb=None, xamb_des=None):
@@ -52,7 +52,7 @@ def solve_best_response(u_warm, x_warm, x_des_warm, response_MPC, amb_MPC, nonre
     '''Create the iterative best response object and solve.  Assumes that it receives warm start profiles.
     This really should only require a u_warm, x_warm, x_des_warm and then one level above we generate those values'''
     
-    bri = mibr.IterativeBestResponseMPCMultiple(response_MPC, amb_MPC, nonresponse_MPC_list )
+    bri = mpc.MultiMPC(response_MPC, amb_MPC, nonresponse_MPC_list )
     bri.k_slack, bri.k_CA, bri.k_CA_power, bri.world, bri.wall_CA = k_slack, k_CA, k_CA_power, world, wall_CA
     bri.generate_optimization(N, T, response_x0, amb_x0, nonresponse_x0_list,  0, slack=slack, solve_amb=solve_amb)
 
@@ -139,7 +139,7 @@ def initialize_cars(n_other, N, dt, world, svo_theta, no_grass = False, random_l
     next_x0_0 = 0
     next_x0_1 = 0
     for i in range(n_other):
-        x1_MPC = mpc.MPC(dt)
+        x1_MPC = vehicle.Vehicle(dt)
         x1_MPC.n_circles = 3
         x1_MPC.theta_iamb =  svo_theta
         x1_MPC.N = N
