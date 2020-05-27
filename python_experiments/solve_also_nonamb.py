@@ -148,7 +148,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         x_warm_profiles, x_ux_warm_profiles = mibr.generate_warm_x(response_MPC, world,  response_x0, np.median([x[4] for x in nonresponse_x0_list]))
         ux_warm_profiles.update(x_ux_warm_profiles) # combine into one
         ################# Solve the Ambulance Best Response ############################
-        k_slack_d, k_CA_d, k_CA_power_d, wall_CA_d = 1000000, 0.1, 4, True
+        k_slack_d, k_CA_d, k_CA_power_d, wall_CA_d = 100000, 0.1, 4, True
         
         k_max_slack = 0.01
         k_solve_amb_max_ibr = 3
@@ -159,7 +159,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         solve_again, solve_number, max_slack_ibr, debug_flag = True, 0, np.infty, False
         while solve_again and solve_number < k_max_solve_number:
             print("SOLVING AMBULANCE:  Attempt %d / %d"%(solve_number+1, k_max_solve_number)) 
-            k_slack = k_slack_d * solve_number
+            k_slack = k_slack_d * 10**solve_number
             k_CA = k_CA_d * 10**solve_number
             if solve_number > 2 or True:
                 debug_flag = True
@@ -214,7 +214,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             slack = True if i_rounds_ibr <= k_max_round_with_slack else False
             while solve_again and solve_number < k_max_solve_number:
                 print("SOLVING Agent %d:  Attempt %d / %d"%(i, solve_number+1, k_max_solve_number))        
-                k_slack = k_slack_d * solve_number
+                k_slack = k_slack_d * 10**solve_number
                 k_CA = k_CA_d * 10**solve_number                
                 if solve_number > 2:
                     debug_flag = True
