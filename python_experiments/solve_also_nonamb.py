@@ -105,7 +105,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
     all_other_x_des_ibr = [None for i in range(n_other)]
     for j in vehicles_index_constant_v:
         all_other_u_ibr[i] = np.zeros((2,N)) #constant v control inputs
-        all_other_x_ibr[i], all_other_x_des_ibr[i] = all_other_MPC[i].forward_simulate_all(all_other_x0[i].reshape(6,1), u_const) 
+        all_other_x_ibr[i], all_other_x_des_ibr[i] = all_other_MPC[i].forward_simulate_all(all_other_x0[i].reshape(6,1), all_other_u_ibr[i]) 
         
 
 
