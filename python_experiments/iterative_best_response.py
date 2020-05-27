@@ -175,8 +175,8 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             raise Exception("Slack variable is too high or infeasible.  MaxS = %.05f > thresh %.05f"%(max_slack_ibr, k_max_slack))
         print("Ambulance Plot Max Slack %0.04f"%max_slack_ibr)
         end_frame = actual_t+number_ctrl_pts_executed+1
-        cmplot.plot_cars(world, amb_MPC, xamb_ibr[:,:], [x[:,:] for x in all_other_x_ibr], None, "ellipse", False, 0)                        
-        plt.show()                                              
+        # cmplot.plot_cars(world, amb_MPC, xamb_ibr[:,:], [x[:,:] for x in all_other_x_ibr], None, "ellipse", False, 0)                        
+        # plt.show()                                              
         ################# SOLVE BEST RESPONSE FOR THE OTHER VEHICLES ON THE ROAD ############################
         for i in vehicles_index_in_mpc:
             response_MPC, response_x0 = all_other_MPC[i], all_other_x0[i]
@@ -241,8 +241,8 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             end_frame = actual_t+number_ctrl_pts_executed+1
             start_frame = max(0, end_frame - 20)
 #             cmplot.plot_cars(world, amb_MPC, xamb_ibr[:,:], [x[:,:] for x in all_other_x_ibr], None, "ellipse", False, 0)                        
-            cmplot.plot_cars(world, amb_MPC,  all_other_x_ibr[i], [xamb_ibr] + nonresponse_x_list, None, "ellipse", False, 0)                        
-            plt.show()
+            # cmplot.plot_cars(world, amb_MPC,  all_other_x_ibr[i], [xamb_ibr] + nonresponse_x_list, None, "ellipse", False, 0)                        
+            # plt.show()
             # cmplot.plot_single_frame(world, response_MPC, all_other_x_ibr[i], [xamb_ibr] + nonresponse_x_list, None, "Ellipse", parallelize=True, camera_speed = None, plot_range = None, car_ids = None, xamb_desired=None, xothers_desired=None)
             # plt.show()                    
 
