@@ -10,7 +10,7 @@ from scipy import ndimage
 
 import multiprocessing
 import functools
-import src.TrafficWorld as tw
+import src.traffic_world as tw
 import psutil
 
 PROJECT_PATH = '/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-multiple-vehicles/'

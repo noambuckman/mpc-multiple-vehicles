@@ -8,7 +8,7 @@ PROJECT_PATHS = ['/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-m
 for p in PROJECT_PATHS:
     sys.path.append(p)
 import src.vehicle as vehicle
-import src.TrafficWorld as tw
+import src.traffic_world as tw
 import src.multiagent_mpc as mpc
 import src.car_plotting_multiple as cmplot
 import src.solver_helper as helper
