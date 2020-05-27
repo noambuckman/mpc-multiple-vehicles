@@ -1,17 +1,13 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from matplotlib.offsetbox import (TextArea, DrawingArea, OffsetImage,
-                                  AnnotationBbox)
-import datetime
-import os
+from matplotlib.offsetbox import (OffsetImage, AnnotationBbox)
+import datetime, os, psutil
+import multiprocessing, functools
 import numpy as np
 import scipy.misc
 from scipy import ndimage
 
-import multiprocessing
-import functools
 import src.traffic_world as tw
-import psutil
 
 PROJECT_PATH = '/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-multiple-vehicles/'
 
@@ -161,8 +157,6 @@ def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder,
             plot_multiple_cars( k, world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_shape, camera_speed, car_labels, xamb_desired, xothers_desired)     
     return None
 
-
-
 def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder, 
                         car_plot_shape="Ellipse", camera_speed = None, car_labels = None,
                         xamb_desired=None, xothers_desired=None ):
@@ -278,8 +272,6 @@ def add_lanes(ax, world):
             topline_y = centerline_y + world.lane_width/2.0       
             ax.plot([xmin1, xmax1], [topline_y, topline_y], dashes=[10,10],color='0.5')
     
-import os
-
 def animate(folder, vid_fname):
     cmd = 'ffmpeg -r 16 -f image2 -i {}imgs/%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p {}'.format(folder, vid_fname)
     os.system(cmd)

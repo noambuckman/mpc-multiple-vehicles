@@ -1,14 +1,17 @@
 import numpy as np
 import casadi as cas
-import src.vehicle as vehicle
-
 import matplotlib.pyplot as plt
+
+import src.vehicle as vehicle
 import src.car_plotting_multiple as cmplot
-import src.TrafficWorld as tw
+import src.traffic_world as tw
 
 class MultiMPC(object):
     ### We always assume that car1 is the one being optimized
-    def __init__(self, responseMPC, ambulanceMPC, otherMPClist):
+    def __init__(self, 
+                responseMPC : vehicle.Vehicle, 
+                ambulanceMPC : vehicle.Vehicle, 
+                otherMPClist):
 
         self.responseMPC = responseMPC
         self.otherMPClist = otherMPClist   
@@ -21,7 +24,6 @@ class MultiMPC(object):
         self.k_CA_power = 8
         self.collision_cost = 0
         self.WALL_CA = False
-
         self.world = tw.TrafficWorld(2, 0, 10000)
 
     def generate_optimization(self, N, T, x0, x0_amb, x0_other, print_level=5, slack=True, solve_amb=False):
