@@ -1,11 +1,12 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from matplotlib.offsetbox import (OffsetImage, AnnotationBbox)
+import matplotlib.offsetbox as offsetbox
 import datetime, os, psutil
 import multiprocessing, functools
 import numpy as np
-import scipy.misc
-from scipy import ndimage
+# import scipy.misc
+import scipy.ndimage as ndimage
+# from scipy import ndimage
 
 import src.traffic_world as tw
 
@@ -48,10 +49,10 @@ def get_frame(x, x_MPC, ax=None, car_name="red", alpha = 1.0):
         zoom_ratio = L/car_width_px * (dpi*figwidth_in)/window_width  * hard_coded_correction #0.8 is a hard coded correction  
     else:
         zoom_ratio = L/car_width_px * (dpi*figwidth_in)/window_width  * hard_coded_correction #0.8 is a hard coded correction             
-    imagebox = OffsetImage(rotated_img, zoom=zoom_ratio) #this zoom is to scale L=1            
+    imagebox = offsetbox.OffsetImage(rotated_img, zoom=zoom_ratio) #this zoom is to scale L=1            
     
     imagebox.image.axes = ax
-    ab = AnnotationBbox(imagebox, (X, Y),frameon=False)
+    ab = offsetbox.AnnotationBbox(imagebox, (X, Y),frameon=False)
     ax.add_artist(ab)        
     return ax    
 
