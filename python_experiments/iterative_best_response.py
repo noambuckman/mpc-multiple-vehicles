@@ -118,17 +118,25 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         nonresponse_MPC_list, nonresponse_x0_list = all_other_MPC, all_other_x0
         nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list = all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr
 
-        fake_amb_i = helper.get_min_dist_i(amb_x0, all_other_x0, restrict_greater=True)
-        nonresponse_MPC_list = all_other_MPC[:fake_amb_i] + all_other_MPC[fake_amb_i+1:]
-        nonresponse_x0_list = all_other_x0[:fake_amb_i] + all_other_x0[fake_amb_i+1:]
-        nonresponse_u_list = all_other_u_ibr[:fake_amb_i] + all_other_u_ibr[fake_amb_i+1:]
-        nonresponse_x_list = all_other_x_ibr[:fake_amb_i] + all_other_x_ibr[fake_amb_i+1:]
-        nonresponse_xd_list = all_other_x_des_ibr[:fake_amb_i] + all_other_x_des_ibr[fake_amb_i+1:]
-        fake_amb_MPC = all_other_MPC[fake_amb_i]     
-        fake_amb_x0 = all_other_x0[fake_amb_i]
-        fake_amb_u = all_other_u_ibr[fake_amb_i]
-        fake_amb_x= all_other_x_ibr[fake_amb_i] 
-        fake_amb_xd = all_other_x_des_ibr[fake_amb_i]    
+        plan_fake_ambulance = False
+        if plan_fake_ambulance:
+            fake_amb_i = helper.get_min_dist_i(amb_x0, all_other_x0, restrict_greater=True)
+            nonresponse_MPC_list = all_other_MPC[:fake_amb_i] + all_other_MPC[fake_amb_i+1:]
+            nonresponse_x0_list = all_other_x0[:fake_amb_i] + all_other_x0[fake_amb_i+1:]
+            nonresponse_u_list = all_other_u_ibr[:fake_amb_i] + all_other_u_ibr[fake_amb_i+1:]
+            nonresponse_x_list = all_other_x_ibr[:fake_amb_i] + all_other_x_ibr[fake_amb_i+1:]
+            nonresponse_xd_list = all_other_x_des_ibr[:fake_amb_i] + all_other_x_des_ibr[fake_amb_i+1:]
+            fake_amb_MPC = all_other_MPC[fake_amb_i]     
+            fake_amb_x0 = all_other_x0[fake_amb_i]
+            fake_amb_u = all_other_u_ibr[fake_amb_i]
+            fake_amb_x= all_other_x_ibr[fake_amb_i] 
+            fake_amb_xd = all_other_x_des_ibr[fake_amb_i]    
+        else:
+            fake_amb_i = -1
+            nonresponse_MPC_list, nonresponse_x0_list = all_other_MPC, all_other_x0
+            nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list = all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr
+            fake_amb_MPC, fake_amb_x0 = None, None
+            fake_amb_u, fake_amb_x, fake_amb_xd = None, None, None
         solve_amb = True  
         i = -1
         ################# Generate the warm starts ###############################
@@ -152,7 +160,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         k_max_solve_number = 3
         k_max_round_with_slack = np.infty
         slack = True if i_rounds_ibr <= k_max_round_with_slack else False
-        solve_amb = True if i_rounds_ibr < k_solve_amb_max_ibr or fake_amb_i>-1 else False
+        solve_amb = False if fake_amb_i == -1 or i_rounds_ibr >= k_solve_amb_max_ibr else True
         solve_again, solve_number, max_slack_ibr, debug_flag = True, 0, np.infty, False
         while solve_again and solve_number < k_max_solve_number:
             print("SOLVING AMBULANCE:  Attempt %d / %d"%(solve_number+1, k_max_solve_number)) 
