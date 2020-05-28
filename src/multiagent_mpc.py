@@ -442,7 +442,7 @@ def generate_warm_u(N, car_mpc, car_x0):
     u_warm[0,:] = np.zeros(shape=(1,N))
     t_half = int(N)
     u_warm[1,:t_half] = np.ones(shape=(1,t_half)) * car_mpc.max_v_u / 3.0
-    u1_warm_profiles["halfaccel"] = u_warm 
+    # u1_warm_profiles["halfaccel"] = u_warm 
     ## no accelerate
     u_warm = np.zeros((2,N))
     u1_warm_profiles["none"] = u_warm
