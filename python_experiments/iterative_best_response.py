@@ -30,7 +30,7 @@ print("number ctrl pts:  %d"%number_ctrl_pts_executed)
 PLOT_FLAG, SAVE_FLAG, PRINT_FLAG = False, True, False
 n_other = 17
 n_rounds_ibr = 3
-world = tw.TrafficWorld(2, 0, 1000)
+world = tw.TrafficWorld(2, 0, 999999)
 n_processors = 15
     # large_world = tw.TrafficWorld(2, 0, 1000, 5.0)
 #########################################################################
