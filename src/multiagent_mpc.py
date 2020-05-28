@@ -370,6 +370,7 @@ def load_costs_int(i):
     return car1_costs_list, amb_costs_list, svo_cost, other_svo_cost , total_svo_cost
 
 def generate_warm_x(car_mpc, world, x0, average_v=None): 
+    ''' Warm starts that return a trajectory in x-space'''
     x_warm_profiles = {}
     N = car_mpc.N
     lane_width = world.lane_width
@@ -421,6 +422,8 @@ def generate_warm_x(car_mpc, world, x0, average_v=None):
     return x_warm_profiles, ux_warm_profiles
 
 def generate_warm_u(N, car_mpc, car_x0):
+    ''' Warm starts that return a trajectory in x-space'''
+
     u0_warm_profiles = {}
     u1_warm_profiles = {}
     ## braking
