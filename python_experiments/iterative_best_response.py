@@ -166,7 +166,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             print("SOLVING AMBULANCE:  Attempt %d / %d"%(solve_number+1, k_max_solve_number)) 
             k_slack = k_slack_d * 10**solve_number
             k_CA = k_CA_d * 2**solve_number
-            if solve_number > 2 or True:
+            if solve_number > 2:
                 debug_flag = True
             if psutil.virtual_memory().percent >= 90.0:
                 raise Exception("Virtual Memory is too high, exiting to save computer")
