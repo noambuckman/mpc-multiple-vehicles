@@ -198,7 +198,7 @@ def initialize_cars(n_other, N, dt, world, svo_theta, no_grass = False, random_l
         if list_of_positions: #list of positions overrides everything
             lane_number, next_x0 = list_of_positions[i]
             
-        initial_speed = 0.9 * x1_MPC.max_v
+        initial_speed = 0.99 * x1_MPC.max_v
         x1_MPC.fd = x1_MPC.gen_f_desired_lane(world, lane_number, True)
         x0 = np.array([next_x0, world.get_lane_centerline_y(lane_number), 0, 0, initial_speed, 0]).T
         all_other_MPC += [x1_MPC]
@@ -221,7 +221,7 @@ def initialize_cars(n_other, N, dt, world, svo_theta, no_grass = False, random_l
     amb_MPC.k_lat = 0.00001
     amb_MPC.k_lon = 0.0
     # amb_MPC.min_v = 0.8*initial_speed
-    amb_MPC.max_v = 35 * 0.447 # m/s
+    amb_MPC.max_v = 30 * 0.447 # m/s
     amb_MPC.k_phi_error = 0.1
     amb_MPC.k_phi_dot = 0.01
     amb_MPC.min_y = world.y_min        
