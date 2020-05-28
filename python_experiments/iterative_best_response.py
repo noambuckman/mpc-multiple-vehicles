@@ -156,7 +156,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         k_slack_d, k_CA_d, k_CA_power_d, wall_CA_d = 1000, 100, 4, True
         
         k_max_slack = 0.01
-        k_solve_amb_max_ibr = 3
+        k_solve_amb_max_ibr = 2
         k_max_solve_number = 3
         k_max_round_with_slack = np.infty
         slack = True if i_rounds_ibr <= k_max_round_with_slack else False
