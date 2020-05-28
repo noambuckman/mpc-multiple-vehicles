@@ -230,11 +230,10 @@ class MultiMPC(object):
                 self.opti.set_value(slack_v, np.zeros((n_ego_circles,N_time_steps+1)))
         return slack_vars
 
-    def generate_collision_ellipse(self, x_e, y_e, x_o, y_o, phi_o, alpha_o, beta_o, slack):
+    def generate_collision_ellipse(self, x_e, y_e, x_o, y_o, phi_o, alpha_o, beta_o, slack_var):
         dx = x_e - x_o
         dy = y_e - y_o
-        if slack is None:
-            slack = 0
+
         R_o = cas.vertcat(cas.horzcat(cas.cos(phi_o), cas.sin(phi_o)), cas.horzcat(-cas.sin(phi_o), cas.cos(phi_o)))
         M = cas.vertcat(cas.horzcat(1/alpha_o**2, 0), cas.horzcat(0, 1/beta_o**2))
         dX = cas.vertcat(dx, dy)

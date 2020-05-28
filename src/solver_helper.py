@@ -48,14 +48,19 @@ def pullover_guess(N, all_other_MPC, all_other_x0):
         all_other_x_ibr[i], all_other_x_des_ibr[i] = all_other_MPC[i].forward_simulate_all(all_other_x0[i].reshape(6,1), all_other_u_ibr[i])
     return all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr
 
-def solve_best_response(warm_key, warm_trajectory, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=None, xamb=None, xamb_des=None):
+def solve_best_response(warm_key, warm_trajectory, 
+                        response_MPC, amb_MPC, nonresponse_MPC_list, 
+                        response_x0, amb_x0, nonresponse_x0_list,
+                        k_slack, k_CA, k_CA_power, world, wall_CA, N, T, slack, solve_amb, 
+                        nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, 
+                        uamb=None, xamb=None, xamb_des=None):
     '''Create the iterative best response object and solve.  Assumes that it receives warm start profiles.
     This really should only require a u_warm, x_warm, x_des_warm and then one level above we generate those values'''
     
     u_warm, x_warm, x_des_warm = warm_trajectory
     bri = mpc.MultiMPC(response_MPC, amb_MPC, nonresponse_MPC_list )
     bri.k_slack, bri.k_CA, bri.k_CA_power, bri.world, bri.wall_CA = k_slack, k_CA, k_CA_power, world, wall_CA
-    bri.generate_optimization(N, T, response_x0, amb_x0, nonresponse_x0_list,  0, slack=slack, solve_amb=solve_amb)
+    bri.generate_optimization(N, T, response_x0, amb_x0, nonresponse_x0_list,  print_level=0, slack=slack, solve_amb=solve_amb)
 
     # u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]
     bri.opti.set_initial(bri.u_opt, u_warm)            
@@ -89,8 +94,20 @@ def solve_best_response(warm_key, warm_trajectory, response_MPC, amb_MPC, nonres
         return False, np.infty, np.infty, None, None, None, None, []
         # ibr_sub_it +=1  
 
-def solve_warm_starts(number_processes, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=None, xamb=None, xamb_des=None, debug_flag=False):
-    warm_solve_partial  = functools.partial(solve_best_response, response_MPC=response_MPC, amb_MPC=amb_MPC, nonresponse_MPC_list=nonresponse_MPC_list, k_slack=k_slack, k_CA=k_CA, k_CA_power=k_CA_power, world=world, wall_CA=wall_CA, N=N, T=T, response_x0=response_x0, amb_x0=amb_x0, nonresponse_x0_list=nonresponse_x0_list, slack=slack, solve_amb=solve_amb, nonresponse_u_list=nonresponse_u_list, nonresponse_x_list=nonresponse_x_list, nonresponse_xd_list=nonresponse_xd_list, uamb=uamb, xamb=xamb, xamb_des=xamb_des)
+def solve_warm_starts(number_processes, ux_warm_profiles, 
+                        response_MPC, amb_MPC, nonresponse_MPC_list, 
+                        response_x0, amb_x0, nonresponse_x0_list, 
+                        k_slack, k_CA, k_CA_power, world, wall_CA, N, T, slack, solve_amb, 
+                        nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, 
+                        uamb=None, xamb=None, xamb_des=None, 
+                        debug_flag=False):
+
+    warm_solve_partial  = functools.partial(solve_best_response, 
+                        response_MPC=response_MPC, amb_MPC=amb_MPC, nonresponse_MPC_list=nonresponse_MPC_list, 
+                        k_slack=k_slack, k_CA=k_CA, k_CA_power=k_CA_power, world=world, wall_CA=wall_CA, N=N, T=T, slack=slack, solve_amb=solve_amb, 
+                        response_x0=response_x0, amb_x0=amb_x0, nonresponse_x0_list=nonresponse_x0_list, 
+                        nonresponse_u_list=nonresponse_u_list, nonresponse_x_list=nonresponse_x_list, nonresponse_xd_list=nonresponse_xd_list, 
+                        uamb=uamb, xamb=xamb, xamb_des=xamb_des)
     
     if number_processes>1:
         pool = multiprocessing.Pool(processes=number_processes)
