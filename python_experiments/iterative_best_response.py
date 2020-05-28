@@ -20,16 +20,16 @@ random_seed = 9
 if random_seed > 0:
     np.random.seed(random_seed)
 #######################################################################
-T = 5  # MPC Planning Horizon
+T = 4  # MPC Planning Horizon
 dt = 0.2
 N = int(T/dt) #Number of control intervals in MPC
 n_rounds_mpc = 75
-percent_mpc_executed = .10 ## This is the percent of MPC that is executed
+percent_mpc_executed = .20 ## This is the percent of MPC that is executed
 number_ctrl_pts_executed =  int(np.floor(N*percent_mpc_executed))
 print("number ctrl pts:  %d"%number_ctrl_pts_executed)
 PLOT_FLAG, SAVE_FLAG, PRINT_FLAG = False, True, False
 n_other = 13
-n_rounds_ibr = 4
+n_rounds_ibr = 3
 world = tw.TrafficWorld(2, 0, 1000)
 n_processors = 16
     # large_world = tw.TrafficWorld(2, 0, 1000, 5.0)
