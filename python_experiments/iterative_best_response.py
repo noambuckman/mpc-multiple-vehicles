@@ -164,8 +164,8 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                 raise Exception("Virtual Memory is too high, exiting to save computer")
             solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, key_ibr, debug_list = helper.solve_warm_starts(n_processors, ux_warm_profiles, 
                                                                                                                 response_MPC, fake_amb_MPC, nonresponse_MPC_list, 
-                                                                                                                k_slack, k_CA, k_CA_power_d, world, wall_CA_d, N, T, slack, solve_amb, 
                                                                                                                 response_x0, fake_amb_x0, nonresponse_x0_list, 
+                                                                                                                k_slack, k_CA, k_CA_power_d, world, wall_CA_d, N, T, slack, solve_amb, 
                                                                                                                 nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, 
                                                                                                                 uamb=fake_amb_u, xamb=fake_amb_x, xamb_des=fake_amb_xd, 
                                                                                                                 debug_flag=debug_flag)
