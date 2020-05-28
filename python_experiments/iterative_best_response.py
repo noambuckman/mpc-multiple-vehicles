@@ -217,7 +217,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
        
             solve_again, solve_number, max_slack_ibr, debug_flag, = True, 0, np.infty, False,
             
-            k_solve_amb_min_distance = 30
+            k_solve_amb_min_distance = 50
             initial_distance_to_ambulance = np.sqrt((response_x0[0] - amb_x0[0])**2 + (response_x0[1] - amb_x0[1])**2)       
             solve_amb = True if (i_rounds_ibr < k_solve_amb_max_ibr and 
                                   initial_distance_to_ambulance < k_solve_amb_min_distance and 
