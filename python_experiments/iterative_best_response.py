@@ -96,7 +96,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             vehicles_index_in_mpc += [i]
         else:
             vehicles_index_constant_v += [i]    
-    vehicles_index_in_mpc = [j for j in range(n_other)] ## Default
+    # vehicles_index_in_mpc = [j for j in range(n_other)] ## Default
 
     uamb_ibr, xamb_ibr, xamb_des_ibr = None, None, None
     all_other_u_ibr = [None for i in range(n_other)]    
