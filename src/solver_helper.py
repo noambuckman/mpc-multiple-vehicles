@@ -101,7 +101,7 @@ def solve_warm_starts(number_processes, ux_warm_profiles,
                         nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, 
                         uamb=None, xamb=None, xamb_des=None, 
                         debug_flag=False):
-
+    print("Helper_SWS", amb_x0)
     warm_solve_partial  = functools.partial(solve_best_response, 
                         response_MPC=response_MPC, amb_MPC=amb_MPC, nonresponse_MPC_list=nonresponse_MPC_list, 
                         k_slack=k_slack, k_CA=k_CA, k_CA_power=k_CA_power, world=world, wall_CA=wall_CA, N=N, T=T, slack=slack, solve_amb=solve_amb, 
