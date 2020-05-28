@@ -71,9 +71,9 @@ actual_uothers = [np.zeros((2, n_rounds_mpc*number_ctrl_pts_executed)) for i in 
 xamb_executed, all_other_x_executed = None, [] #This gets updated after each round of MPC
 uamb_mpc, all_other_u_mpc = None, []
 if SAVE_FLAG:
-    pass
-    # pickle.dump(all_other_MPC[0], open(folder + "data/"+"mpcother" + ".p",'wb'))
-    # pickle.dump(amb_MPC, open(folder + "data/"+"mpcamb" + ".p",'wb'))
+    # pass
+    pickle.dump(all_other_MPC[0], open(folder + "data/"+"mpcother" + ".p",'wb'))
+    pickle.dump(amb_MPC, open(folder + "data/"+"mpcamb" + ".p",'wb'))
 
 preloaded_data = True
 
