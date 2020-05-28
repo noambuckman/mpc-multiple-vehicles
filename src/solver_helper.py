@@ -48,10 +48,11 @@ def pullover_guess(N, all_other_MPC, all_other_x0):
         all_other_x_ibr[i], all_other_x_des_ibr[i] = all_other_MPC[i].forward_simulate_all(all_other_x0[i].reshape(6,1), all_other_u_ibr[i])
     return all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr
 
-def solve_best_response(u_warm, x_warm, x_des_warm, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=None, xamb=None, xamb_des=None):
+def solve_best_response(warm_key, warm_trajectory, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=None, xamb=None, xamb_des=None):
     '''Create the iterative best response object and solve.  Assumes that it receives warm start profiles.
     This really should only require a u_warm, x_warm, x_des_warm and then one level above we generate those values'''
     
+    u_warm, x_warm, x_des_warm = warm_trajectory
     bri = mpc.MultiMPC(response_MPC, amb_MPC, nonresponse_MPC_list )
     bri.k_slack, bri.k_CA, bri.k_CA_power, bri.world, bri.wall_CA = k_slack, k_CA, k_CA_power, world, wall_CA
     bri.generate_optimization(N, T, response_x0, amb_x0, nonresponse_x0_list,  0, slack=slack, solve_amb=solve_amb)
@@ -82,10 +83,10 @@ def solve_best_response(u_warm, x_warm, x_des_warm, response_MPC, amb_MPC, nonre
         debug_list = [current_cost, bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.k_CA*bri.collision_cost), 
                         bri.solution.value(bri.k_slack*bri.slack_cost), [bri.solution.value(s) for s in bri.slack_vars_list]]
         solved = True
-        return solved, current_cost, max_slack, x_ibr, x_des_ibr, u_ibr, debug_list
+        return solved, current_cost, max_slack, x_ibr, x_des_ibr, u_ibr, warm_key, debug_list
     except RuntimeError:
         # print("Infeasibility: k_warm %s"%k_warm)
-        return False, np.infty, np.infty, None, None, None, []
+        return False, np.infty, np.infty, None, None, None, None, []
         # ibr_sub_it +=1  
 
 def solve_warm_starts(number_processes, ux_warm_profiles, response_MPC, amb_MPC, nonresponse_MPC_list, k_slack, k_CA, k_CA_power, world, wall_CA, N, T, response_x0, amb_x0, nonresponse_x0_list, slack, solve_amb, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb=None, xamb=None, xamb_des=None, debug_flag=False):
@@ -93,12 +94,12 @@ def solve_warm_starts(number_processes, ux_warm_profiles, response_MPC, amb_MPC,
     
     if number_processes>1:
         pool = multiprocessing.Pool(processes=number_processes)
-        solve_costs_solutions  =  pool.starmap(warm_solve_partial, ux_warm_profiles.values()) #will apply k=1...N to plot_partial
+        solve_costs_solutions  =  pool.starmap(warm_solve_partial, ux_warm_profiles.items()) #will apply k=1...N to plot_partial
         pool.terminate()
     else:
         solve_costs_solutions = []
         for k_warm in ux_warm_profiles:
-            solve_costs_solutions += [warm_solve_partial(*ux_warm_profiles[k_warm])]
+            solve_costs_solutions += [warm_solve_partial(k_warm, ux_warm_profiles[k_warm])]
 
     if debug_flag:
         for ki in range(len(solve_costs_solutions)):
