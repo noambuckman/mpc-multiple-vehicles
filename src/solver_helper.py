@@ -56,7 +56,7 @@ def solve_best_response(warm_key, warm_trajectory,
                         uamb=None, xamb=None, xamb_des=None):
     '''Create the iterative best response object and solve.  Assumes that it receives warm start profiles.
     This really should only require a u_warm, x_warm, x_des_warm and then one level above we generate those values'''
-    
+    print("Helper_SBR",amb_x0)
     u_warm, x_warm, x_des_warm = warm_trajectory
     bri = mpc.MultiMPC(response_MPC, amb_MPC, nonresponse_MPC_list )
     bri.k_slack, bri.k_CA, bri.k_CA_power, bri.world, bri.wall_CA = k_slack, k_CA, k_CA_power, world, wall_CA
