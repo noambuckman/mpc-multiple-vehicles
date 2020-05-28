@@ -56,7 +56,6 @@ def solve_best_response(warm_key, warm_trajectory,
                         uamb=None, xamb=None, xamb_des=None):
     '''Create the iterative best response object and solve.  Assumes that it receives warm start profiles.
     This really should only require a u_warm, x_warm, x_des_warm and then one level above we generate those values'''
-    print("Helper_SBR",amb_x0)
     u_warm, x_warm, x_des_warm = warm_trajectory
     bri = mpc.MultiMPC(response_MPC, amb_MPC, nonresponse_MPC_list )
     bri.k_slack, bri.k_CA, bri.k_CA_power, bri.world, bri.wall_CA = k_slack, k_CA, k_CA_power, world, wall_CA
@@ -101,7 +100,6 @@ def solve_warm_starts(number_processes, ux_warm_profiles,
                         nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, 
                         uamb=None, xamb=None, xamb_des=None, 
                         debug_flag=False):
-    print("Helper_SWS", amb_x0)
     warm_solve_partial  = functools.partial(solve_best_response, 
                         response_MPC=response_MPC, amb_MPC=amb_MPC, nonresponse_MPC_list=nonresponse_MPC_list, 
                         k_slack=k_slack, k_CA=k_CA, k_CA_power=k_CA_power, world=world, wall_CA=wall_CA, N=N, T=T, slack=slack, solve_amb=solve_amb, 

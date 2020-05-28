@@ -28,7 +28,6 @@ class MultiMPC(object):
 
     def generate_optimization(self, N, T, x0, x0_amb, x0_other, print_level=5, slack=True, solve_amb=False):
         n_state, n_ctrl, n_desired = 6, 2, 3
-        print("MMPC_GO", x0_amb)
         #Response (planning) Vehicle Variables
         self.x_opt = self.opti.variable(n_state, N+1)        
         self.u_opt  = self.opti.variable(n_ctrl, N)
