@@ -20,18 +20,18 @@ random_seed = 9
 if random_seed > 0:
     np.random.seed(random_seed)
 #######################################################################
-T = 4  # MPC Planning Horizon
+T = 5  # MPC Planning Horizon
 dt = 0.2
 N = int(T/dt) #Number of control intervals in MPC
-n_rounds_mpc = 75
-percent_mpc_executed = .20 ## This is the percent of MPC that is executed
+n_rounds_mpc = 300
+percent_mpc_executed = .10 ## This is the percent of MPC that is executed
 number_ctrl_pts_executed =  int(np.floor(N*percent_mpc_executed))
 print("number ctrl pts:  %d"%number_ctrl_pts_executed)
 PLOT_FLAG, SAVE_FLAG, PRINT_FLAG = False, True, False
-n_other = 2
+n_other = 17
 n_rounds_ibr = 3
 world = tw.TrafficWorld(2, 0, 1000)
-n_processors = 13
+n_processors = 15
     # large_world = tw.TrafficWorld(2, 0, 1000, 5.0)
 #########################################################################
 optional_suffix = str(n_other) + "nograss"
@@ -54,7 +54,11 @@ position_list = [
     (0, 120),
     (0, 145),
     (0, 160),
-    (0, 200)
+    (0, 200),
+    (1, 250),
+    (1, 300),
+    (0, 320),
+    (1, 400),
 ]
 if len(position_list) != n_other:
     raise Exception("number of vehicles don't match n_other")
