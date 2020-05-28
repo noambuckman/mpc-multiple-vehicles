@@ -31,7 +31,7 @@ PLOT_FLAG, SAVE_FLAG, PRINT_FLAG = False, True, False
 n_other = 2
 n_rounds_ibr = 3
 world = tw.TrafficWorld(2, 0, 1000)
-n_processors = 16
+n_processors = 13
     # large_world = tw.TrafficWorld(2, 0, 1000, 5.0)
 #########################################################################
 optional_suffix = str(n_other) + "nograss"
@@ -42,19 +42,19 @@ for f in [folder, folder+"imgs/", folder+"data/", folder+"vids/", folder+"plots/
 print(folder)
 
 position_list = [
-    # (0, 20),
-    # (0, 35),
-    # (1, 40),
-    # (0, 60),
-    # (1, 60),
-    # (0, 80),
-    # (1, 85),
-    # (1, 100),
-    # (1, 123),
-    # (0, 120),
-    # (0, 145),
-    (0, 200),
-    (0, 300),
+    (0, 20),
+    (0, 35),
+    (1, 40),
+    (0, 60),
+    (1, 60),
+    (0, 80),
+    (1, 85),
+    (1, 100),
+    (1, 123),
+    (0, 120),
+    (0, 145),
+    (0, 160),
+    (0, 200)
 ]
 if len(position_list) != n_other:
     raise Exception("number of vehicles don't match n_other")
@@ -92,11 +92,10 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
     vehicles_index_constant_v = []
     for i in range(n_other):
         initial_distance = np.sqrt((amb_x0[0]-all_other_x0[i][0])**2 + (amb_x0[1]-all_other_x0[i][1])**2)
-        if initial_distance <= 150:
+        if initial_distance <= np.infty: #RIGHT NOW THIS ISN'T REALLY WORKING
             vehicles_index_in_mpc += [i]
         else:
             vehicles_index_constant_v += [i]    
-    # vehicles_index_in_mpc = [j for j in range(n_other)] ## Default
 
     uamb_ibr, xamb_ibr, xamb_des_ibr = None, None, None
     all_other_u_ibr = [None for i in range(n_other)]    
