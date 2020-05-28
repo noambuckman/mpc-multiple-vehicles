@@ -28,7 +28,7 @@ percent_mpc_executed = .20 ## This is the percent of MPC that is executed
 number_ctrl_pts_executed =  int(np.floor(N*percent_mpc_executed))
 print("number ctrl pts:  %d"%number_ctrl_pts_executed)
 PLOT_FLAG, SAVE_FLAG, PRINT_FLAG = False, True, False
-n_other = 13
+n_other = 2
 n_rounds_ibr = 3
 world = tw.TrafficWorld(2, 0, 1000)
 n_processors = 16
@@ -42,19 +42,19 @@ for f in [folder, folder+"imgs/", folder+"data/", folder+"vids/", folder+"plots/
 print(folder)
 
 position_list = [
-    (0, 20),
-    (0, 35),
-    (1, 40),
-    (0, 60),
-    (1, 60),
-    (0, 80),
-    (1, 85),
-    (1, 100),
-    (1, 123),
-    (0, 120),
-    (0, 145),
-    (0, 160),
-    (0, 200)
+    # (0, 20),
+    # (0, 35),
+    # (1, 40),
+    # (0, 60),
+    # (1, 60),
+    # (0, 80),
+    # (1, 85),
+    # (1, 100),
+    # (1, 123),
+    # (0, 120),
+    # (0, 145),
+    (0, 200),
+    (0, 300),
 ]
 if len(position_list) != n_other:
     raise Exception("number of vehicles don't match n_other")
