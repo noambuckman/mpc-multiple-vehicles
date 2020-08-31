@@ -89,6 +89,7 @@ class MultiMPC(object):
         self.responseMPC.add_dynamics_constraints(self.opti, self.x_opt, self.u_opt, self.x_desired, p)
         self.responseMPC.add_state_constraints(self.opti, self.x_opt, self.u_opt, self.x_desired, T)
 
+        
         if solve_amb and self.ambMPC: # only add constraints if we're solving ampMPC
             self.ambMPC.add_dynamics_constraints(self.opti, self.xamb_opt, self.uamb_opt, self.xamb_desired, pamb)
             self.ambMPC.add_state_constraints(self.opti, self.xamb_opt, self.uamb_opt, self.xamb_desired, T)
@@ -168,6 +169,11 @@ class MultiMPC(object):
                             self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_bottom, 0.0001)**self.k_CA_power)
                             self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_top, 0.0001)**self.k_CA_power)                
             
+        ###### Collision Braking Avoidance
+        if self.ambMPC:
+            self.generate_stopping_constraint(self.x_opt, self.xamb_opt, self.allother_x_opt, solve_amb, safety_buffer = 0.5) ###
+        else:
+            self.generate_stopping_constraint(self.x_opt, None, self.allother_x_opt, False, safety_buffer = 0.5) ###
 
         ######## optimization  ##################################
         self.total_svo_cost = self.response_svo_cost + self.other_svo_cost + self.k_slack * self.slack_cost + self.k_CA * self.collision_cost
@@ -295,6 +301,63 @@ class MultiMPC(object):
             dy = Y - y_o          
             dX = np.stack((dx, dy), axis=2)
             prod =    cas.mtimes([dX.T, R_o.T, M, R_o, dX])
+
+    def generate_stopping_constraint(self, x_opt, xamb_opt, xothers_opt, solve_amb, safety_buffer=0.50):
+        ''' Add a velocity constraint on the ego vehicle so it doesn't go too fast behind a lead vehicle.
+        Constrains ego velocity so that ego vehicle can brake (at u_v_max) to the same velocity of the lead vehicle
+        within the distance to the lead vehicle.  We add a buffer distance to ensure doesn't collide.
+
+        safety_buffer:  Shortened distance for the braking
+        '''
+        u_v_maxbraking = self.responseMPC.min_v_u #this is max change in V, in discrete steps
+        a_maxbraking = u_v_maxbraking / self.responseMPC.dt ### find max acceleration
+        N = x_opt.shape[1]
+        car_length = self.responseMPC.L
+
+        for k in range(N):
+            x_ego = x_opt[0, k]
+            y_ego = x_opt[1, k]
+            v_ego = x_opt[4, k]
+            
+            ### Add constraint between ego vehicle and ambulance
+            if xamb_opt is not None:
+                x_amb = xamb_opt[0, k]
+                y_amb = xamb_opt[1, k]
+                v_amb = xamb_opt[4, k]                  
+                dxegoamb = (x_amb - x_ego)
+                dyegoamb = (y_amb - y_ego)
+                dist_egoamb = cas.sqrt(dxegoamb**2 + dyegoamb**2)                
+                egobehind_amb = cas.fmax(-(dxegoamb-car_length), 0) ## 0 if ego is beind, else should be >0
+                
+                v_max_constraint = cas.fmax((v_amb**2 - 2*a_maxbraking * (dist_egoamb - safety_buffer)), 999999*egobehind_amb)
+                self.opti.subject_to(v_ego**2 <= v_max_constraint)
+
+            ### Add constraints between ego vehicle and other vehicles
+            for j in range(len(xothers_opt)):
+                x_j = xothers_opt[j][0, k]
+                y_j = xothers_opt[j][1, k]
+                v_j = xothers_opt[j][4, k]       
+
+                #### Add constraint between ego and j
+                dxego = (x_j - x_ego)
+                dyego = (y_j - y_ego)
+                
+                dist_ego = cas.sqrt(dxego**2 + dyego**2)
+                ego_behind = cas.fmax(-(dxego-car_length), 0) ###how many meters behind or 0 if ahead/same
+                v_max_constraint = cas.fmax(v_j**2 - 2*a_maxbraking * (dist_ego - safety_buffer), 999999*ego_behind)
+                self.opti.subject_to(v_ego**2 <= v_max_constraint)
+
+                #### Add constraint betweem amb and j
+                if xamb_opt is not None and solve_amb:
+                    dxamb = (x_j - x_amb)
+                    dyamb = (y_j - y_amb)
+                    dist_amb = cas.sqrt(dxamb**2 + dyamb**2)
+
+                    amb_behind = cas.fmax(-(dxamb-car_length), 0) ## 0 if ambulance is beind, else should be >0
+                    v_max_constraint = cas.fmax((v_j**2 - 2*a_maxbraking * (dist_amb - safety_buffer)), 999999*amb_behind)
+                    self.opti.subject_to(v_amb**2 <= v_max_constraint)
+
+
 
 
 
