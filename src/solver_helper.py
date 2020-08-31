@@ -51,15 +51,15 @@ def pullover_guess(N, all_other_MPC, all_other_x0):
 def solve_best_response(warm_key, warm_trajectory, 
                         response_MPC, amb_MPC, nonresponse_MPC_list, 
                         response_x0, amb_x0, nonresponse_x0_list,
-                        k_slack, k_CA, k_CA_power, world, wall_CA, N, T, slack, solve_amb, 
-                        nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, 
+                        world, solver_params, params, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list,
                         uamb=None, xamb=None, xamb_des=None):
     '''Create the iterative best response object and solve.  Assumes that it receives warm start profiles.
     This really should only require a u_warm, x_warm, x_des_warm and then one level above we generate those values'''
+    
     u_warm, x_warm, x_des_warm = warm_trajectory
     bri = mpc.MultiMPC(response_MPC, amb_MPC, nonresponse_MPC_list )
-    bri.k_slack, bri.k_CA, bri.k_CA_power, bri.world, bri.wall_CA = k_slack, k_CA, k_CA_power, world, wall_CA
-    bri.generate_optimization(N, T, response_x0, amb_x0, nonresponse_x0_list,  print_level=0, slack=slack, solve_amb=solve_amb)
+    bri.k_slack, bri.k_CA, bri.k_CA_power, bri.world, bri.wall_CA = solver_params['k_slack'], solver_params['k_CA'], solver_params['k_CA_power'], world, solver_params['wall_CA']
+    bri.generate_optimization(params['N'], params['T'], response_x0, amb_x0, nonresponse_x0_list,  print_level=0, slack=solver_params['slack'], solve_amb=solver_params['solve_amb'])
 
     # u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]
     bri.opti.set_initial(bri.u_opt, u_warm)            
@@ -67,7 +67,7 @@ def solve_best_response(warm_key, warm_trajectory,
     bri.opti.set_initial(bri.x_desired, x_des_warm)   
 
     if amb_MPC:
-        if solve_amb:
+        if solver_params['solve_amb']:
             bri.opti.set_initial(bri.xamb_opt, xamb)
             bri.opti.set_initial(bri.xamb_desired, xamb_des)                        
         else:
@@ -78,7 +78,7 @@ def solve_best_response(warm_key, warm_trajectory,
         bri.opti.set_value(bri.allother_x_opt[j], nonresponse_x_list[j])
         bri.opti.set_value(bri.allother_x_desired[j], nonresponse_xd_list[j])
     try:
-        bri.solve(uamb, nonresponse_u_list, solve_amb)
+        bri.solve(uamb, nonresponse_u_list, solver_params['solve_amb'])
         x_ibr, u_ibr, x_des_ibr, _, _, _, _, _, _ = bri.get_solution()
         current_cost = bri.solution.value(bri.total_svo_cost)
         max_slack = np.max([np.max(bri.solution.value(s)) for s in bri.slack_vars_list])                                                                         
@@ -93,22 +93,22 @@ def solve_best_response(warm_key, warm_trajectory,
         return False, np.infty, np.infty, None, None, None, None, []
         # ibr_sub_it +=1  
 
-def solve_warm_starts(number_processes, ux_warm_profiles, 
-                        response_MPC, amb_MPC, nonresponse_MPC_list, 
-                        response_x0, amb_x0, nonresponse_x0_list, 
-                        k_slack, k_CA, k_CA_power, world, wall_CA, N, T, slack, solve_amb, 
-                        nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, 
-                        uamb=None, xamb=None, xamb_des=None, 
-                        debug_flag=False):
+def solve_warm_starts(ux_warm_profiles, 
+                    response_MPC, amb_MPC, nonresponse_MPC_list, 
+                    response_x0, amb_x0, nonresponse_x0_list, 
+                    world, solver_params, params,
+                    nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, 
+                    uamb=None, xamb=None, xamb_des=None, 
+                    debug_flag=False):
     warm_solve_partial  = functools.partial(solve_best_response, 
                         response_MPC=response_MPC, amb_MPC=amb_MPC, nonresponse_MPC_list=nonresponse_MPC_list, 
-                        k_slack=k_slack, k_CA=k_CA, k_CA_power=k_CA_power, world=world, wall_CA=wall_CA, N=N, T=T, slack=slack, solve_amb=solve_amb, 
                         response_x0=response_x0, amb_x0=amb_x0, nonresponse_x0_list=nonresponse_x0_list, 
+                        world=world, solver_params = solver_params, params=params,
                         nonresponse_u_list=nonresponse_u_list, nonresponse_x_list=nonresponse_x_list, nonresponse_xd_list=nonresponse_xd_list, 
                         uamb=uamb, xamb=xamb, xamb_des=xamb_des)
     
-    if number_processes>1:
-        pool = multiprocessing.Pool(processes=number_processes)
+    if params['n_processors']>1:
+        pool = multiprocessing.Pool(processes=params['n_processors'])
         solve_costs_solutions  =  pool.starmap(warm_solve_partial, ux_warm_profiles.items()) #will apply k=1...N to plot_partial
         pool.terminate()
     else:
