@@ -7,11 +7,21 @@ import copy as cp
 PROJECT_PATHS = ['/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-multiple-vehicles/', '/Users/noambuckman/mpc-multiple-vehicles/']
 for p in PROJECT_PATHS:
     sys.path.append(p)
-import src.vehicle as vehicle
 import src.traffic_world as tw
 import src.multiagent_mpc as mpc
 import src.car_plotting_multiple as cmplot
 import src.solver_helper as helper
+
+def nonresponse_slice(i, all_other_x0, all_other_MPC, all_other_u, all_other_x, all_other_x_des):
+    ''' Returns all vehicles except i'''
+    nonresponse_x0_list = all_other_x0[:i] + all_other_x0[i+1:]
+    nonresponse_MPC_list = all_other_MPC[:i] + all_other_MPC[i+1:]
+    nonresponse_u_list = all_other_u[:i] + all_other_u[i+1:]
+    nonresponse_x_list = all_other_x[:i] + all_other_x[i+1:]
+    nonresponse_xd_list = all_other_x_des[:i] + all_other_x_des[i+1:]
+    
+    return nonresponse_x0_list, nonresponse_MPC_list, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list
+
 
 ##########################################################
 svo_theta = np.pi/3.0
@@ -70,6 +80,7 @@ print("number ctrl pts:  %d"%number_ctrl_pts_executed)
 world = tw.TrafficWorld(2, 0, 999999)
     # large_world = tw.TrafficWorld(2, 0, 1000, 5.0)
 #########################################################################
+#TODO: change this to date/random string of letters
 optional_suffix = str(params['n_other']) + "nograss"
 subdir_name = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + optional_suffix
 folder = "results/" + subdir_name + "/"
@@ -99,25 +110,25 @@ position_list = [
 if len(position_list) != params['n_other']:
     raise Exception("number of vehicles don't match n_other, %d, %d"%(len(position_list), params['n_other']))
 
+#TODO: fix this line
 all_other_x0, all_other_MPC, amb_MPC, amb_x0 = helper.initialize_cars(params['n_other'], params['N'], params['dt'], world, svo_theta, True, False, False, position_list)
 
 t_start_time = time.time()
 actual_t = 0    
+
 actual_xamb, actual_uamb = np.zeros((6, n_rounds_mpc*number_ctrl_pts_executed + 1)), np.zeros((2, n_rounds_mpc*number_ctrl_pts_executed)) 
 actual_xothers = [np.zeros((6, n_rounds_mpc*number_ctrl_pts_executed + 1)) for i in range(params['n_other'])]
-actual_uothers = [np.zeros((2, n_rounds_mpc*number_ctrl_pts_executed)) for i in range(params['n_other'])]
-    
+actual_uothers = [np.zeros((2, n_rounds_mpc*number_ctrl_pts_executed)) for i in range(params['n_other'])]    
 xamb_executed, all_other_x_executed = None, [] #This gets updated after each round of MPC
 uamb_mpc, all_other_u_mpc = None, []
-if SAVE_FLAG:
-    # pass
+
+if params['save_flag']:
     pickle.dump(all_other_MPC[0], open(folder + "data/"+"mpcother" + ".p",'wb'))
     pickle.dump(amb_MPC, open(folder + "data/"+"mpcamb" + ".p",'wb'))
 
-preloaded_data = True
-
 i_mpc_start = 0                 
 preloaded_data = False
+
 for i_mpc in range(i_mpc_start, n_rounds_mpc):
     min_slack = np.infty
 #     actual_t = i_mpc * number_ctrl_pts_executed
@@ -136,53 +147,39 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         else:
             vehicles_index_constant_v += [i]    
 
-    uamb_ibr, xamb_ibr, xamb_des_ibr = None, None, None
-    all_other_u_ibr = [None for i in range(params['n_other'])]    
-    all_other_x_ibr = [None for i in range(params['n_other'])]
-    all_other_x_des_ibr = [None for i in range(params['n_other'])]
     for j in vehicles_index_constant_v:
         all_other_u_ibr[j] = np.zeros((2,N)) #constant v control inputs
         all_other_x_ibr[j], all_other_x_des_ibr[j] = all_other_MPC[j].forward_simulate_all(all_other_x0[j].reshape(6,1), all_other_u_ibr[j]) 
         
-    for i_rounds_ibr in range(params['n_rounds_ibr']):
-        ############# Generate (if needed) the control inputs of other vehicles        
-        if i_rounds_ibr == 0:
-            if i_mpc == 0:
-                all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = helper.pullover_guess(N, all_other_MPC, all_other_x0)  # This is a hack and should be explicit that it's lane change                   
-            else:
-                all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = helper.extend_last_mpc_ctrl(all_other_u_mpc, number_ctrl_pts_executed, N, all_other_MPC, all_other_x0)  # This is a hack and should be explicit that it's lane change                   
+    ############# Generate (if needed) the control inputs of other vehicles        
+    if i_mpc == 0:
+        all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = helper.pullover_guess(N, all_other_MPC, all_other_x0)  # This is a hack and should be explicit that it's lane change                   
+    else:
+        all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = helper.extend_last_mpc_ctrl(all_other_u_mpc, number_ctrl_pts_executed, N, all_other_MPC, all_other_x0)  # This is a hack and should be explicit that it's lane change                   
+    
+    for i_rounds_ibr in range(params['n_rounds_ibr']):    
         ########## Solve the Response MPC ##########
         response_MPC, response_x0 = amb_MPC, amb_x0
         nonresponse_MPC_list, nonresponse_x0_list = all_other_MPC, all_other_x0
         nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list = all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr
-
         
         if params['plan_fake_ambulance']:
             fake_amb_i = helper.get_min_dist_i(amb_x0, all_other_x0, restrict_greater=True)
-            nonresponse_MPC_list = all_other_MPC[:fake_amb_i] + all_other_MPC[fake_amb_i+1:]
-            nonresponse_x0_list = all_other_x0[:fake_amb_i] + all_other_x0[fake_amb_i+1:]
-            nonresponse_u_list = all_other_u_ibr[:fake_amb_i] + all_other_u_ibr[fake_amb_i+1:]
-            nonresponse_x_list = all_other_x_ibr[:fake_amb_i] + all_other_x_ibr[fake_amb_i+1:]
-            nonresponse_xd_list = all_other_x_des_ibr[:fake_amb_i] + all_other_x_des_ibr[fake_amb_i+1:]
-            fake_amb_MPC = all_other_MPC[fake_amb_i]     
-            fake_amb_x0 = all_other_x0[fake_amb_i]
-            fake_amb_u = all_other_u_ibr[fake_amb_i]
-            fake_amb_x= all_other_x_ibr[fake_amb_i] 
-            fake_amb_xd = all_other_x_des_ibr[fake_amb_i]    
+            nonresponse_x0_list, nonresponse_MPC_list, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list = nonresponse_slice(fake_amb_i, all_other_x0, all_other_MPC, all_other_u_ibr, other_x_ibr, all_other_x_des_ibr)
+            fake_amb_MPC, fake_amb_x0, fake_amb_u, fake_amb_x, fake_amb_xd = all_other_MPC[fake_amb_i], all_other_x0[fake_amb_i], all_other_u_ibr[fake_amb_i], all_other_x_ibr[fake_amb_i], all_other_x_des_ibr[fake_amb_i]    
         else:
             fake_amb_i = -1
             nonresponse_MPC_list, nonresponse_x0_list = all_other_MPC, all_other_x0
             nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list = all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr
-            fake_amb_MPC, fake_amb_x0 = None, None
-            fake_amb_u, fake_amb_x, fake_amb_xd = None, None, None
-        i = -1
+            fake_amb_MPC, fake_amb_x0, fake_amb_u, fake_amb_x, fake_amb_xd = None, None, None, None, None
+        
         ################# Generate the warm starts ###############################
         u_warm_profiles, ux_warm_profiles = mpc.generate_warm_u(N, response_MPC, response_x0)
-        if i_mpc > 0:
-            u_warm_profiles["previous_mpc"] = np.concatenate((uamb_mpc[:, number_ctrl_pts_executed:], np.tile(uamb_mpc[:,-1:],(1, number_ctrl_pts_executed))),axis=1) ##    
+        if i_mpc > 0: #TODO: What is going on here?
+            u_warm_profiles["previous_mpc"] = np.concatenate((uamb_mpc[:, number_ctrl_pts_executed:], np.tile(uamb_mpc[:,-1:],(1, number_ctrl_pts_executed))), axis=1) ##    
             x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm_profiles["previous_mpc"]) 
             ux_warm_profiles["previous_mpc"] = [u_warm_profiles["previous_mpc"], x_warm, x_des_warm]
-        if i_rounds_ibr > 0:
+        if i_rounds_ibr > 0: #TODO: What is going on here?
             u_warm_profiles["previous_ibr"] = uamb_ibr    
             x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm_profiles["previous_ibr"]) 
             ux_warm_profiles["previous_ibr"] = [u_warm_profiles["previous_ibr"], x_warm, x_des_warm]            
@@ -230,11 +227,9 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         ################# SOLVE BEST RESPONSE FOR THE OTHER VEHICLES ON THE ROAD ############################
         for i in vehicles_index_in_mpc:
             response_MPC, response_x0 = all_other_MPC[i], all_other_x0[i]
-            nonresponse_MPC_list = all_other_MPC[:i] + all_other_MPC[i+1:]
-            nonresponse_x0_list = all_other_x0[:i] + all_other_x0[i+1:]
-            nonresponse_u_list = all_other_u_ibr[:i] + all_other_u_ibr[i+1:]
-            nonresponse_x_list = all_other_x_ibr[:i] + all_other_x_ibr[i+1:]
-            nonresponse_xd_list = all_other_x_des_ibr[:i] + all_other_x_des_ibr[i+1:]
+            #TODO:  Limit the nonresponse list?
+            nonresponse_x0_list, nonresponse_MPC_list, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list = nonresponse_slice(i, 
+                                                                                                all_other_x0, all_other_MPC, all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr)
 
             ################# Generate the warm starts ###############################
             u_warm_profiles, ux_warm_profiles = mpc.generate_warm_u(N, response_MPC, response_x0)            
@@ -308,7 +303,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
             # plt.show()                    
 
     ################ SAVE THE BEST RESPONSE SOLUTION FOR THE CURRENT PLANNING HORIZONG/MPC ITERATION ###########################
-
+    ## CLEANUP:  x_mpc, x_actual, x_ibr, x_executed
     xamb_mpc, xamb_des_mpc, uamb_mpc = xamb_ibr, xamb_des_ibr, uamb_ibr
     all_other_u_mpc, all_other_x_mpc, all_other_x_des_mpc = all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr
     bri_mpc = None
