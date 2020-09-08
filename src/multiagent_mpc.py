@@ -191,10 +191,11 @@ class MultiMPC(object):
                             self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_top, 0.0001)**self.k_CA_power)                
             
         ###### Collision Braking Avoidance
+        k_max_ttc = 3.0
         if self.ambMPC:
-            self.generate_stopping_constraint(self.x_opt, self.xamb_opt, self.allother_x_opt, solve_amb, safety_buffer = 0.5) ###
+            self.generate_stopping_constraint_ttc(self.x_opt, self.xamb_opt, self.allother_x_opt, solve_amb, max_time_to_collision = k_max_ttc) ###
         else:
-            self.generate_stopping_constraint(self.x_opt, None, self.allother_x_opt, False, safety_buffer = 0.5) ###
+            self.generate_stopping_constraint_ttc(self.x_opt, None, self.allother_x_opt, False, max_time_to_collision = k_max_ttc) ###
 
         ######## optimization  ##################################
         self.total_svo_cost = self.response_svo_cost + self.other_svo_cost + self.k_slack * self.slack_cost + self.k_CA * self.collision_cost
@@ -322,6 +323,76 @@ class MultiMPC(object):
             dy = Y - y_o          
             dX = np.stack((dx, dy), axis=2)
             prod =    cas.mtimes([dX.T, R_o.T, M, R_o, dX])
+
+
+    def generate_stopping_constraint_ttc(self, x_opt, xamb_opt, xothers_opt, solve_amb, max_time_to_collision = 3.0):
+        ''' Add a velocity constraint on the ego vehicle so it doesn't go too fast behind a lead vehicle.
+            Constrains the vehicle so that the time to collision is always less than time_to_collision seconds
+            assuming that both ego and ado vehicle mantain constant velocity
+        '''
+
+        N = x_opt.shape[1]
+        car_length = self.responseMPC.L
+        car_width = self.responseMPC.W        
+        for k in range(N):
+            x_ego = x_opt[0, k]
+            y_ego = x_opt[1, k]
+            phi_ego = x_opt[2, k]
+            v_ego = x_opt[4, k]
+            v_ego_components = (v_ego * cas.cos(phi_ego), v_ego * cas.sin(phi_ego))
+
+            if xamb_opt is not None:
+                x_amb = xamb_opt[0, k]
+                y_amb = xamb_opt[1, k]
+                phi_amb = xamb_opt[2, k]
+                v_amb = xamb_opt[4, k]    
+
+                v_amb_components = (v_amb * cas.cos(phi_amb), v_amb * cas.sin(phi_amb))              
+                
+                dxegoamb = (x_amb - x_ego) - car_length
+                dyegoamb = (y_amb - y_ego) - car_width
+                dot_product = (v_ego_components[0] - v_amb_components[0])*dxegoamb + (v_ego_components[1] - v_amb_components[1])*dyegoamb
+                self.opti.subject_to(dot_product <= (dxegoamb**2 + dyegoamb**2) / max_time_to_collision)
+                # dist_egoamb = cas.sqrt(dxegoamb**2 + dyegoamb**2)                
+                
+                # egobehind_amb = cas.fmax(-dxegoamb, 0) ## 0 if ego is beind, else should be >0
+
+                # v_max_constraint = cas.fmax((v_amb**2 - 2*a_maxbraking * (dist_egoamb - safety_buffer)), 999*egobehind_amb)
+                # self.opti.subject_to(v_ego**2 <= v_max_constraint)
+            
+            for j in range(len(xothers_opt)):
+                x_j = xothers_opt[j][0, k]
+                y_j = xothers_opt[j][1, k]
+                phi_j = xothers_opt[j][2, k]
+                v_j = xothers_opt[j][4, k]       
+
+                #### Add constraint between ego and j
+                dxego = (x_j - x_ego) - car_length
+                dyego = (y_j - y_ego) - car_width
+                
+                v_j_components = (v_j * cas.cos(phi_j), v_j * cas.sin(phi_j))
+                dot_product = (v_ego_components[0] - v_j_components[0])*dxego + (v_ego_components[1] - v_j_components[1])*dyego
+                
+                self.opti.subject_to(dot_product <= (dxego**2 + dyego**2) / max_time_to_collision)
+                
+                # dist_ego = cas.sqrt(dxego**2 + dyego**2)
+                # ego_behind = cas.fmax(-dxego, 0) ###how many meters behind or 0 if ahead/same
+                # v_max_constraint = cas.fmax(v_j**2 - 2*a_maxbraking * (dist_ego - safety_buffer), 999*ego_behind)
+                # self.opti.subject_to(v_ego**2 <= v_max_constraint)
+
+                #### Add constraint betweem amb and j
+                if xamb_opt is not None and solve_amb:
+                    dxamb = (x_j - x_amb) - car_length
+                    dyamb = (y_j - y_amb) - car_width
+                    
+                    dot_product = (v_amb_components[0] - v_j_components[0])*dxamb + (v_amb_components[1] - v_j_components[1])*dyamb
+                    self.opti.subject_to(dot_product <= (dxamb**2 + dyamb**2) / max_time_to_collision)
+                    
+                    # dist_amb = cas.sqrt(dxamb**2 + dyamb**2)
+
+                    # amb_behind = cas.fmax(-dxamb, 0) ## 0 if ambulance is beind, else should be >0
+                    # v_max_constraint = cas.fmax((v_j**2 - 2*a_maxbraking * (dist_amb - safety_buffer)), 999*amb_behind)
+                    # self.opti.subject_to(v_amb**2 <= v_max_constraint)
 
     def generate_stopping_constraint(self, x_opt, xamb_opt, xothers_opt, solve_amb, safety_buffer=0.50):
         ''' Add a velocity constraint on the ego vehicle so it doesn't go too fast behind a lead vehicle.
