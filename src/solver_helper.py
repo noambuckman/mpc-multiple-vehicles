@@ -52,7 +52,7 @@ def solve_best_response(warm_key, warm_trajectory,
                         response_MPC, amb_MPC, nonresponse_MPC_list, 
                         response_x0, amb_x0, nonresponse_x0_list,
                         world, solver_params, params, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list,
-                        uamb=None, xamb=None, xamb_des=None):
+                        uamb=None, xamb=None, xamb_des=None, return_bri=False):
     '''Create the iterative best response object and solve.  Assumes that it receives warm start profiles.
     This really should only require a u_warm, x_warm, x_des_warm and then one level above we generate those values'''
     
@@ -88,9 +88,13 @@ def solve_best_response(warm_key, warm_trajectory,
         debug_list = [current_cost, bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.k_CA*bri.collision_cost), 
                         bri.solution.value(bri.k_slack*bri.slack_cost), [bri.solution.value(s) for s in bri.slack_vars_list]]
         solved = True
+        if return_bri:
+            debug_list += [bri]
         return solved, current_cost, max_slack, x_ibr, x_des_ibr, u_ibr, warm_key, debug_list
     except RuntimeError:
         # print("Infeasibility: k_warm %s"%k_warm)
+        if return_bri:
+            return bri
         return False, np.infty, np.infty, None, None, None, None, []
         # ibr_sub_it +=1  
 
