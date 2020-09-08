@@ -13,7 +13,7 @@ import src.traffic_world as tw
 
 PROJECT_PATH = '/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-multiple-vehicles/'
 
-car_colors = ['red', 'green', 'blue', 'yellow', 'orange']
+car_colors = ['green', 'blue', 'yellow', 'orange']
 def get_car_color(i):
     return car_colors[i%len(car_colors)]
 
@@ -149,6 +149,8 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_sh
         fig.savefig(folder + 'imgs/' '{:03d}.png'.format(k))
         plt.close(fig)        
         gc.collect()
+    else:
+        plt.show()
 
 def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder,   
                 car_plot_shape="ellipse", parallelize=True, camera_speed = None, car_labels = None,
