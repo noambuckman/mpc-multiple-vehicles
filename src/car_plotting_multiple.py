@@ -13,6 +13,11 @@ import src.traffic_world as tw
 
 PROJECT_PATH = '/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-multiple-vehicles/'
 
+car_colors = ['red', 'green', 'blue', 'yellow', 'orange']
+def get_car_color(i):
+    return car_colors[i%len(car_colors)]
+
+
 def get_frame(x, x_MPC, ax=None, car_name="red", alpha = 1.0):
     '''Plots a car at a single state x.  Assumes red_car and ambulance.png'''
     L = x_MPC.L
@@ -57,7 +62,8 @@ def get_frame(x, x_MPC, ax=None, car_name="red", alpha = 1.0):
     ax.add_artist(ab)        
     return ax    
 
-def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_shape="Ellipse", parallelize=True, camera_speed = None, plot_range = None, car_ids = None, xamb_desired=None, xothers_desired=None):
+def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_shape="Ellipse", parallelize=True, 
+                            camera_speed = None, plot_range = None, car_ids = None, xamb_desired=None, xothers_desired=None):
     '''Plots the progression of all cars in one frame'''
     if camera_speed is None:
         camera_speed = x_mpc.max_v
@@ -108,15 +114,17 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_sh
                     car_id = car_ids[i+1]  
                 else:
                     car_id = i
-                if (car_id%2)==0:
-                    color="red"
-                else:
-                    color="green"
+
+                color = get_car_color(car_id)
+                # if (car_id%2)==0:
+                #     color="red"
+                # else:
+                #     color="green"
 
                 x1_plot = xothers_plot[i]
                 x, y, phi = x1_plot[0,k], x1_plot[1,k], x1_plot[2,k]
                 a, b = x_mpc.ax, x_mpc.by
-                ellipse_patch = patches.Ellipse((x, y), 2*a, 2*b, angle=np.rad2deg(phi), fill=False, color='red', alpha=alpha_k)
+                ellipse_patch = patches.Ellipse((x, y), 2*a, 2*b, angle=np.rad2deg(phi), fill=False, color=color, alpha=alpha_k)
                 ax.add_patch(ellipse_patch)
 
 
@@ -145,12 +153,13 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_sh
 def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder,   
                 car_plot_shape="ellipse", parallelize=True, camera_speed = None, car_labels = None,
                 xamb_desired=None, xothers_desired=None):
+    '''TODO: Cleanup and document'''
     N = xamb_plot.shape[1]
     # if car_plot_shape:
     if psutil.virtual_memory().percent >= 90.0:
         raise Exception("Virtual Memory is too high, exiting to save computer")    
     if parallelize:
-        pool = multiprocessing.Pool(processes=4)
+        pool = multiprocessing.Pool(processes=8)
         plot_partial = functools.partial(plot_multiple_cars, x_mpc=x_mpc, xothers_plot=xothers_plot, xamb_plot=xamb_plot, car_plot_shape=car_plot_shape, xothers_desired=xothers_desired, xamb_desired=xamb_desired,
                                          folder=folder, world=world, camera_speed = camera_speed, car_labels=car_labels)
         pool.map(plot_partial, range(N)) #will apply k=1...N to plot_partial
@@ -280,3 +289,18 @@ def animate(folder, vid_fname):
     cmd = 'ffmpeg -r 16 -f image2 -i {}imgs/%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p {}'.format(folder, vid_fname)
     os.system(cmd)
     print('Saving video to: {}'.format(vid_fname))
+
+from PIL import Image
+import glob
+def concat_imgs(folder):
+    im_0 = Image.open(folder + 'imgs/' '{:03d}.png'.format(0))
+    buffer = int(0.1 * im_0.height)
+    files = glob.glob(folder+ 'imgs/*.png')
+    n_timesteps = len(files)
+    dst = Image.new('RGB', (im_0.width, (im_0.height + buffer)*n_timesteps))    
+
+    for k in range(n_timesteps):
+        im_k = Image.open(folder + 'imgs/' '{:03d}.png'.format(k))
+        dst.paste(im_k, (0, k*(im_0.height + buffer)))
+    filename = folder + 'single.png'
+    return filename

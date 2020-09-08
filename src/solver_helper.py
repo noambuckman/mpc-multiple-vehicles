@@ -57,9 +57,8 @@ def solve_best_response(warm_key, warm_trajectory,
     This really should only require a u_warm, x_warm, x_des_warm and then one level above we generate those values'''
     
     u_warm, x_warm, x_des_warm = warm_trajectory
-    bri = mpc.MultiMPC(response_MPC, amb_MPC, nonresponse_MPC_list )
-    bri.k_slack, bri.k_CA, bri.k_CA_power, bri.world, bri.wall_CA = solver_params['k_slack'], solver_params['k_CA'], solver_params['k_CA_power'], world, solver_params['wall_CA']
-    bri.generate_optimization(params['N'], params['T'], response_x0, amb_x0, nonresponse_x0_list,  print_level=0, slack=solver_params['slack'], solve_amb=solver_params['solve_amb'])
+    bri = mpc.MultiMPC(response_MPC, amb_MPC, nonresponse_MPC_list, world, solver_params)
+    bri.generate_optimization(params["N"], params["T"], response_x0, amb_x0, nonresponse_x0_list,  print_level=params["print_level"], slack=solver_params['slack'], solve_amb=solver_params['solve_amb'])
 
     # u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]
     bri.opti.set_initial(bri.u_opt, u_warm)            
@@ -78,6 +77,8 @@ def solve_best_response(warm_key, warm_trajectory,
         bri.opti.set_value(bri.allother_x_opt[j], nonresponse_x_list[j])
         bri.opti.set_value(bri.allother_x_desired[j], nonresponse_xd_list[j])
     try:
+        if "constant_v" in solver_params and solver_params["constant_v"]:
+            bri.opti.subject_to(bri.u_opt[1,:] == 0)
         bri.solve(uamb, nonresponse_u_list, solver_params['solve_amb'])
         x_ibr, u_ibr, x_des_ibr, _, _, _, _, _, _ = bri.get_solution()
         current_cost = bri.solution.value(bri.total_svo_cost)
@@ -232,4 +233,4 @@ def initialize_cars(n_other, N, dt, world, svo_theta, no_grass = False, random_l
     amb_MPC.fd = amb_MPC.gen_f_desired_lane(world, 0, True)
     x0_amb = np.array([0, 0, 0, 0, initial_speed , 0]).T
     
-    return all_other_x0, all_other_MPC, amb_MPC, x0_amb
+    return amb_MPC, x0_amb, all_other_MPC, all_other_x0

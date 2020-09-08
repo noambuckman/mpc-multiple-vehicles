@@ -11,22 +11,36 @@ class MultiMPC(object):
     def __init__(self, 
                 responseMPC : vehicle.Vehicle, 
                 ambulanceMPC : vehicle.Vehicle, 
-                otherMPClist):
+                otherMPClist,
+                world, 
+                solver_params = None):
 
         self.responseMPC = responseMPC
         self.otherMPClist = otherMPClist   
         self.ambMPC = ambulanceMPC
+        if solver_params is None:
+            solver_params = {}
+            self.k_slack = 99999
+            self.k_CA = 0
+            self.k_CA_power = 8
+            self.collision_cost = 0      
+            self.WALL_CA = False
+        else:
+            self.k_slack = solver_params['k_slack']
+            self.k_CA = solver_params['k_CA']
+            self.k_CA_power = solver_params['k_CA_power']
+            self.WALL_CA = solver_params['wall_CA']
+        
+        self.world = world
 
         self.opti = cas.Opti()
         self.min_dist = 2 * 1.5   # 2 times the radius of 1.5
-        self.k_slack = 99999
-        self.k_CA = 0
-        self.k_CA_power = 8
-        self.collision_cost = 0
-        self.WALL_CA = False
-        self.world = tw.TrafficWorld(2, 0, 10000)
 
-    def generate_optimization(self, N, T, x0, x0_amb, x0_other, print_level=5, slack=True, solve_amb=False):
+
+
+
+    def generate_optimization(self, N, T, x0, x0_amb, x0_other, print_level=5, slack=True, solve_amb=False, params = None):
+
         n_state, n_ctrl, n_desired = 6, 2, 3
         #Response (planning) Vehicle Variables
         self.x_opt = self.opti.variable(n_state, N+1)        
@@ -47,10 +61,11 @@ class MultiMPC(object):
             pamb = self.opti.parameter(n_state, 1)
 
         ### Variables of surrounding vehicles assumed fixed (TODO: This could probably be np arrays)
-        self.allother_x_opt = [self.opti.parameter(n_state, N+1) for i in self.otherMPClist] 
-        self.allother_u_opt = [self.opti.parameter(n_ctrl, N) for i in self.otherMPClist] 
-        self.allother_x_desired = [self.opti.parameter(3, N+1) for i in self.otherMPClist]
-        self.allother_p = [self.opti.parameter(n_state, 1) for i in self.otherMPClist]
+        if len(self.otherMPClist) > 0:
+            self.allother_x_opt = [self.opti.parameter(n_state, N+1) for i in self.otherMPClist] 
+            self.allother_u_opt = [self.opti.parameter(n_ctrl, N) for i in self.otherMPClist] 
+            self.allother_x_desired = [self.opti.parameter(3, N+1) for i in self.otherMPClist]
+            self.allother_p = [self.opti.parameter(n_state, 1) for i in self.otherMPClist]
 
         #### Costs
         self.responseMPC.generate_costs(self.x_opt, self.u_opt, self.x_desired)
@@ -63,7 +78,10 @@ class MultiMPC(object):
             self.amb_costs, self.amb_costs_list = 0, []
 
         ## Generate Slack Variables used as part of collision avoidance
-        self.slack_vars_list = self.generate_slack_variables(slack, N, len(self.otherMPClist), n_ego_circles = self.responseMPC.n_circles)
+        if len(self.otherMPClist) > 0:
+            self.slack_vars_list = self.generate_slack_variables(slack, N, len(self.otherMPClist), n_ego_circles = self.responseMPC.n_circles)
+        else:
+            self.slack_vars_list = []
         
         self.slack_cost = 0       
         for agent_i in range(len(self.slack_vars_list)):
@@ -76,7 +94,10 @@ class MultiMPC(object):
             self.slack_cost += cas.sumsqr(self.slack_amb)            
 
         if solve_amb and self.ambMPC:    
-            self.slack_amb_other = self.generate_slack_variables(slack, N, len(self.otherMPClist), n_ego_circles = self.responseMPC.n_circles)
+            if len(self.otherMPClist) > 0:
+                self.slack_amb_other = self.generate_slack_variables(slack, N, len(self.otherMPClist), n_ego_circles = self.responseMPC.n_circles)
+            else:
+                self.slack_amb_other = []
             for slack_var in self.slack_amb_other:
                 for i in range(slack_var.shape[0]):
                     for j in range(slack_var.shape[1]):
@@ -313,7 +334,7 @@ class MultiMPC(object):
         a_maxbraking = u_v_maxbraking / self.responseMPC.dt ### find max acceleration
         N = x_opt.shape[1]
         car_length = self.responseMPC.L
-
+        car_width = self.responseMPC.W
         for k in range(N):
             x_ego = x_opt[0, k]
             y_ego = x_opt[1, k]
@@ -324,12 +345,12 @@ class MultiMPC(object):
                 x_amb = xamb_opt[0, k]
                 y_amb = xamb_opt[1, k]
                 v_amb = xamb_opt[4, k]                  
-                dxegoamb = (x_amb - x_ego)
-                dyegoamb = (y_amb - y_ego)
+                dxegoamb = (x_amb - x_ego) - car_length
+                dyegoamb = (y_amb - y_ego) - car_width
                 dist_egoamb = cas.sqrt(dxegoamb**2 + dyegoamb**2)                
-                egobehind_amb = cas.fmax(-(dxegoamb-car_length), 0) ## 0 if ego is beind, else should be >0
+                egobehind_amb = cas.fmax(-dxegoamb, 0) ## 0 if ego is beind, else should be >0
                 
-                v_max_constraint = cas.fmax((v_amb**2 - 2*a_maxbraking * (dist_egoamb - safety_buffer)), 999999*egobehind_amb)
+                v_max_constraint = cas.fmax((v_amb**2 - 2*a_maxbraking * (dist_egoamb - safety_buffer)), 999*egobehind_amb)
                 self.opti.subject_to(v_ego**2 <= v_max_constraint)
 
             ### Add constraints between ego vehicle and other vehicles
@@ -339,56 +360,63 @@ class MultiMPC(object):
                 v_j = xothers_opt[j][4, k]       
 
                 #### Add constraint between ego and j
-                dxego = (x_j - x_ego)
-                dyego = (y_j - y_ego)
+                dxego = (x_j - x_ego) - car_length
+                dyego = (y_j - y_ego) - car_width
                 
                 dist_ego = cas.sqrt(dxego**2 + dyego**2)
-                ego_behind = cas.fmax(-(dxego-car_length), 0) ###how many meters behind or 0 if ahead/same
-                v_max_constraint = cas.fmax(v_j**2 - 2*a_maxbraking * (dist_ego - safety_buffer), 999999*ego_behind)
+                ego_behind = cas.fmax(-dxego, 0) ###how many meters behind or 0 if ahead/same
+                v_max_constraint = cas.fmax(v_j**2 - 2*a_maxbraking * (dist_ego - safety_buffer), 999*ego_behind)
                 self.opti.subject_to(v_ego**2 <= v_max_constraint)
 
                 #### Add constraint betweem amb and j
                 if xamb_opt is not None and solve_amb:
-                    dxamb = (x_j - x_amb)
-                    dyamb = (y_j - y_amb)
+                    dxamb = (x_j - x_amb) - car_length
+                    dyamb = (y_j - y_amb) - car_width
                     dist_amb = cas.sqrt(dxamb**2 + dyamb**2)
 
-                    amb_behind = cas.fmax(-(dxamb-car_length), 0) ## 0 if ambulance is beind, else should be >0
-                    v_max_constraint = cas.fmax((v_j**2 - 2*a_maxbraking * (dist_amb - safety_buffer)), 999999*amb_behind)
+                    amb_behind = cas.fmax(-dxamb, 0) ## 0 if ambulance is beind, else should be >0
+                    v_max_constraint = cas.fmax((v_j**2 - 2*a_maxbraking * (dist_amb - safety_buffer)), 999*amb_behind)
                     self.opti.subject_to(v_amb**2 <= v_max_constraint)
 
 
 
 
 
-def load_state(file_name, n_others):
+def load_state(file_name, n_others, ignore_des=False):
     xamb = np.load(file_name + "xamb.npy",allow_pickle=False)
     uamb = np.load(file_name + "uamb.npy",allow_pickle=False)
-    xamb_des = np.load(file_name + "xamb_des.npy",allow_pickle=False)
-
+    if not ignore_des:
+        xamb_des = np.load(file_name + "xamb_des.npy",allow_pickle=False)
+    else:
+        xamb_des = None
 
     xothers, uothers, xothers_des = [], [], []
     for i in range(n_others):
         x = np.load(file_name + "x%0d.npy"%i, allow_pickle=False)
         u = np.load(file_name + "u%0d.npy"%i, allow_pickle=False)
-        x_des = np.load(file_name + "x_des%0d.npy"%i, allow_pickle=False)
         xothers += [x]
         uothers += [u]
-        xothers_des += [x_des]
+        if not ignore_des:
+            x_des = np.load(file_name + "x_des%0d.npy"%i, allow_pickle=False)
+            xothers_des += [x_des]
 
     return xamb, uamb, xamb_des, xothers, uothers, xothers_des
 
 
 def save_state(file_name, xamb, uamb, xamb_des, xothers, uothers, xothers_des):
-    np.save(file_name + "xamb", xamb,allow_pickle=False)
-    np.save(file_name + "uamb", uamb,allow_pickle=False)
-    np.save(file_name + "xamb_des", xamb_des, allow_pickle=False)
+    #TODO: Move xamb_des to an optional aparamter
+    np.save(file_name + "xamb", xamb, allow_pickle=False)
+    np.save(file_name + "uamb", uamb, allow_pickle=False)
+    if xamb_des is not None:
+        np.save(file_name + "xamb_des", xamb_des, allow_pickle=False)
 
     for i in range(len(xothers)):
-        x, u, x_des = xothers[i], uothers[i], xothers_des[i]    
+        x, u = xothers[i], uothers[i]   
         np.save(file_name + "x%0d"%i, x, allow_pickle=False)
         np.save(file_name + "u%0d"%i, u, allow_pickle=False)
-        np.save(file_name + "x_des%0d"%i, x_des, allow_pickle=False)
+        if xothers_des is not None:
+            x_des = xothers_des[i]
+            np.save(file_name + "x_des%0d"%i, x_des, allow_pickle=False)
     
     return file_name
 
@@ -432,7 +460,21 @@ def load_costs_int(i):
     return car1_costs_list, amb_costs_list, svo_cost, other_svo_cost , total_svo_cost
 
 def generate_warm_x(car_mpc, world, x0, average_v=None): 
-    ''' Warm starts that return a trajectory in x-space'''
+    ''' Warm starts that return a trajectory in x (control) -space
+    N:  Number of control points
+    car_mpc:  Vehicle instance
+    car_x0:  Initial position
+    
+    Return:  x_warm_profiles [dict]
+                keys: label of warm start [str]
+                values: 6xn state vector
+
+            ux_warm_profiles [dict]
+                keys: label of warm start [str]
+                values:  control vector (initialized as zero), state vector, x desired vector
+    '''
+
+
     x_warm_profiles = {}
     N = car_mpc.N
     lane_width = world.lane_width
@@ -484,7 +526,19 @@ def generate_warm_x(car_mpc, world, x0, average_v=None):
     return x_warm_profiles, ux_warm_profiles
 
 def generate_warm_u(N, car_mpc, car_x0):
-    ''' Warm starts that return a trajectory in x-space'''
+    ''' Warm starts that return a trajectory in u (control) -space
+    N:  Number of control points
+    car_mpc:  Vehicle instance
+    car_x0:  Initial position
+    
+    Return:  u_warm_profiles [dict]
+                keys: label of warm start [str]
+                values: 2xn control vector
+
+            ux_warm_profiles [dict]
+                keys: label of warm start [str]
+                values:  control vector, state vector, x desired vector
+    '''
 
     u0_warm_profiles = {}
     u1_warm_profiles = {}
