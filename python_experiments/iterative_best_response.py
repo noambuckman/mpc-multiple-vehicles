@@ -126,8 +126,8 @@ else:
     alpha_num = string.ascii_lowercase[:8] + string.digits
     subdir_name = ''.join(random.choice(alpha_num) for j in range(4)) + '-' + ''.join(random.choice(alpha_num) for j in range(4)) + "-" + params["start_time_string"]
     folder = "/home/nbuckman/mpc_results/" + subdir_name + "/"
-    for f in [folder, folder+"imgs/", folder+"data/", folder+"vids/", folder+"plots/"]:
-        os.makedirs(f)
+    for f in [folder+"imgs/", folder+"data/", folder+"vids/", folder+"plots/"]:
+        os.makedirs(f, exist_ok = True)
     i_mpc_start = 0
 
 T = params['T']  # MPC Planning Horizon
@@ -380,7 +380,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
                 if psutil.virtual_memory().percent >= 90.0:
                     raise Exception("Virtual Memory is too high, exit ing to save computer")                
 
-                ux_warm_profiles_subset = warm_profiles_subset(solver_params['n_warm_starts'], u_warm_profiles)
+                ux_warm_profiles_subset = warm_profiles_subset(solver_params['n_warm_starts'], ux_warm_profiles)
 
                 start_ipopt_time = time.time()
                 with redirect_stdout(f):
@@ -434,7 +434,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
       
     mean_amb_v = np.mean(xamb_executed[4,:])
     im_dir = folder + '%02d/'%i_mpc
-    os.makedirs(im_dir+"imgs/")    
+    os.makedirs(im_dir+"imgs/", exist_ok=True)    
     end_frame = actual_t + number_ctrl_pts_executed + 1
     start_frame = max(0, end_frame - 20)
     cmplot.plot_cars(world, amb_MPC, xamb_actual[:,start_frame:end_frame], [x[:,start_frame:end_frame] for x in xothers_actual], im_dir, "ellipse", True, 0)                        
