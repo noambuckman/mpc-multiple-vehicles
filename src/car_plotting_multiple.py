@@ -159,24 +159,26 @@ def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder,
     N = xamb_plot.shape[1]
     # if car_plot_shape:
     if psutil.virtual_memory().percent >= 90.0:
-        raise Exception("Virtual Memory is too high, exiting to save computer")    
+        raise Exception("Virtual Memory is too high, exiting to save computer")
+
+    camera_positions = generate_camera_positions(xamb_plot, x_mpc)    
     if parallelize:
         pool = multiprocessing.Pool(processes=8)
         plot_partial = functools.partial(plot_multiple_cars, x_mpc=x_mpc, xothers_plot=xothers_plot, xamb_plot=xamb_plot, car_plot_shape=car_plot_shape, xothers_desired=xothers_desired, xamb_desired=xamb_desired,
-                                         folder=folder, world=world, camera_speed = camera_speed, car_labels=car_labels)
+                                         folder=folder, world=world, camera_positions = camera_positions, car_labels=car_labels)
         pool.map(plot_partial, range(N)) #will apply k=1...N to plot_partial
         pool.terminate()
     else:
         for k in range(N):
-            plot_multiple_cars( k, world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_shape, camera_speed, car_labels, xamb_desired, xothers_desired)     
+            plot_multiple_cars( k, world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_shape, camera_positions, car_labels, xamb_desired, xothers_desired)     
     return None
 
 def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder, 
-                        car_plot_shape="Ellipse", camera_speed = None, car_labels = None,
-                        xamb_desired=None, xothers_desired=None ):
+                        car_plot_shape="Ellipse", camera_positions = None, car_labels = None,
+                        xamb_desired=None, xothers_desired=None,):
     ''' This only has info from x_mpc but not any individual ones'''
-    if camera_speed is None:
-        camera_speed = x_mpc.max_v
+    if camera_positions is None:
+        camera_positions = [xamb_plot[0,0] + t*x_mpc.max_v*x_mpc.dt for t in range(xamb_plot.shape[1])]
     figsize="LARGE"
     if figsize == "LARGE":
         figwidth_in=12.0
@@ -187,9 +189,13 @@ def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder,
     ymin = world.y_min     
     # initial_speed = 0.9 * x_mpc.max_v
     # center_frame = xamb_plot[0,k]
-    center_frame = xamb_plot[0,0] + k*camera_speed*x_mpc.dt
+    ## Camera dynamics:  vdot = k (xdot - v)
+
+
+    # center_frame = xamb_plot[0,0] + k*camera_speed*x_mpc.dt
+    center_frame = camera_positions[k]
     # center_frame = xamb_plot[0,0]
-    axlim_minx, axlim_maxx = center_frame - 5, center_frame + 100,    
+    axlim_minx, axlim_maxx = center_frame - 40, center_frame + 100,    
 
     fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx ))
     fig, ax = plt.subplots(figsize=(figwidth_in, fig_height), dpi=144)
@@ -243,6 +249,34 @@ def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder,
     else:
         plt.show()
 
+def generate_camera_positions(xamb_plot, amb_veh):
+    ''' we assume a bang-bang controller for the camera in single x-dimension '''
+    xc = [xamb_plot[0,0]]
+    xc_dot = [0]
+    k_v = .5
+    k_d = 0.1
+    for k in range(1, xamb_plot.shape[1]):
+        prev_xamb_position = xamb_plot[0, k-1]
+        prev_xc = xc[k-1]
+        
+        if prev_xc < prev_xamb_position - 5.0:
+            u = k_v * (xamb_plot[4, k-1] - xc_dot[k-1]) + k_d * (xamb_plot[0, k-1] - xc[k-1])
+        elif prev_xc > prev_xamb_position + 5.0:
+            u = k_v * (xamb_plot[4, k-1] - xc_dot[k-1]) + k_d * (xamb_plot[0, k-1] - xc[k-1])
+        else:
+            u = 0.0
+        xc_dot_new = xc_dot[k-1] + u
+        xc_new = xc[k-1] + xc_dot_new * amb_veh.dt
+        xc += [xc_new]
+        xc_dot += [xc_dot_new]
+        
+
+    return xc
+
+
+
+
+
 def add_grass(ax, world, k):
     axlim_minx, axlim_maxx = ax.get_xlim()
     y_bottom_b, y_center_b, y_top_b = world.get_bottom_grass_y()
@@ -251,6 +285,7 @@ def add_grass(ax, world, k):
     bottom_y_grass = y_bottom_b 
     bottom_grass = patches.Rectangle((left_x_grass,bottom_y_grass), width, y_top_b-y_bottom_b, facecolor='g', hatch='/') 
     ax.add_patch(bottom_grass)
+    k = axlim_minx
     left_x_grass = axlim_maxx - k % (1.5*width)
     bottom_contrast_grass = patches.Rectangle((left_x_grass,bottom_y_grass), width/2.0, y_top_b-y_bottom_b, facecolor='g', hatch='x')                 
     ax.add_patch(bottom_contrast_grass)
@@ -290,7 +325,8 @@ def add_lanes(ax, world):
 def animate(folder, vid_fname):
     cmd = 'ffmpeg -r 16 -f image2 -i {}imgs/%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p {}'.format(folder, vid_fname)
     os.system(cmd)
-    print('Saving video to: {}'.format(vid_fname))
+    # print('Saving video to: {}'.format(vid_fname))
+    return vid_fname
 
 from PIL import Image
 import glob
@@ -305,4 +341,5 @@ def concat_imgs(folder):
         im_k = Image.open(folder + 'imgs/' '{:03d}.png'.format(k))
         dst.paste(im_k, (0, k*(im_0.height + buffer)))
     filename = folder + 'single.png'
+    dst.save(filename, "PNG")
     return filename
