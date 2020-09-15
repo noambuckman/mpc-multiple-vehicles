@@ -199,6 +199,15 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         all_other_u_mpc = all_other_u_executed
         uamb_mpc = uamb_executed
         print("Loaded initial positions from %s"%(previous_mpc_file))
+        previous_all_file = folder + 'data/all_%02d'%(i_mpc_start -1)
+        xamb_actual_prev, uamb_actual_prev, _, xothers_actual_prev, uothers_actual_prev, _ = mpc.load_state(previous_all_file, params['n_other'], ignore_des=True)
+        t_end = xamb_actual_prev.shape[1]
+        xamb_actual[:, :t_end] = xamb_actual_prev[:, :t_end]
+        uamb_actual[:, :t_end] = uamb_actual_prev[:, :t_end]
+        for i in range(len(xothers_actual_prev)):
+            xothers_actual[i][:, :t_end] = xothers_actual_prev[i][:, :t_end]
+            uothers_actual[i][:, :t_end] = uothers_actual_prev[i][:, :t_end]
+
     if i_mpc > 0:
         amb_x0 = xamb_executed[:, number_ctrl_pts_executed] 
         for i in range(len(all_other_x0)):
@@ -384,6 +393,12 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
 
                 start_ipopt_time = time.time()
                 with redirect_stdout(f):
+
+                    if args.save_solver_input:
+                        with open(folder + 'data/inputs_v%02d_mpc_%03d_ibr_%01d_s_%01d.p'%(response_i, i_mpc, i_rounds_ibr, solve_number), 'wb') as fp:
+                            list_of_inputs = [ux_warm_profiles_subset, response_MPC, amb_MPC, nonresponse_MPC_list,response_x0, amb_x0, nonresponse_x0_list, world, solver_params, params, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb_ibr, xamb_ibr, xamb_des_ibr, debug_flag]
+                            pickle.dump(list_of_inputs, fp)
+
                     solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, key_ibr, debug_list = helper.solve_warm_starts(ux_warm_profiles_subset, 
                                                                                                             response_MPC, amb_MPC, nonresponse_MPC_list, 
                                                                                                             response_x0, amb_x0, nonresponse_x0_list, 
@@ -418,6 +433,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
 
     ### SAVE EXECUTED MPC SOLUTION TO HISTORY
     xamb_executed, uamb_executed = xamb_mpc[:,:number_ctrl_pts_executed+1], uamb_mpc[:,:number_ctrl_pts_executed]
+    
     xamb_actual[:, actual_t:actual_t+number_ctrl_pts_executed+1], uamb_actual[:, actual_t:actual_t+number_ctrl_pts_executed] = xamb_executed, uamb_executed
     for i in range(len(all_other_x_mpc)):
         all_other_x_executed[i], all_other_u_executed[i] = all_other_x_mpc[i][:,:number_ctrl_pts_executed+1], all_other_u_mpc[i][:,:number_ctrl_pts_executed]
@@ -430,7 +446,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
         print("Saving MPC Rd %02d / %02d to ... %s" % (i_mpc, n_rounds_mpc-1, file_name))
         # mpc.save_costs(file_name, bri_mpc) 
         file_name = folder + "data/"+'all_%02d'%(i_mpc)        
-        mpc.save_state(file_name, xamb_actual, uamb_actual, None, xothers_actual, uothers_actual, None)
+        mpc.save_state(file_name, xamb_actual, uamb_actual, None, xothers_actual, uothers_actual, None, end_t = actual_t+number_ctrl_pts_executed+1)
       
     mean_amb_v = np.mean(xamb_executed[4,:])
     im_dir = folder + '%02d/'%i_mpc
