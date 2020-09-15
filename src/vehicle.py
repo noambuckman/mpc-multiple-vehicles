@@ -353,11 +353,19 @@ class Vehicle(object):
         return centers, radius
 
     def get_ellipse(self, L, W):
-        '''Solve for the minimal inscribing ellipse.  X-axis is aligned with length of car'''
+        '''Solve for the minimal inscribing ellipse.
+        Inputs:  
+            L: Length of vehicle
+            W: Width of vehicle
+        Returns:
+            ax [float]: half length of the major axis  
+            by [float]: half length of the minor axis
+        '''
         min_elipse_a =  lambda a: (1 - L**2/(2*a)**2 - W**2/(2*a + W - L)**2)
         
         ax = optimize.fsolve(min_elipse_a, L/2.0)
         by = ax + .5*(W-L)
+        
         return ax, by
 
     def get_collision_ellipse(self, r, L_other=None, W_other=None):
@@ -388,3 +396,4 @@ class Vehicle(object):
         a_new = a+delta+r
         b_new = b+delta+r
         return a_new, b_new, delta, a, b
+
