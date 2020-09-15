@@ -58,7 +58,8 @@ def solve_best_response(warm_key, warm_trajectory,
     
     u_warm, x_warm, x_des_warm = warm_trajectory
     bri = mpc.MultiMPC(response_MPC, amb_MPC, nonresponse_MPC_list, world, solver_params)
-    bri.generate_optimization(params["N"], params["T"], response_x0, amb_x0, nonresponse_x0_list,  print_level=params["print_level"], slack=solver_params['slack'], solve_amb=solver_params['solve_amb'])
+    params["collision_avoidance_checking_distance"] = 100
+    bri.generate_optimization(params["N"], params["T"], response_x0, amb_x0, nonresponse_x0_list,  print_level=params["print_level"], slack=solver_params['slack'], solve_amb=solver_params['solve_amb'], params=params)
 
     # u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]
     bri.opti.set_initial(bri.u_opt, u_warm)            
@@ -76,17 +77,23 @@ def solve_best_response(warm_key, warm_trajectory,
     for j in range(len(nonresponse_x_list)):
         bri.opti.set_value(bri.allother_x_opt[j], nonresponse_x_list[j])
         bri.opti.set_value(bri.allother_x_desired[j], nonresponse_xd_list[j])
+    
     try:
         if "constant_v" in solver_params and solver_params["constant_v"]:
             bri.opti.subject_to(bri.u_opt[1,:] == 0)
         bri.solve(uamb, nonresponse_u_list, solver_params['solve_amb'])
         x_ibr, u_ibr, x_des_ibr, _, _, _, _, _, _ = bri.get_solution()
         current_cost = bri.solution.value(bri.total_svo_cost)
-        max_slack = np.max([np.max(bri.solution.value(s)) for s in bri.slack_vars_list])                                                                         
+        all_slack_vars = [bri.solution.value(s) for s in bri.slack_vars_list]
+        if amb_MPC:
+             all_slack_vars += [bri.solution.value(bri.slack_amb)]
+        max_slack = np.max([np.max(s) for s in all_slack_vars])
+        # max_slack = np.max([np.max(bri.solution.value(s)) for s in bri.slack_vars_list])                                                                         
         min_response_warm_ibr = None #<This used to return k_warm
-        min_bri_ibr = bri
+        
+
         debug_list = [current_cost, bri.solution.value(bri.response_svo_cost), bri.solution.value(bri.k_CA*bri.collision_cost), 
-                        bri.solution.value(bri.k_slack*bri.slack_cost), [bri.solution.value(s) for s in bri.slack_vars_list]]
+                        bri.solution.value(bri.k_slack*bri.slack_cost), all_slack_vars]
         solved = True
         if return_bri:
             debug_list += [bri]
@@ -110,7 +117,7 @@ def solve_warm_starts(ux_warm_profiles,
                         response_x0=response_x0, amb_x0=amb_x0, nonresponse_x0_list=nonresponse_x0_list, 
                         world=world, solver_params = solver_params, params=params,
                         nonresponse_u_list=nonresponse_u_list, nonresponse_x_list=nonresponse_x_list, nonresponse_xd_list=nonresponse_xd_list, 
-                        uamb=uamb, xamb=xamb, xamb_des=xamb_des)
+                        uamb=uamb, xamb=xamb, xamb_des=xamb_des, return_bri=False)
     
     if params['n_processors']>1:
         pool = multiprocessing.Pool(processes=params['n_processors'])
