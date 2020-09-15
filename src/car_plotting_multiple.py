@@ -80,7 +80,7 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_sh
     k = 0
     center_frame = xamb_plot[0,0] + k*camera_speed*x_mpc.dt
     # center_frame = xamb_plot[0,0]
-    axlim_minx, axlim_maxx = center_frame - 5, center_frame + 100,    
+    axlim_minx, axlim_maxx = center_frame - 40, center_frame + 100,    
 
     fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx ))
     fig, ax = plt.subplots(figsize=(figwidth_in, fig_height), dpi=144)
@@ -103,10 +103,15 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_sh
                 alpha_k = 1.0
             else:
                 alpha_k = .25 + float(ki/(len(plot_range) - 1)) * (1 - .25)
-            for ci in range(len(centers)):
-                xy_f = centers[ci]
-                circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius, color='red',alpha=alpha_k)
-                ax.add_patch(circle_patch_f)
+            # for ci in range(len(centers)):
+            #     xy_f = centers[ci]
+            #     circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius, color='red',alpha=alpha_k)
+            #     ax.add_patch(circle_patch_f)
+            
+            x, y, phi = xamb_plot[0,k], xamb_plot[1,k], xamb_plot[2,k]
+            a, b = x_mpc.ax, x_mpc.by
+            ellipse_patch = patches.Ellipse((x, y), 2*a, 2*b, angle=np.rad2deg(phi), fill=False, color='red', alpha=alpha_k)
+            ax.add_patch(ellipse_patch)                
 
             for i in range(len(xothers_plot)):
 
@@ -195,10 +200,12 @@ def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder,
     # center_frame = xamb_plot[0,0] + k*camera_speed*x_mpc.dt
     center_frame = camera_positions[k]
     # center_frame = xamb_plot[0,0]
-    axlim_minx, axlim_maxx = center_frame - 40, center_frame + 100,    
-
+    axlim_minx, axlim_maxx = center_frame - 20, center_frame + 60,    
+    ## 1080p = 1920×1080, 
     fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx ))
-    fig, ax = plt.subplots(figsize=(figwidth_in, fig_height), dpi=144)
+
+    # fig, ax = plt.subplots(figsize=(figwidth_in, fig_height), dpi=144)
+    fig, ax = plt.subplots(figsize=(1920/144, 1080/144), dpi=144)
     ax.axis('square')
     ax.set_ylim((ymin, ymax))
     ax.set_xlim((axlim_minx , axlim_maxx))
@@ -209,11 +216,17 @@ def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder,
         raise Exception("Incorrect car_plot_shape")
     if car_plot_shape.lower() == "ellipse" or car_plot_shape.lower() == "both" or car_plot_shape.lower() == "ellipses":
         # Plot the ambulance as circles
-        centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
-        for ci in range(len(centers)):
-            xy_f = centers[ci]
-            circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius, color='red')
-            ax.add_patch(circle_patch_f)
+
+        x, y, phi = xamb_plot[0,k], xamb_plot[1,k], xamb_plot[2,k]
+        a, b = x_mpc.ax, x_mpc.by
+        ellipse_patch = patches.Ellipse((x, y), 2*a, 2*b, angle=np.rad2deg(phi), fill=False, color='red')
+        ax.add_patch(ellipse_patch)    
+
+        # centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
+        # for ci in range(len(centers)):
+        #     xy_f = centers[ci]
+        #     circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius, color='red')
+        #     ax.add_patch(circle_patch_f)
         if car_labels is not None:
             ax.annotate('R', xy=(xamb_plot[0,k:k+1], xamb_plot[1,k:k+1]))
 
@@ -221,7 +234,8 @@ def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder,
             x1_plot = xothers_plot[i]
             x, y, phi = x1_plot[0,k], x1_plot[1,k], x1_plot[2,k]
             a, b = x_mpc.ax, x_mpc.by
-            ellipse_patch = patches.Ellipse((x, y), 2*a, 2*b, angle=np.rad2deg(phi), fill=False, edgecolor='red')
+            color = get_car_color(i)
+            ellipse_patch = patches.Ellipse((x, y), 2*a, 2*b, angle=np.rad2deg(phi), fill=False, edgecolor=color)
             ax.add_patch(ellipse_patch)
             # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2)
             # ax.add_patch(circle_patch_r)
@@ -242,6 +256,8 @@ def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder,
         
         ax = get_frame(xamb_plot[:,k], x_mpc, ax, "Amb")
     fig = plt.gcf()
+    ax = plt.gca()
+    ax.get_yaxis().set_visible(False)
     if folder is not None:
         fig.savefig(folder + 'imgs/' '{:03d}.png'.format(k))
         plt.close(fig)    
