@@ -245,3 +245,105 @@ def initialize_cars(n_other, N, dt, world, svo_theta, no_grass = False, random_l
     x0_amb = np.array([0, 0, 0, 0, initial_speed , 0]).T
     
     return amb_MPC, x0_amb, all_other_MPC, all_other_x0
+
+
+def initialize_cars_from_positions(N, dt, world, svo_theta, no_grass = False, list_of_positions = None):
+    '''x_variance is in terms of number of min_dist'''
+    ## Create the Cars in this Problem
+    all_other_x0 = []
+    all_other_u = []
+    all_other_MPC = []
+    next_x0_0 = 0
+    next_x0_1 = 0
+    for i in range(len(list_of_positions)):
+        x1_MPC = vehicle.Vehicle(dt)
+        x1_MPC.n_circles = 3
+        x1_MPC.theta_iamb =  svo_theta
+        x1_MPC.N = N
+
+
+        x1_MPC.k_change_u_v = 0.001
+        x1_MPC.max_delta_u = 50 * np.pi/180 * x1_MPC.dt
+        x1_MPC.k_u_v = 0.01
+        x1_MPC.k_u_delta = .00001
+        x1_MPC.k_change_u_v = 0.01
+        x1_MPC.k_change_u_delta = 0.001
+        x1_MPC.k_s = 0
+        x1_MPC.k_x = 0
+        x1_MPC.k_x_dot = -1.0 / 100.0
+        x1_MPC.k_lat = 0.001
+        x1_MPC.k_lon = 0.0
+        x1_MPC.k_phi_error = 0.001
+        x1_MPC.k_phi_dot = 0.01    
+
+        x1_MPC.min_y = world.y_min        
+        x1_MPC.max_y = world.y_max    
+        if no_grass:
+                x1_MPC.min_y += world.grass_width
+                x1_MPC.max_y -= world.grass_width        
+        x1_MPC.strict_wall_constraint = True
+
+        lane_number, next_x0 = list_of_positions[i]
+            
+        initial_speed = 0.99 * x1_MPC.max_v
+        x1_MPC.fd = x1_MPC.gen_f_desired_lane(world, lane_number, True)
+        x0 = np.array([next_x0, world.get_lane_centerline_y(lane_number), 0, 0, initial_speed, 0]).T
+        all_other_MPC += [x1_MPC]
+        all_other_x0 += [x0]
+
+    # Settings for Ambulance
+    amb_MPC = cp.deepcopy(x1_MPC)
+    amb_MPC.theta_iamb = 0.0
+
+    amb_MPC.k_u_v = 0.0000
+    amb_MPC.k_u_delta = .01
+    amb_MPC.k_change_u_v = 0.0000
+    amb_MPC.k_change_u_delta = 0
+
+    amb_MPC.k_s = 0
+    amb_MPC.k_x = 0
+    amb_MPC.k_x_dot = -1.0 / 100.0
+    amb_MPC.k_x = -1.0/100
+    amb_MPC.k_x_dot = 0
+    amb_MPC.k_lat = 0.00001
+    amb_MPC.k_lon = 0.0
+    # amb_MPC.min_v = 0.8*initial_speed
+    amb_MPC.max_v = 30 * 0.447 # m/s
+    amb_MPC.k_phi_error = 0.1
+    amb_MPC.k_phi_dot = 0.01
+    amb_MPC.min_y = world.y_min        
+    amb_MPC.max_y = world.y_max
+    if no_grass:
+        amb_MPC.min_y += world.grass_width
+        amb_MPC.max_y -= world.grass_width
+    amb_MPC.fd = amb_MPC.gen_f_desired_lane(world, 0, True)
+    x0_amb = np.array([0, 0, 0, 0, initial_speed , 0]).T
+    
+    return amb_MPC, x0_amb, all_other_MPC, all_other_x0
+
+
+def poission_positions(cars_per_hour, total_seconds, n_lanes, average_velocity, car_length):
+    cars_per_second = cars_per_hour / 3600.0
+    rng = np.random.default_rng()
+    n_cars_per_second = rng.poisson(cars_per_second, total_seconds)
+    
+    vehicle_x_distance = [[average_velocity*(s + rng.uniform(0,1))]*n_cars_per_second[s] for s in range(len(n_cars_per_second))]
+    
+    all_vehicle_positions = []
+    for s in range(len(vehicle_x_distance)):
+        if len(vehicle_x_distance[s]) == 0:
+            continue
+        else:
+            for j in range(len(vehicle_x_distance[s])):
+                all_vehicle_positions += [(rng.integers(0, n_lanes), vehicle_x_distance[s][j])]
+
+    # Remove cars that would have collided
+    prev_car_lane = -9999 * np.ones(n_lanes)
+    prev_car_lane[0] = 0.0
+    initial_vehicle_positions = []
+    for (lane, x) in all_vehicle_positions:
+        if x > prev_car_lane[lane] + 1.1*car_length:
+            initial_vehicle_positions += [(lane, float(x))]
+            prev_car_lane[lane] = x
+
+    return initial_vehicle_positions
