@@ -2,21 +2,21 @@
 import numpy as np
 
 class TrafficWorld():
-    def __init__(self, n_lanes_right, n_lanes_left, x_max, lane_width=3.7):
+    def __init__(self, n_lanes_right, n_lanes_left, x_max=np.infty, lane_width=3.7):
         
         self.lane_width = lane_width #m avg lane width
         self.n_lanes_right = n_lanes_right
         self.n_lanes_left = n_lanes_left
         self.n_lanes = self.n_lanes_left + self.n_lanes_right
 
-        self.grass_width = self.lane_width/4.0
+        self.grass_width = self.lane_width/2.0
 
         self.total_height = self.get_window_height()
         
         self.y_min = -0.5*self.lane_width - self.grass_width
         self.y_max = (- 0.5 + self.n_lanes) * self.lane_width + self.grass_width
-        self.x_min = - self.lane_width # NO REAL GOOD REASON
         self.x_max = x_max
+        self.x_min = - self.lane_width # NO REAL GOOD REASON
 
 
     def get_window_height(self):
