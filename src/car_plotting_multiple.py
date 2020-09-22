@@ -52,9 +52,9 @@ def get_frame(x, x_MPC, ax=None, car_name="red", alpha = 1.0):
     else:
         hard_coded_correction = 0.75
     if car_name == "Amb":
-        zoom_ratio = L/car_width_px * (dpi*figwidth_in)/window_width  * hard_coded_correction #0.8 is a hard coded correction  
+        zoom_ratio = L/car_width_px * (dpi*figwidth_in)/window_width  * hard_coded_correction   
     else:
-        zoom_ratio = L/car_width_px * (dpi*figwidth_in)/window_width  * hard_coded_correction #0.8 is a hard coded correction             
+        zoom_ratio = L/car_width_px * (dpi*figwidth_in)/window_width  * hard_coded_correction             
     imagebox = offsetbox.OffsetImage(rotated_img, zoom=zoom_ratio) #this zoom is to scale L=1            
     
     imagebox.image.axes = ax
