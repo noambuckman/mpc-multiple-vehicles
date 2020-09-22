@@ -49,6 +49,7 @@ def warm_profiles_subset(n_warm_keys, ux_warm_profiles):
     return ux_warm_profiles_subset
 ##########################################################
 svo_theta = np.pi/3.0
+# svo_theta = 0.0
 # random_seed = args.random_seed[0]
 random_seed = 9
 if random_seed > 0:
@@ -57,6 +58,8 @@ if random_seed > 0:
 default_position_list = [
     (0, 20),
     (0, 35),
+    (2, 35),
+    (2, 60),
     (1, 40),
     (0, 60),
     (1, 60),
@@ -83,16 +86,17 @@ parser.add_argument('--save-solver-input', action='store_true')
 
 parser.add_argument('--T', type=int, default=5)
 parser.add_argument('--dt', type=float, default=0.2)
-parser.add_argument('--n-rounds-mpc', type=int, default=300)
-parser.add_argument('--percent-mpc-executed', type=float, default=0.1)
-
+parser.add_argument('--p-exec', type=float, default=0.4, help="Percent of MPC points executed")
+parser.add_argument('--car-density', type=int, default=3000, help="Car density across all lanes, cars per hour")
 parser.add_argument('--plot-flag', action='store_true')
 # parser.add_argument('--save-flag', action='store_true') #Make the default to safe
 parser.add_argument('--print-flag', action='store_true')
 
-parser.add_argument('--n-other', type=int, default=4, help="Number of ado vehicles")
-parser.add_argument('--n-rounds-ibr', type=int, default=3, help="Number of rounds of iterative best response before excuting mpc")
+parser.add_argument('--n-other', type=int, default=10, help="Number of ado vehicles")
+parser.add_argument('--n-mpc', type=int, default=300)
+parser.add_argument('--n-ibr', type=int, default=3, help="Number of rounds of iterative best response before excuting mpc")
 parser.add_argument('--n-processors', type=int, default=15, help="Number of processors used when solving a single mpc")
+parser.add_argument('--n-lanes', type=int, default=2, help="Number of lanes in the right direction")
 
 parser.add_argument('--k-max-slack', type=float, default=0.01, help="Maximum allowed collision slack/overlap between vehicles")
 parser.add_argument('--k-solve-amb-max-ibr', type=int, default=2, help="Max number iterations where ado solves for ambulance controls, afterwards only ado")
@@ -101,10 +105,12 @@ parser.add_argument('--k-max-round-with-slack', type=int, default=np.infty, help
 
 
 parser.add_argument('--k-slack-d', type=float, default=1000)
-parser.add_argument('--k_CA-d', type=float, default=100)
+parser.add_argument('--k-CA-d', type=float, default=100)
 parser.add_argument('--k-CA-power', type=float, default=4)
 parser.add_argument('--wall-CA', action='store_true')
-parser.add_argument('--default-n-warm-starts', type=int, default=5)
+
+
+parser.add_argument('--default-n-warm-starts', type=int, default=10)
 
 parser.add_argument('--plan-fake-ambulance', action='store_true')
 parser.add_argument('--default-positions', action='store_true')
@@ -112,6 +118,8 @@ parser.add_argument('--default-positions', action='store_true')
 parser.add_argument('--print-level', type=int, default=0)
 args = parser.parse_args()
 params = vars(args)
+
+params["pid"] = os.getpid()
 
 if args.load_log_dir is not None:
     print("Preloading settings from log %s"%args.load_log_dir)
@@ -129,25 +137,18 @@ else:
     for f in [folder+"imgs/", folder+"data/", folder+"vids/", folder+"plots/"]:
         os.makedirs(f, exist_ok = True)
     i_mpc_start = 0
+    print(folder)
 
 T = params['T']  # MPC Planning Horizon
 dt = params['dt']
-n_rounds_mpc = params['n_rounds_mpc']
-percent_mpc_executed = params['percent_mpc_executed'] ## This is the percent of MPC that is executed
 params['save_flag'] = True
 
 PLOT_FLAG, SAVE_FLAG, PRINT_FLAG = params['plot_flag'], params['save_flag'], params['print_flag']
-# n_other = params['n_other']
 
+params['N'] = N = int(T/dt) #Number of control intervals in MPC
+params['number_ctrl_pts_executed'] = number_ctrl_pts_executed =  int(np.floor(params['N']*params['p_exec']))
 
-N = int(T/dt) #Number of control intervals in MPC
-number_ctrl_pts_executed =  int(np.floor(N*percent_mpc_executed))
-params['N'] = N
-params['number_ctrl_pts_executed'] = number_ctrl_pts_executed
-
-print("number ctrl pts:  %d"%number_ctrl_pts_executed)
-
-world = tw.TrafficWorld(2, 0, 999999)
+world = tw.TrafficWorld(params["n_lanes"], 0, 999999)
     # large_world = tw.TrafficWorld(2, 0, 1000, 5.0)
 
 
@@ -157,28 +158,36 @@ world = tw.TrafficWorld(2, 0, 999999)
 # handler.setFormatter(formatter)
 # logger.addHandler(handler) 
 # logger.info("Paramters: %s"%params.)
+params["svo_theta"] = svo_theta #TODO: make this an input arg
+
+if params['default_positions']:
+    position_list = default_position_list[:params['n_other']]
+    amb_MPC, amb_x0, all_other_MPC, all_other_x0  = helper.initialize_cars(params['n_other'], params['N'], params['dt'], world, svo_theta, True, False, False, position_list)
+else:
+    # This should be replaced with random placement
+    MAX_VELOCITY = 25 * 0.447 # m/s
+    VEHICLE_LENGTH = 4.5 #m
+    time_duration_s = (params["n_other"] * 3600.0 / params["car_density"] ) * 2 # amount of time to generate traffic
+    initial_vehicle_positions = helper.poission_positions(params["car_density"], int(time_duration_s), params["n_lanes"] , MAX_VELOCITY, VEHICLE_LENGTH)
+    position_list = initial_vehicle_positions[:params["n_other"]]
+    amb_MPC, amb_x0, all_other_MPC, all_other_x0 = helper.initialize_cars_from_positions(params["N"], params["dt"], world, params["svo_theta"], 
+                                                                True, 
+                                                                position_list)    
+
+if params['n_other'] != len(position_list):
+    raise Exception("n other larger than default position list")
+
 if args.load_log_dir is None:
     with open(folder + 'params.json', 'w') as fp:
         json.dump(params, fp, indent=2)
 
 
-if params['default_positions']:
-    position_list = default_position_list[:params['n_other']]
-else:
-    # This should be replaced with random placement
-    position_list = default_position_list[:params['n_other']]
-if params['n_other'] != len(position_list):
-    raise Exception("n other larger than default position list")
-
-#TODO: fix this line
-amb_MPC, amb_x0, all_other_MPC, all_other_x0  = helper.initialize_cars(params['n_other'], params['N'], params['dt'], world, svo_theta, True, False, False, position_list)
-
 t_start_time = time.time()
 actual_t = 0    
 
-xamb_actual, uamb_actual = np.zeros((6, n_rounds_mpc*number_ctrl_pts_executed + 1)), np.zeros((2, n_rounds_mpc*number_ctrl_pts_executed)) 
-xothers_actual = [np.zeros((6, n_rounds_mpc*number_ctrl_pts_executed + 1)) for i in range(params['n_other'])]
-uothers_actual = [np.zeros((2, n_rounds_mpc*number_ctrl_pts_executed)) for i in range(params['n_other'])]    
+xamb_actual, uamb_actual = np.zeros((6, params['n_mpc']*number_ctrl_pts_executed + 1)), np.zeros((2, params['n_mpc']*number_ctrl_pts_executed)) 
+xothers_actual = [np.zeros((6, params['n_mpc']*number_ctrl_pts_executed + 1)) for i in range(params['n_other'])]
+uothers_actual = [np.zeros((2, params['n_mpc']*number_ctrl_pts_executed)) for i in range(params['n_other'])]    
 
 
 
@@ -187,9 +196,13 @@ xamb_executed, all_other_x_executed, uamb_mpc, all_other_u_mpc = None, [], None,
 if params['save_flag']:
     pickle.dump(all_other_MPC[0], open(folder + "data/"+"mpcother" + ".p",'wb'))
     pickle.dump(amb_MPC, open(folder + "data/"+"mpcamb" + ".p",'wb'))
+    pickle.dump(world, open(folder + "data/"+"world" + ".p",'wb'))
 
-f = io.StringIO()
-for i_mpc in range(i_mpc_start, n_rounds_mpc):
+f = open(folder + 'out.txt',"w")
+# f = io.StringIO()
+sys.stdout = f
+
+for i_mpc in range(i_mpc_start, params['n_mpc']):
     min_slack = np.infty
 
     ###### Update the initial conditions for all vehicles
@@ -253,8 +266,8 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
     else:
         all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = helper.extend_last_mpc_ctrl(all_other_u_mpc, number_ctrl_pts_executed, N, all_other_MPC, all_other_x0)  # This is a hack and should be explicit that it's lane change                   
     
-    for i_rounds_ibr in range(params['n_rounds_ibr']):    
-        print("MPC %d, IBR %d / %d"%(i_mpc, i_rounds_ibr, params['n_rounds_ibr'] - 1))
+    for i_rounds_ibr in range(params['n_ibr']):    
+        print("MPC %d, IBR %d / %d"%(i_mpc, i_rounds_ibr, params['n_ibr'] - 1))
         ########## Solve the Response MPC ##########
         response_MPC, response_x0 = amb_MPC, amb_x0
 
@@ -443,7 +456,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
     file_name = folder + "data/"+'mpc_%02d'%(i_mpc)
     if SAVE_FLAG:
         mpc.save_state(file_name, xamb_mpc, uamb_mpc, xamb_des_mpc, all_other_x_mpc, all_other_u_mpc, all_other_x_des_mpc)
-        print("Saving MPC Rd %02d / %02d to ... %s" % (i_mpc, n_rounds_mpc-1, file_name))
+        print("Saving MPC Rd %02d / %02d to ... %s" % (i_mpc, params['n_mpc']-1, file_name))
         # mpc.save_costs(file_name, bri_mpc) 
         file_name = folder + "data/"+'all_%02d'%(i_mpc)        
         mpc.save_state(file_name, xamb_actual, uamb_actual, None, xothers_actual, uothers_actual, None, end_t = actual_t+number_ctrl_pts_executed+1)
@@ -457,7 +470,7 @@ for i_mpc in range(i_mpc_start, n_rounds_mpc):
     cmplot.concat_imgs(im_dir)
     actual_t += number_ctrl_pts_executed
     
-
+f.close()
 print("Solver Done!  Runtime: %.1d"%(time.time()-t_start_time))
 ######################## SAVE THE FINAL STATE OF THE VEHICLES
 final_t = actual_t+number_ctrl_pts_executed+1
