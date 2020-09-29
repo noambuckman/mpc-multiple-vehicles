@@ -60,7 +60,7 @@ def solve_best_response(warm_key, warm_trajectory,
     bri = mpc.MultiMPC(response_MPC, amb_MPC, nonresponse_MPC_list, world, solver_params)
     params["collision_avoidance_checking_distance"] = 100
     bri.generate_optimization(params["N"], params["T"], response_x0, amb_x0, nonresponse_x0_list,  print_level=params["print_level"], slack=solver_params['slack'], solve_amb=solver_params['solve_amb'], params=params)
-
+    print("Succesffully generated optimzation %d %d %d"%(len(nonresponse_MPC_list), len(nonresponse_x_list), len(nonresponse_u_list)))
     # u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]
     bri.opti.set_initial(bri.u_opt, u_warm)            
     bri.opti.set_initial(bri.x_opt, x_warm)
@@ -87,7 +87,7 @@ def solve_best_response(warm_key, warm_trajectory,
         all_slack_vars = [bri.solution.value(s) for s in bri.slack_vars_list]
         if amb_MPC:
              all_slack_vars += [bri.solution.value(bri.slack_amb)]
-        max_slack = np.max([np.max(s) for s in all_slack_vars])
+        max_slack = np.max([np.max(s) for s in all_slack_vars] + [0.000000000000])
         # max_slack = np.max([np.max(bri.solution.value(s)) for s in bri.slack_vars_list])                                                                         
         min_response_warm_ibr = None #<This used to return k_warm
         

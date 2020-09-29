@@ -87,7 +87,7 @@ parser.add_argument('--save-solver-input', action='store_true')
 parser.add_argument('--T', type=int, default=5)
 parser.add_argument('--dt', type=float, default=0.2)
 parser.add_argument('--p-exec', type=float, default=0.4, help="Percent of MPC points executed")
-parser.add_argument('--car-density', type=int, default=3000, help="Car density across all lanes, cars per hour")
+parser.add_argument('--car-density', type=int, default=5000, help="Car density across all lanes, cars per hour")
 parser.add_argument('--plot-flag', action='store_true')
 # parser.add_argument('--save-flag', action='store_true') #Make the default to safe
 parser.add_argument('--print-flag', action='store_true')
@@ -114,7 +114,7 @@ parser.add_argument('--default-n-warm-starts', type=int, default=10)
 
 parser.add_argument('--plan-fake-ambulance', action='store_true')
 parser.add_argument('--default-positions', action='store_true')
-
+parser.add_argument('--save-ibr', type=int, default=1, help="Save the IBR control inputs, 1=True, 0=False")
 parser.add_argument('--print-level', type=int, default=0)
 args = parser.parse_args()
 params = vars(args)
@@ -226,46 +226,24 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
         for i in range(len(all_other_x0)):
             all_other_x0[i] = all_other_x_executed[i][:, number_ctrl_pts_executed]
     
-    vehicles_index_in_mpc = []
-    vehicles_index_constant_v = []
-    for i in range(params['n_other']):
-        initial_distance = np.sqrt((amb_x0[0]-all_other_x0[i][0])**2 + (amb_x0[1]-all_other_x0[i][1])**2)
-        if initial_distance <= np.infty: #RIGHT NOW THIS ISN'T REALLY WORKING
-            vehicles_index_in_mpc += [i]
-        else:
-            vehicles_index_constant_v += [i]    
+    ############ Select which vehicles will be solved in IBR
+    x_distance_from_response = [all_other_x0[j][0] - amb_x0[0] for j in range(params['n_other'])]
+    vehicles_index_in_mpc = [j for j in range(params['n_other']) if (-10*amb_MPC.L <= x_distance_from_response[j] <= 10*amb_MPC.L)]    
+    vehicles_index_constant_v = [j for j in range(params['n_other']) if j not in vehicles_index_in_mpc]
 
-    # for j in vehicles_index_constant_v:
-    #     # Solve but constrain u_v = 0, allow for small changes in steering
-    #     response_MPC = all_other_MPC[j]
-    #     response_x0 = all_other_x0[j]
-    #     solver_params = {}
-    #     solver_params['slack'] = True if i_rounds_ibr <= params['k_max_round_with_slack'] else False
-    #     solver_params['solve_amb'] = False if fake_amb_i == -1 or i_rounds_ibr >= params['k_solve_amb_max_ibr'] else True
-
-    #     solve_number, solve_again, max_slack_ibr, debug_flag = 0, True, np.infty, False
-    #     solver_params['k_slack'] = params['k_slack_d'] * 10**solve_number
-    #     solver_params['k_CA'] = params['k_CA_d'] * 2**solve_number
-    #     solver_params['k_CA_power'] = params['k_CA_power']
-    #     solver_params['wall_CA'] = params['wall_CA']        
-    #     x_warm_profiles, x_ux_warm_profiles = mpc.generate_warm_x(response_MPC, world,  response_x0, np.median([x[4] for x in all_other_x0]))
-
-    #     solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, key_ibr, debug_list = helper.solve_warm_starts(x_ux_warm_profiles, 
-    #                                                                                                 response_MPC, None, [], 
-    #                                                                                                 response_x0, None, [], 
-    #                                                                                                 world, solver_params, params, 
-    #                                                                                                 [], [], [], 
-    #                                                                                                 uamb=None, xamb=None, xamb_des=None, 
-    #                                                                                                 debug_flag=debug_flag)
-    #     all_other_u_ibr[j] = u_ibr #constant v control inputs
-    #     all_other_x_ibr[j], all_other_x_des_ibr[j] = x_ibr, x_des_ibr
-        
     ############# Generate (if needed) the control inputs of other vehicles        
     if i_mpc == 0:
         all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = helper.pullover_guess(N, all_other_MPC, all_other_x0)  # This is a hack and should be explicit that it's lane change                   
     else:
         all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = helper.extend_last_mpc_ctrl(all_other_u_mpc, number_ctrl_pts_executed, N, all_other_MPC, all_other_x0)  # This is a hack and should be explicit that it's lane change                   
     
+    for j in vehicles_index_constant_v:
+        # Solve but constrain u_v = 0, allow for small changes in steering
+        response_MPC = all_other_MPC[j]
+        response_x0 = all_other_x0[j]
+        all_other_u_ibr[j], all_other_x_ibr[j], all_other_x_des_ibr[j] = mpc.centerline_following(params["N"], response_MPC, response_x0)
+        
+
     for i_rounds_ibr in range(params['n_ibr']):    
         print("MPC %d, IBR %d / %d"%(i_mpc, i_rounds_ibr, params['n_ibr'] - 1))
         ########## Solve the Response MPC ##########
@@ -273,7 +251,7 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
 
         # Select which vehicles should be included in the ambulance's MPC (3 cars ahead and 2 car behind)
         x_distance_from_response = [all_other_x0[i][0] - amb_x0[0] for i in range(len(all_other_x0))]
-        veh_idxs_in_amb_mpc = [i for i in range(len(all_other_x0)) if (x_distance_from_response[i] <= 4*amb_MPC.L or x_distance_from_response[i] >= -2*amb_MPC.L)]
+        veh_idxs_in_amb_mpc = [i for i in range(len(all_other_x0)) if (-40*amb_MPC.L <= x_distance_from_response[i] <= 40*amb_MPC.L)]
         
         fake_amb_i = -1
         fake_amb_MPC, fake_amb_x0, fake_amb_u, fake_amb_x, fake_amb_xd = None, None, None, None, None
@@ -295,8 +273,12 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
             u_warm_profiles["previous_ibr"] = uamb_ibr    
             x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm_profiles["previous_ibr"]) 
             ux_warm_profiles["previous_ibr"] = [u_warm_profiles["previous_ibr"], x_warm, x_des_warm]            
-            
-        x_warm_profiles, x_ux_warm_profiles = mpc.generate_warm_x(response_MPC, world,  response_x0, np.median([x[4] for x in nonresponse_x0_list]))
+        
+        if len(nonresponse_x0_list) > 0:
+            warm_velocity = np.median([x[4] for x in nonresponse_x0_list])
+        else:
+            warm_velocity = response_x0[4]
+        x_warm_profiles, x_ux_warm_profiles = mpc.generate_warm_x(response_MPC, world,  response_x0, warm_velocity)
         ux_warm_profiles.update(x_ux_warm_profiles) # combine into one
         ################# Solve the Ambulance Best Response ############################
         
@@ -326,6 +308,10 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
                     with open(folder + 'data/inputs_amb_mpc_%d_ibr_%d_s_%d.p'%(i_mpc, i_rounds_ibr, solve_number), 'wb') as fp:
                         list_of_inputs = [ux_warm_profiles_subset, response_MPC, fake_amb_MPC, nonresponse_MPC_list,response_x0, fake_amb_x0, nonresponse_x0_list, world, solver_params, params, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, fake_amb_u, fake_amb_x, fake_amb_xd, debug_flag]
                         pickle.dump(list_of_inputs, fp)
+                print("....Length of Amb's NonResponse: %d %d %d %d %d"%(
+                                                                len(nonresponse_MPC_list), len(nonresponse_x0_list), 
+                                                                len(nonresponse_u_list), len(nonresponse_x_list), len(nonresponse_xd_list)
+                                                                ))
                 solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, key_ibr, debug_list = helper.solve_warm_starts(ux_warm_profiles_subset, 
                                                                                                                     response_MPC, fake_amb_MPC, nonresponse_MPC_list, 
                                                                                                                     response_x0, fake_amb_x0, nonresponse_x0_list, 
@@ -337,7 +323,7 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
             if max_slack_ibr <= params['k_max_slack']:
                 print("......Solver converged.  Solver time: %0.1f s"%(end_ipopt_time - start_ipopt_time))            
                 xamb_ibr, xamb_des_ibr, uamb_ibr = x_ibr, x_des_ibr, u_ibr
-                solve_again = False
+                solve_again = False                    
             else:
                 # print("ipopt solved in %0.1f s"%(end_ipopt_time - start_ipopt_time))            
                 print("......Re-solve:  Slack too large: %.05f > Max Threshold (%.05f).  Solver time: %0.1f s"%(max_slack_ibr, params['k_max_slack'], end_ipopt_time - start_ipopt_time))
@@ -354,7 +340,7 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
 
             # Select which vehicles should be included in the ambulance's MPC (3 cars ahead and 2 car behind)
             x_distance_from_response = [all_other_x0[j][0] - response_x0[0] for j in range(len(all_other_x0))]
-            veh_idxs_in_mpc = [j for j in range(len(all_other_x0)) if j != response_i and (x_distance_from_response[j] <= 4*response_MPC.L or x_distance_from_response[j] >= -2*response_MPC.L)]
+            veh_idxs_in_mpc = [j for j in range(len(all_other_x0)) if j != response_i and (-40*response_MPC.L <= x_distance_from_response[j] <= 40*response_MPC.L)]
 
             nonresponse_x0_list, nonresponse_MPC_list, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list = nonresponse_subset(veh_idxs_in_mpc, 
                                                                                                 all_other_x0, all_other_MPC, all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr)
@@ -370,8 +356,11 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
                 u_warm_profiles["previous_ibr"] = all_other_u_ibr[response_i]  
                 x_warm, x_des_warm = response_MPC.forward_simulate_all(response_x0.reshape(6,1), u_warm_profiles["previous_ibr"])
                 ux_warm_profiles["previous_ibr"] = [u_warm_profiles["previous_ibr"], x_warm, x_des_warm]
-            
-            x_warm_profiles, x_ux_warm_profiles = mpc.generate_warm_x(response_MPC, world,  response_x0, np.median([x[4] for x in nonresponse_x0_list]))
+            if len(nonresponse_x0_list) > 0:
+                warm_velocity = np.median([x[4] for x in nonresponse_x0_list])
+            else:
+                warm_velocity = response_x0[4]
+            x_warm_profiles, x_ux_warm_profiles = mpc.generate_warm_x(response_MPC, world,  response_x0, warm_velocity)
             ux_warm_profiles.update(x_ux_warm_profiles) # combine into one
             #######
 
@@ -411,7 +400,10 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
                         with open(folder + 'data/inputs_v%02d_mpc_%03d_ibr_%01d_s_%01d.p'%(response_i, i_mpc, i_rounds_ibr, solve_number), 'wb') as fp:
                             list_of_inputs = [ux_warm_profiles_subset, response_MPC, amb_MPC, nonresponse_MPC_list,response_x0, amb_x0, nonresponse_x0_list, world, solver_params, params, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb_ibr, xamb_ibr, xamb_des_ibr, debug_flag]
                             pickle.dump(list_of_inputs, fp)
-
+                    print("....Length of Veh's NonResponse: %d %d %d %d %d"%(
+                                                                    len(nonresponse_MPC_list), len(nonresponse_x0_list), 
+                                                                    len(nonresponse_u_list), len(nonresponse_x_list), len(nonresponse_xd_list)
+                                                                ))
                     solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, key_ibr, debug_list = helper.solve_warm_starts(ux_warm_profiles_subset, 
                                                                                                             response_MPC, amb_MPC, nonresponse_MPC_list, 
                                                                                                             response_x0, amb_x0, nonresponse_x0_list, 
@@ -433,7 +425,10 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
                         solver_params['solve_amb'] = False
             if solve_again:
                 raise Exception("Reached maximum number of re-solves @ Veh %02d MPC Rd %d IBR %d.   Max Slack = %.05f > thresh %.05f"%(response_i, i_mpc, i_rounds_ibr, 
-                                                                                                                                        max_slack_ibr, params['k_max_slack']))
+                                                                                                                           max_slack_ibr, params['k_max_slack']))
+            if params["save_ibr"] == 1:
+                file_name = folder + "data/"+'ibr_m%03di%03d'%(i_mpc, i_rounds_ibr)
+                mpc.save_state(file_name, xamb_ibr, uamb_ibr, xamb_des_ibr, all_other_x_ibr, all_other_u_ibr, all_other_x_des_ibr)
 
     ################ SAVE THE BEST RESPONSE SOLUTION FOR THE CURRENT PLANNING HORIZONG/MPC ITERATION ###########################
     ## CLEANUP:  x_mpc, x_actual, x_ibr, x_executed
