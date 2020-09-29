@@ -247,7 +247,7 @@ def initialize_cars(n_other, N, dt, world, svo_theta, no_grass = False, random_l
     return amb_MPC, x0_amb, all_other_MPC, all_other_x0
 
 
-def initialize_cars_from_positions(N, dt, world, svo_theta, no_grass = False, list_of_positions = None):
+def initialize_cars_from_positions(N, dt, world, svo_theta, no_grass = False, list_of_positions = None, list_of_svo = None):
     '''x_variance is in terms of number of min_dist'''
     ## Create the Cars in this Problem
     all_other_x0 = []
@@ -258,7 +258,10 @@ def initialize_cars_from_positions(N, dt, world, svo_theta, no_grass = False, li
     for i in range(len(list_of_positions)):
         x1_MPC = vehicle.Vehicle(dt)
         x1_MPC.n_circles = 3
-        x1_MPC.theta_iamb =  svo_theta
+        if list_of_svo is None:
+            x1_MPC.theta_iamb =  svo_theta
+        else:
+            x1_MPC.theta_iamb = list_of_svo[i]
         x1_MPC.N = N
 
 

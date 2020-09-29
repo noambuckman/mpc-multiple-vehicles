@@ -111,7 +111,7 @@ parser.add_argument('--wall-CA', action='store_true')
 
 
 parser.add_argument('--default-n-warm-starts', type=int, default=10)
-
+parser.add_argument('--random-svo', action='store_true')
 parser.add_argument('--plan-fake-ambulance', action='store_true')
 parser.add_argument('--default-positions', action='store_true')
 parser.add_argument('--save-ibr', type=int, default=1, help="Save the IBR control inputs, 1=True, 0=False")
@@ -170,9 +170,13 @@ else:
     time_duration_s = (params["n_other"] * 3600.0 / params["car_density"] ) * 2 # amount of time to generate traffic
     initial_vehicle_positions = helper.poission_positions(params["car_density"], int(time_duration_s), params["n_lanes"] , MAX_VELOCITY, VEHICLE_LENGTH)
     position_list = initial_vehicle_positions[:params["n_other"]]
+    if params['random_svo']:
+        list_of_svo = [np.random.choice([0, np.pi/4.0, np.pi/2.01]) for i in range(params["n_other"])]
+    else:
+        list_of_svo = None
     amb_MPC, amb_x0, all_other_MPC, all_other_x0 = helper.initialize_cars_from_positions(params["N"], params["dt"], world, params["svo_theta"], 
                                                                 True, 
-                                                                position_list)    
+                                                                position_list, list_of_svo)    
 
 if params['n_other'] != len(position_list):
     raise Exception("n other larger than default position list")
