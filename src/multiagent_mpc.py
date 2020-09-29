@@ -66,7 +66,12 @@ class MultiMPC(object):
             self.allother_u_opt = [self.opti.parameter(n_ctrl, N) for i in self.otherMPClist] 
             self.allother_x_desired = [self.opti.parameter(3, N+1) for i in self.otherMPClist]
             self.allother_p = [self.opti.parameter(n_state, 1) for i in self.otherMPClist]
-
+        else:
+            self.allother_x_opt = [] 
+            self.allother_u_opt = [] 
+            self.allother_x_desired = []
+            self.allother_p = []            
+            
         #### Costs
         self.responseMPC.generate_costs(self.x_opt, self.u_opt, self.x_desired)
         self.car1_costs, self.car1_costs_list, self.car1_cost_titles = self.responseMPC.total_cost()
@@ -139,7 +144,7 @@ class MultiMPC(object):
             response_centers, response_radius = self.responseMPC.get_car_circles(self.x_opt[:,k]) 
             for center_i in range(len(response_centers)):
                 response_circle_xy = response_centers[center_i]
-                for i in range(len(self.allother_x_opt)):
+                for i in range(len(self.otherMPClist)):
                     initial_displacement = x0_other[i] - x0
                     initial_xy_distance = cas.sqrt(initial_displacement[0]**2 + initial_displacement[1]**2)
                     if initial_xy_distance <= params["collision_avoidance_checking_distance"]: #collision avoidance distance for other cars 
@@ -180,7 +185,7 @@ class MultiMPC(object):
                 if solve_amb and self.ambMPC:
                     for ci in range(len(self.ca_vars)):
                         ca_circle_xy = self.ca_vars[ci]
-                        for i in range(len(self.allother_x_opt)):
+                        for i in range(len(self.otherMPClist)):
                             initial_displacement = x0_other[i] - x0_amb
                             initial_xy_distance = cas.sqrt(initial_displacement[0]**2 + initial_displacement[1]**2)
                             if initial_xy_distance <= params["collision_avoidance_checking_distance"]: #collision avoidance distance for other cars                        
@@ -235,9 +240,9 @@ class MultiMPC(object):
                 self.opti.set_initial(self.uamb_opt, uamb)
             else:
                 self.opti.set_value(self.uamb_opt, uamb)
-
-        for i in range(len(self.allother_u_opt)):
-            self.opti.set_value(self.allother_u_opt[i], uother[i])
+        if len(uother)>0:
+            for i in range(len(self.otherMPClist)):
+                self.opti.set_value(self.allother_u_opt[i], uother[i])
         # self.opti.set_value(self.u2_opt, u2) 
 
         self.solution = self.opti.solve()         
@@ -254,9 +259,9 @@ class MultiMPC(object):
         else:
             xamb, uamb, xamb_des, = None, None, None
 
-        other_x = [self.solution.value(self.allother_x_opt[i]) for i in range(len(self.allother_x_opt))]
-        other_u = [self.solution.value(self.allother_u_opt[i]) for i in range(len(self.allother_u_opt))]
-        other_des = [self.solution.value(self.allother_x_desired[i]) for i in range(len(self.allother_x_desired))]
+        other_x = [self.solution.value(self.allother_x_opt[i]) for i in range(len(self.otherMPClist))]
+        other_u = [self.solution.value(self.allother_u_opt[i]) for i in range(len(self.otherMPClist))]
+        other_des = [self.solution.value(self.allother_x_desired[i]) for i in range(len(self.otherMPClist))]
         return x1, u1, x1_des, xamb, uamb, xamb_des, other_x, other_u, other_des
 
     def generate_slack_variables(self, slack_bool, N_time_steps, number_other_vehicles, n_ego_circles):
