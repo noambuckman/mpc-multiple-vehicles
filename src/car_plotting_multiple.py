@@ -158,7 +158,7 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_sh
         plt.show()
 
 def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder,   
-                car_plot_shape="ellipse", parallelize=True, camera_speed = None, car_labels = None,
+                car_plot_shape="ellipse", parallelize=True, camera_speed = None, car_labels = None, car_colors = None, 
                 xamb_desired=None, xothers_desired=None):
     '''TODO: Cleanup and document'''
     N = xamb_plot.shape[1]
@@ -170,16 +170,16 @@ def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder,
     if parallelize:
         pool = multiprocessing.Pool(processes=8)
         plot_partial = functools.partial(plot_multiple_cars, x_mpc=x_mpc, xothers_plot=xothers_plot, xamb_plot=xamb_plot, car_plot_shape=car_plot_shape, xothers_desired=xothers_desired, xamb_desired=xamb_desired,
-                                         folder=folder, world=world, camera_positions = camera_positions, car_labels=car_labels)
+                                         folder=folder, world=world, camera_positions = camera_positions, car_labels=car_labels, car_colors=car_colors)
         pool.map(plot_partial, range(N)) #will apply k=1...N to plot_partial
         pool.terminate()
     else:
         for k in range(N):
-            plot_multiple_cars( k, world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_shape, camera_positions, car_labels, xamb_desired, xothers_desired)     
+            plot_multiple_cars( k, world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_shape, camera_positions, car_labels, car_colors, xamb_desired, xothers_desired)     
     return None
 
 def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder, 
-                        car_plot_shape="Ellipse", camera_positions = None, car_labels = None,
+                        car_plot_shape="Ellipse", camera_positions = None, car_labels = None, car_colors = None, 
                         xamb_desired=None, xothers_desired=None,):
     ''' This only has info from x_mpc but not any individual ones'''
     if camera_positions is None:
@@ -234,7 +234,10 @@ def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder,
             x1_plot = xothers_plot[i]
             x, y, phi = x1_plot[0,k], x1_plot[1,k], x1_plot[2,k]
             a, b = x_mpc.ax, x_mpc.by
-            color = get_car_color(i)
+            if car_colors is None:
+                color = get_car_color(i)
+            else:
+                color = car_colors[i]
             ellipse_patch = patches.Ellipse((x, y), 2*a, 2*b, angle=np.rad2deg(phi), fill=False, edgecolor=color)
             ax.add_patch(ellipse_patch)
             # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2)

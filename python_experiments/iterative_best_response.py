@@ -151,13 +151,6 @@ params['number_ctrl_pts_executed'] = number_ctrl_pts_executed =  int(np.floor(pa
 world = tw.TrafficWorld(params["n_lanes"], 0, 999999)
     # large_world = tw.TrafficWorld(2, 0, 1000, 5.0)
 
-
-# logger = logging.getLogger('iterative_best_response')
-# handler = logging.FileHandler(folder + 'ibr.log')
-# formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-# handler.setFormatter(formatter)
-# logger.addHandler(handler) 
-# logger.info("Paramters: %s"%params.)
 params["svo_theta"] = svo_theta #TODO: make this an input arg
 
 if params['default_positions']:
@@ -197,10 +190,10 @@ uothers_actual = [np.zeros((2, params['n_mpc']*number_ctrl_pts_executed)) for i 
 
 xamb_executed, all_other_x_executed, uamb_mpc, all_other_u_mpc = None, [], None, [] #This gets updated after each round of MPC
 
-if params['save_flag']:
-    pickle.dump(all_other_MPC[0], open(folder + "data/"+"mpcother" + ".p",'wb'))
-    pickle.dump(amb_MPC, open(folder + "data/"+"mpcamb" + ".p",'wb'))
-    pickle.dump(world, open(folder + "data/"+"world" + ".p",'wb'))
+for i in range(len(all_other_MPC)):
+    pickle.dump(all_other_MPC[i], open(folder + "data/mpcother%02d.p"%i,'wb'))
+pickle.dump(amb_MPC, open(folder + "data/mpcamb.p",'wb'))
+pickle.dump(world, open(folder + "data/"+"world.p",'wb'))
 
 f = open(folder + 'out.txt',"w")
 # f = io.StringIO()
