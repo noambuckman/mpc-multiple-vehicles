@@ -105,8 +105,8 @@ parser.add_argument('--k-max-round-with-slack', type=int, default=np.infty, help
 
 
 parser.add_argument('--k-slack-d', type=float, default=1000)
-parser.add_argument('--k-CA-d', type=float, default=100)
-parser.add_argument('--k-CA-power', type=float, default=4)
+parser.add_argument('--k-CA-d', type=float, default=10)
+parser.add_argument('--k-CA-power', type=float, default=2)
 parser.add_argument('--wall-CA', action='store_true')
 
 
@@ -127,7 +127,6 @@ if args.load_log_dir is not None:
     with open(args.load_log_dir + "params.json",'rb') as fp:
         params = json.load(fp)
     i_mpc_start = args.mpc_start_iteration
-    params['default_n_warm_starts'] = 20
 else:
     params["start_time_string"] = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     subdir_name = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -145,8 +144,8 @@ params['save_flag'] = True
 
 PLOT_FLAG, SAVE_FLAG, PRINT_FLAG = params['plot_flag'], params['save_flag'], params['print_flag']
 
-params['N'] = N = int(T/dt) #Number of control intervals in MPC
-params['number_ctrl_pts_executed'] = number_ctrl_pts_executed =  int(np.floor(params['N']*params['p_exec']))
+params['N'] = N = max(1, int(T/dt)) #Number of control intervals in MPC
+params['number_ctrl_pts_executed'] = number_ctrl_pts_executed =  max(1, int(np.floor(params['N']*params['p_exec'])))
 
 world = tw.TrafficWorld(params["n_lanes"], 0, 999999)
     # large_world = tw.TrafficWorld(2, 0, 1000, 5.0)
@@ -232,7 +231,9 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
     if i_mpc == 0:
         all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = helper.pullover_guess(N, all_other_MPC, all_other_x0)  # This is a hack and should be explicit that it's lane change                   
     else:
-        all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = helper.extend_last_mpc_ctrl(all_other_u_mpc, number_ctrl_pts_executed, N, all_other_MPC, all_other_x0)  # This is a hack and should be explicit that it's lane change                   
+        # all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = helper.extend_last_mpc_ctrl(all_other_u_mpc, number_ctrl_pts_executed, N, all_other_MPC, all_other_x0)  
+        all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = helper.extend_last_mpc_and_follow(all_other_u_mpc, number_ctrl_pts_executed, N, all_other_MPC, all_other_x0)  
+
     
     for j in vehicles_index_constant_v:
         # Solve but constrain u_v = 0, allow for small changes in steering
@@ -248,7 +249,7 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
 
         # Select which vehicles should be included in the ambulance's MPC (3 cars ahead and 2 car behind)
         x_distance_from_response = [all_other_x0[i][0] - amb_x0[0] for i in range(len(all_other_x0))]
-        veh_idxs_in_amb_mpc = [i for i in range(len(all_other_x0)) if (-40*amb_MPC.L <= x_distance_from_response[i] <= 40*amb_MPC.L)]
+        veh_idxs_in_amb_mpc = [i for i in range(len(all_other_x0)) if (-20*amb_MPC.L <= x_distance_from_response[i] <= 20*amb_MPC.L)]
         
         fake_amb_i = -1
         fake_amb_MPC, fake_amb_x0, fake_amb_u, fake_amb_x, fake_amb_xd = None, None, None, None, None
@@ -285,6 +286,7 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
         solver_params['n_warm_starts'] = params['default_n_warm_starts']
         solve_number, solve_again, max_slack_ibr, debug_flag = 0, True, np.infty, False
         print("...Amb Solver:")
+        ipopt_params = {'print_level': 0}
         while solve_again and solve_number < params['k_max_solve_number']:
             # print("...Attempt %d / %d"%(solve_number, params['k_max_solve_number'] - 1)) 
             solver_params['k_slack'] = params['k_slack_d'] * 10**solve_number
@@ -299,7 +301,6 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
             if psutil.virtual_memory().percent >= 90.0:
                 raise Exception("Virtual Memory is too high, exiting to save computer")
             start_ipopt_time = time.time()
-            save_solver_inputs = False
             with redirect_stdout(f):
                 if args.save_solver_input:
                     with open(folder + 'data/inputs_amb_mpc_%d_ibr_%d_s_%d.p'%(i_mpc, i_rounds_ibr, solve_number), 'wb') as fp:
@@ -312,7 +313,7 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
                 solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, key_ibr, debug_list = helper.solve_warm_starts(ux_warm_profiles_subset, 
                                                                                                                     response_MPC, fake_amb_MPC, nonresponse_MPC_list, 
                                                                                                                     response_x0, fake_amb_x0, nonresponse_x0_list, 
-                                                                                                                    world, solver_params, params, 
+                                                                                                                    world, solver_params, params, ipopt_params,
                                                                                                                     nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, 
                                                                                                                     uamb=fake_amb_u, xamb=fake_amb_x, xamb_des=fake_amb_xd, 
                                                                                                                     debug_flag=debug_flag)
@@ -323,7 +324,7 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
                 solve_again = False                    
             else:
                 # print("ipopt solved in %0.1f s"%(end_ipopt_time - start_ipopt_time))            
-                print("......Re-solve:  Slack too large: %.05f > Max Threshold (%.05f).  Solver time: %0.1f s"%(max_slack_ibr, params['k_max_slack'], end_ipopt_time - start_ipopt_time))
+                print("......Re-solve %d/%d:  Slack too large: %.05f > Max Threshold (%.05f).  Solver time: %0.1f s"%(solve_number, params['k_max_solve_number'], max_slack_ibr, params['k_max_slack'], end_ipopt_time - start_ipopt_time))
                 solve_again = True
                 solve_number += 1
 #             raise Exception("Test")
@@ -337,7 +338,7 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
 
             # Select which vehicles should be included in the ambulance's MPC (3 cars ahead and 2 car behind)
             x_distance_from_response = [all_other_x0[j][0] - response_x0[0] for j in range(len(all_other_x0))]
-            veh_idxs_in_mpc = [j for j in range(len(all_other_x0)) if j != response_i and (-40*response_MPC.L <= x_distance_from_response[j] <= 40*response_MPC.L)]
+            veh_idxs_in_mpc = [j for j in range(len(all_other_x0)) if j != response_i and (-20*response_MPC.L <= x_distance_from_response[j] <= 20*response_MPC.L)]
 
             nonresponse_x0_list, nonresponse_MPC_list, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list = nonresponse_subset(veh_idxs_in_mpc, 
                                                                                                 all_other_x0, all_other_MPC, all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr)
@@ -386,7 +387,7 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
                 if solve_number > 2:
                     debug_flag = True
                 if psutil.virtual_memory().percent >= 90.0:
-                    raise Exception("Virtual Memory is too high, exit ing to save computer")                
+                    raise Exception("Virtual Memory is too high, exiting to save computer")                
 
                 ux_warm_profiles_subset = warm_profiles_subset(solver_params['n_warm_starts'], ux_warm_profiles)
 
@@ -404,7 +405,7 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
                     solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, key_ibr, debug_list = helper.solve_warm_starts(ux_warm_profiles_subset, 
                                                                                                             response_MPC, amb_MPC, nonresponse_MPC_list, 
                                                                                                             response_x0, amb_x0, nonresponse_x0_list, 
-                                                                                                            world, solver_params, params, 
+                                                                                                            world, solver_params, params, ipopt_params,
                                                                                                             nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, 
                                                                                                             uamb_ibr, xamb_ibr, xamb_des_ibr, debug_flag)
                 end_ipopt_time = time.time()

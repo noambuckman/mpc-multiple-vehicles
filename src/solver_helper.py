@@ -28,11 +28,31 @@ def get_min_dist_i(ambulance_x0, all_other_x0, restrict_greater=False):
 
 
 def extend_last_mpc_ctrl(all_other_u_mpc, number_ctrl_pts_executed, N, all_other_MPC, all_other_x0):
-    '''Copy the previous mpc and extend the last values'''
+    '''Copy the previous mpc and extend the last values with all zeros'''
     all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = [np.zeros(shape=(2, N)) for i in range(len(all_other_MPC))], [np.zeros(shape=(6, N+1)) for i in range(len(all_other_MPC))], [np.zeros(shape=(3, N+1)) for i in range(len(all_other_MPC))]
     for i in range(len(all_other_MPC)):
         all_other_u_ibr[i] = np.concatenate((all_other_u_mpc[i][:, number_ctrl_pts_executed:], np.tile(np.zeros(shape=(2,1)),(1, number_ctrl_pts_executed))),axis=1) ##   
         all_other_x_ibr[i], all_other_x_des_ibr[i] = all_other_MPC[i].forward_simulate_all(all_other_x0[i].reshape(6,1), all_other_u_ibr[i])
+    return all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr
+
+def extend_last_mpc_and_follow(all_other_u_mpc, number_ctrl_pts_executed, N, all_other_MPC, all_other_x0):
+    '''Copy the previous mpc and extend the last values with lane following control'''
+    all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = [np.zeros(shape=(2, N)) for i in range(len(all_other_MPC))], [np.zeros(shape=(6, N+1)) for i in range(len(all_other_MPC))], [np.zeros(shape=(3, N+1)) for i in range(len(all_other_MPC))]
+    for i in range(len(all_other_MPC)):
+        # Ctrl and traj from previous MPC
+        prev_ctrl = all_other_u_mpc[i][:, number_ctrl_pts_executed:]
+        prev_traj, prev_traj_des = all_other_MPC[i].forward_simulate_all(all_other_x0[i].reshape(6,1), prev_ctrl)
+        
+        # Predicted portion of just lane following.  This is an estimated ctrl of ado vehicles.
+        initial_pt = prev_traj[:, -1]
+        lane_following_ctrl, lane_following_traj, lane_following_traj_des = mpc.centerline_following(number_ctrl_pts_executed, all_other_MPC[i], initial_pt)
+
+        # Lane following traj's initial pt is redundant (since it is also in prev traj)
+        lane_following_traj = lane_following_traj[:, 1:]
+        lane_following_traj_des = lane_following_traj_des[:, 1:]
+        all_other_u_ibr[i] = np.concatenate((prev_ctrl, lane_following_ctrl), axis=1)
+        all_other_x_ibr[i] = np.concatenate((prev_traj, lane_following_traj), axis=1)
+        all_other_x_des_ibr[i] = np.concatenate((prev_traj_des, lane_following_traj_des), axis=1)
     return all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr
 
 
@@ -51,7 +71,8 @@ def pullover_guess(N, all_other_MPC, all_other_x0):
 def solve_best_response(warm_key, warm_trajectory, 
                         response_MPC, amb_MPC, nonresponse_MPC_list, 
                         response_x0, amb_x0, nonresponse_x0_list,
-                        world, solver_params, params, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list,
+                        world, solver_params, params, ipopt_params,
+                        nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list,
                         uamb=None, xamb=None, xamb_des=None, return_bri=False):
     '''Create the iterative best response object and solve.  Assumes that it receives warm start profiles.
     This really should only require a u_warm, x_warm, x_des_warm and then one level above we generate those values'''
@@ -59,7 +80,7 @@ def solve_best_response(warm_key, warm_trajectory,
     u_warm, x_warm, x_des_warm = warm_trajectory
     bri = mpc.MultiMPC(response_MPC, amb_MPC, nonresponse_MPC_list, world, solver_params)
     params["collision_avoidance_checking_distance"] = 100
-    bri.generate_optimization(params["N"], params["T"], response_x0, amb_x0, nonresponse_x0_list,  print_level=params["print_level"], slack=solver_params['slack'], solve_amb=solver_params['solve_amb'], params=params)
+    bri.generate_optimization(params["N"], params["T"], response_x0, amb_x0, nonresponse_x0_list,  print_level=params["print_level"], slack=solver_params['slack'], solve_amb=solver_params['solve_amb'], params=params, ipopt_params=ipopt_params)
     print("Succesffully generated optimzation %d %d %d"%(len(nonresponse_MPC_list), len(nonresponse_x_list), len(nonresponse_u_list)))
     # u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]
     bri.opti.set_initial(bri.u_opt, u_warm)            
@@ -108,14 +129,14 @@ def solve_best_response(warm_key, warm_trajectory,
 def solve_warm_starts(ux_warm_profiles, 
                     response_MPC, amb_MPC, nonresponse_MPC_list, 
                     response_x0, amb_x0, nonresponse_x0_list, 
-                    world, solver_params, params,
+                    world, solver_params, params, ipopt_params,
                     nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, 
                     uamb=None, xamb=None, xamb_des=None, 
                     debug_flag=False):
     warm_solve_partial  = functools.partial(solve_best_response, 
                         response_MPC=response_MPC, amb_MPC=amb_MPC, nonresponse_MPC_list=nonresponse_MPC_list, 
                         response_x0=response_x0, amb_x0=amb_x0, nonresponse_x0_list=nonresponse_x0_list, 
-                        world=world, solver_params = solver_params, params=params,
+                        world=world, solver_params = solver_params, params=params, ipopt_params=ipopt_params,
                         nonresponse_u_list=nonresponse_u_list, nonresponse_x_list=nonresponse_x_list, nonresponse_xd_list=nonresponse_xd_list, 
                         uamb=uamb, xamb=xamb, xamb_des=xamb_des, return_bri=False)
     
