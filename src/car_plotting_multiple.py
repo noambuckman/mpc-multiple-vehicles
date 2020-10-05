@@ -10,7 +10,7 @@ import scipy.ndimage as ndimage
 import gc
 import tqdm
 import src.traffic_world as tw
-
+import p_tqdm
 PROJECT_PATH = '/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-multiple-vehicles/'
 
 car_colors = ['green', 'blue', 'yellow', 'orange']
@@ -170,11 +170,13 @@ def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder,
 
     camera_positions = generate_camera_positions(xamb_plot, x_mpc)    
     if n_processors > 1:
-        pool = multiprocessing.Pool(processes=n_processors)
+        # pool = multiprocessing.Pool(processes=n_processors)
         plot_partial = functools.partial(plot_multiple_cars, x_mpc=x_mpc, xothers_plot=xothers_plot, xamb_plot=xamb_plot, car_plot_shape=car_plot_shape, xothers_desired=xothers_desired, xamb_desired=xamb_desired,
                                          folder=folder, world=world, camera_positions = camera_positions, car_labels=car_labels, car_colors=car_colors)
-        list(tqdm.tqdm(pool.imap(plot_partial, range(N)))) #will apply k=1...N to plot_partial
-        pool.terminate()
+        # list(tqdm.tqdm(pool.imap(plot_partial, range(N)))) #will apply k=1...N to plot_partial
+        # pool.terminate()
+
+        p_tqdm.p_map(plot_partial, range(N), num_cpus = n_processors)
     else:
         for k in range(N):
             plot_multiple_cars( k, world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_shape, camera_positions, car_labels, car_colors, xamb_desired, xothers_desired)     
