@@ -8,7 +8,7 @@ import numpy as np
 import scipy.ndimage as ndimage
 # from scipy import ndimage
 import gc
-
+import tqdm
 import src.traffic_world as tw
 
 PROJECT_PATH = '/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-multiple-vehicles/'
@@ -39,9 +39,9 @@ def get_frame(x, x_MPC, ax=None, car_name="red", alpha = 1.0):
         car_width_px = 599
         car_height_px = 310               
     arr_img[:,:,3] = alpha * arr_img[:,:,3]
-    
     degree = np.rad2deg(Phi)
     xy = (X, Y)
+
     rotated_img = ndimage.rotate(arr_img, degree)
     window_width = ax.get_xlim()[1] - ax.get_xlim()[0]
     window_height = ax.get_ylim()[1] - ax.get_ylim()[0]
@@ -55,8 +55,10 @@ def get_frame(x, x_MPC, ax=None, car_name="red", alpha = 1.0):
         zoom_ratio = L/car_width_px * (dpi*figwidth_in)/window_width  * hard_coded_correction   
     else:
         zoom_ratio = L/car_width_px * (dpi*figwidth_in)/window_width  * hard_coded_correction             
-    imagebox = offsetbox.OffsetImage(rotated_img, zoom=zoom_ratio) #this zoom is to scale L=1            
     
+    # return rotated_img
+    rotated_img = np.clip(rotated_img, 0.0, 1.0)
+    imagebox = offsetbox.OffsetImage(rotated_img, zoom=zoom_ratio) #this zoom is to scale L=1            
     imagebox.image.axes = ax
     ab = offsetbox.AnnotationBbox(imagebox, (X, Y),frameon=False)
     ax.add_artist(ab)        
@@ -158,7 +160,7 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_sh
         plt.show()
 
 def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder,   
-                car_plot_shape="ellipse", parallelize=True, camera_speed = None, car_labels = None, car_colors = None, 
+                car_plot_shape="ellipse", camera_speed = None, car_labels = None, car_colors = None, n_processors=8,
                 xamb_desired=None, xothers_desired=None):
     '''TODO: Cleanup and document'''
     N = xamb_plot.shape[1]
@@ -167,11 +169,11 @@ def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder,
         raise Exception("Virtual Memory is too high, exiting to save computer")
 
     camera_positions = generate_camera_positions(xamb_plot, x_mpc)    
-    if parallelize:
-        pool = multiprocessing.Pool(processes=8)
+    if n_processors > 1:
+        pool = multiprocessing.Pool(processes=n_processors)
         plot_partial = functools.partial(plot_multiple_cars, x_mpc=x_mpc, xothers_plot=xothers_plot, xamb_plot=xamb_plot, car_plot_shape=car_plot_shape, xothers_desired=xothers_desired, xamb_desired=xamb_desired,
                                          folder=folder, world=world, camera_positions = camera_positions, car_labels=car_labels, car_colors=car_colors)
-        pool.map(plot_partial, range(N)) #will apply k=1...N to plot_partial
+        list(tqdm.tqdm(pool.imap(plot_partial, range(N)))) #will apply k=1...N to plot_partial
         pool.terminate()
     else:
         for k in range(N):
@@ -229,33 +231,34 @@ def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder,
         #     ax.add_patch(circle_patch_f)
         if car_labels is not None:
             ax.annotate('R', xy=(xamb_plot[0,k:k+1], xamb_plot[1,k:k+1]))
-
+        
         for i in range(len(xothers_plot)):
             x1_plot = xothers_plot[i]
-            x, y, phi = x1_plot[0,k], x1_plot[1,k], x1_plot[2,k]
-            a, b = x_mpc.ax, x_mpc.by
-            if car_colors is None:
-                color = get_car_color(i)
-            else:
-                color = car_colors[i]
-            ellipse_patch = patches.Ellipse((x, y), 2*a, 2*b, angle=np.rad2deg(phi), fill=False, edgecolor=color)
-            ax.add_patch(ellipse_patch)
-            # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2)
-            # ax.add_patch(circle_patch_r)
-            if car_labels is not None:
-                ax.annotate(str(car_labels[i]), xy=(x,y))
-
+            if 0.9*axlim_minx <= x1_plot[0,k] <= 1.1*axlim_maxx:
+                x, y, phi = x1_plot[0,k], x1_plot[1,k], x1_plot[2,k]
+                a, b = x_mpc.ax, x_mpc.by
+                if car_colors is None:
+                    color = get_car_color(i)
+                else:
+                    color = car_colors[i]
+                ellipse_patch = patches.Ellipse((x, y), 2*a, 2*b, angle=np.rad2deg(phi), fill=False, edgecolor=color)
+                ax.add_patch(ellipse_patch)
+                # circle_patch_r = patches.Circle((xy_r[0], xy_r[1]), radius=x_mpc.min_dist/2)
+                # ax.add_patch(circle_patch_r)
+                if car_labels is not None:
+                    ax.annotate(str(car_labels[i]), xy=(x,y))
 
         centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])                  
 
     if car_plot_shape.lower() == "image" or car_plot_shape.lower() == "both":
         for i in range(len(xothers_plot)):
             x1_plot = xothers_plot[i]
-            if (i%2)==0:
-                color="red"
-            else:
-                color="green"
-            ax = get_frame(x1_plot[:,k], x_mpc, ax, color, alpha=1.0)
+            if 0.9*axlim_minx <= x1_plot[0,k] <= 1.1*axlim_maxx:
+                if (i%2)==0:
+                    color="red"
+                else:
+                    color="green"
+                ax = get_frame(x1_plot[:,k], x_mpc, ax, color, alpha=1.0)
         
         ax = get_frame(xamb_plot[:,k], x_mpc, ax, "Amb")
     fig = plt.gcf()
