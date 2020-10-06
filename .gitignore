@@ -12,3 +12,5 @@ __init__.py
 trash/
 results/
 january_notebooks/
+*.txt
+*code-workspace
