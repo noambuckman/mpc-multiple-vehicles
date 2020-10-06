@@ -39,7 +39,7 @@ class MultiMPC(object):
 
 
 
-    def generate_optimization(self, N, T, x0, x0_amb, x0_other, print_level=5, slack=True, solve_amb=False, params = None, ipopt_params=None):
+    def generate_optimization(self, N, T, x0, x0_amb, x0_other, slack=True, solve_amb=False, params = None, ipopt_params=None):
 
         n_state, n_ctrl, n_desired = 6, 2, 3
         #Response (planning) Vehicle Variables
@@ -226,10 +226,7 @@ class MultiMPC(object):
             self.opti.set_value(pamb, x0_amb) 
 
         # Set the solver conditions
-        if ipopt_params is None:
-            ipopt_params = {}
-            ipopt_params['print_level'] = print_level
-            # ipopt_params['max_iter'] = 0
+
         self.opti.solver('ipopt',{}, ipopt_params)
 
 
