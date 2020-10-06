@@ -80,7 +80,7 @@ def solve_best_response(warm_key, warm_trajectory,
     u_warm, x_warm, x_des_warm = warm_trajectory
     bri = mpc.MultiMPC(response_MPC, amb_MPC, nonresponse_MPC_list, world, solver_params)
     params["collision_avoidance_checking_distance"] = 100
-    bri.generate_optimization(params["N"], params["T"], response_x0, amb_x0, nonresponse_x0_list,  print_level=params["print_level"], slack=solver_params['slack'], solve_amb=solver_params['solve_amb'], params=params, ipopt_params=ipopt_params)
+    bri.generate_optimization(params["N"], params["T"], response_x0, amb_x0, nonresponse_x0_list,  slack=solver_params['slack'], solve_amb=solver_params['solve_amb'], params=params, ipopt_params=ipopt_params)
     print("Succesffully generated optimzation %d %d %d"%(len(nonresponse_MPC_list), len(nonresponse_x_list), len(nonresponse_u_list)))
     # u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]
     bri.opti.set_initial(bri.u_opt, u_warm)            
