@@ -133,6 +133,8 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_sh
                 a, b = x_mpc.ax, x_mpc.by
                 ellipse_patch = patches.Ellipse((x, y), 2*a, 2*b, angle=np.rad2deg(phi), fill=False, color=color, alpha=alpha_k)
                 ax.add_patch(ellipse_patch)
+                if car_ids is not None:
+                    ax.annotate(str(car_id), (x,y))
 
 
             centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])                  
