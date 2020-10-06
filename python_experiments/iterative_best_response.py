@@ -110,7 +110,7 @@ parser.add_argument('--k-CA-power', type=float, default=2)
 parser.add_argument('--wall-CA', action='store_true')
 
 
-parser.add_argument('--default-n-warm-starts', type=int, default=10)
+parser.add_argument('--default-n-warm-starts', type=int, default=15)
 parser.add_argument('--random-svo', action='store_true')
 parser.add_argument('--plan-fake-ambulance', action='store_true')
 parser.add_argument('--default-positions', action='store_true')
@@ -119,7 +119,6 @@ parser.add_argument('--print-level', type=int, default=0)
 args = parser.parse_args()
 params = vars(args)
 
-params["pid"] = os.getpid()
 
 if args.load_log_dir is not None:
     print("Preloading settings from log %s"%args.load_log_dir)
@@ -172,6 +171,7 @@ else:
 
 if params['n_other'] != len(position_list):
     raise Exception("n other larger than default position list")
+params["pid"] = os.getpid()
 
 if args.load_log_dir is None:
     with open(folder + 'params.json', 'w') as fp:
@@ -286,7 +286,7 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
         solver_params['n_warm_starts'] = params['default_n_warm_starts']
         solve_number, solve_again, max_slack_ibr, debug_flag = 0, True, np.infty, False
         print("...Amb Solver:")
-        ipopt_params = {'print_level': 0}
+        ipopt_params = {'print_level': params["print_level"]}
         while solve_again and solve_number < params['k_max_solve_number']:
             # print("...Attempt %d / %d"%(solve_number, params['k_max_solve_number'] - 1)) 
             solver_params['k_slack'] = params['k_slack_d'] * 10**solve_number
@@ -306,10 +306,7 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
                     with open(folder + 'data/inputs_amb_mpc_%d_ibr_%d_s_%d.p'%(i_mpc, i_rounds_ibr, solve_number), 'wb') as fp:
                         list_of_inputs = [ux_warm_profiles_subset, response_MPC, fake_amb_MPC, nonresponse_MPC_list,response_x0, fake_amb_x0, nonresponse_x0_list, world, solver_params, params, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, fake_amb_u, fake_amb_x, fake_amb_xd, debug_flag]
                         pickle.dump(list_of_inputs, fp)
-                print("....Length of Amb's NonResponse: %d %d %d %d %d"%(
-                                                                len(nonresponse_MPC_list), len(nonresponse_x0_list), 
-                                                                len(nonresponse_u_list), len(nonresponse_x_list), len(nonresponse_xd_list)
-                                                                ))
+                print("....# Vehicles in Amb's Best Response: %d "%(len(nonresponse_MPC_list)))
                 solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, key_ibr, debug_list = helper.solve_warm_starts(ux_warm_profiles_subset, 
                                                                                                                     response_MPC, fake_amb_MPC, nonresponse_MPC_list, 
                                                                                                                     response_x0, fake_amb_x0, nonresponse_x0_list, 
@@ -331,6 +328,9 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
         if solve_again:
             raise Exception("Reached maximum number of re-solves @ Veh %s MPC Rd %d IBR %d.   Max Slack = %.05f > thresh %.05f"%("Amb", i_mpc, i_rounds_ibr, 
                                                                                                                                 max_slack_ibr, params['k_max_slack']))
+        if params["save_ibr"] == 1:
+            file_name = folder + "data/"+'ibr_m%03di%03damb'%(i_mpc, i_rounds_ibr)
+            mpc.save_state(file_name, xamb_ibr, uamb_ibr, xamb_des_ibr, all_other_x_ibr, all_other_u_ibr, all_other_x_des_ibr)       
         # out = f.getvalue()                            
         ################# SOLVE BEST RESPONSE FOR THE OTHER VEHICLES ON THE ROAD ############################
         for response_i in vehicles_index_in_mpc:
@@ -398,10 +398,7 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
                         with open(folder + 'data/inputs_v%02d_mpc_%03d_ibr_%01d_s_%01d.p'%(response_i, i_mpc, i_rounds_ibr, solve_number), 'wb') as fp:
                             list_of_inputs = [ux_warm_profiles_subset, response_MPC, amb_MPC, nonresponse_MPC_list,response_x0, amb_x0, nonresponse_x0_list, world, solver_params, params, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, uamb_ibr, xamb_ibr, xamb_des_ibr, debug_flag]
                             pickle.dump(list_of_inputs, fp)
-                    print("....Length of Veh's NonResponse: %d %d %d %d %d"%(
-                                                                    len(nonresponse_MPC_list), len(nonresponse_x0_list), 
-                                                                    len(nonresponse_u_list), len(nonresponse_x_list), len(nonresponse_xd_list)
-                                                                ))
+                    print("....# Vehicles in Best Response: %d "%(len(nonresponse_MPC_list)))
                     solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, key_ibr, debug_list = helper.solve_warm_starts(ux_warm_profiles_subset, 
                                                                                                             response_MPC, amb_MPC, nonresponse_MPC_list, 
                                                                                                             response_x0, amb_x0, nonresponse_x0_list, 
@@ -425,8 +422,11 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
                 raise Exception("Reached maximum number of re-solves @ Veh %02d MPC Rd %d IBR %d.   Max Slack = %.05f > thresh %.05f"%(response_i, i_mpc, i_rounds_ibr, 
                                                                                                                            max_slack_ibr, params['k_max_slack']))
             if params["save_ibr"] == 1:
-                file_name = folder + "data/"+'ibr_m%03di%03d'%(i_mpc, i_rounds_ibr)
-                mpc.save_state(file_name, xamb_ibr, uamb_ibr, xamb_des_ibr, all_other_x_ibr, all_other_u_ibr, all_other_x_des_ibr)
+                file_name = folder + "data/"+'ibr_m%03di%03da%03d'%(i_mpc, i_rounds_ibr, response_i)
+                mpc.save_state(file_name, xamb_ibr, uamb_ibr, xamb_des_ibr, all_other_x_ibr, all_other_u_ibr, all_other_x_des_ibr)                                                                                                                           
+        if params["save_ibr"] == 1:
+            file_name = folder + "data/"+'ibr_m%03di%03d'%(i_mpc, i_rounds_ibr)
+            mpc.save_state(file_name, xamb_ibr, uamb_ibr, xamb_des_ibr, all_other_x_ibr, all_other_u_ibr, all_other_x_des_ibr)
 
     ################ SAVE THE BEST RESPONSE SOLUTION FOR THE CURRENT PLANNING HORIZONG/MPC ITERATION ###########################
     ## CLEANUP:  x_mpc, x_actual, x_ibr, x_executed
@@ -459,8 +459,8 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
     os.makedirs(im_dir+"imgs/", exist_ok=True)    
     end_frame = actual_t + number_ctrl_pts_executed + 1
     start_frame = max(0, end_frame - 20)
-    cmplot.plot_cars(world, amb_MPC, xamb_actual[:,start_frame:end_frame], [x[:,start_frame:end_frame] for x in xothers_actual], im_dir, "ellipse", True, 0)                        
-    cmplot.concat_imgs(im_dir)
+    # cmplot.plot_cars(world, amb_MPC, xamb_actual[:,start_frame:end_frame], [x[:,start_frame:end_frame] for x in xothers_actual], im_dir, "ellipse", True, 0)                        
+    # cmplot.concat_imgs(im_dir)
     actual_t += number_ctrl_pts_executed
     
 f.close()
