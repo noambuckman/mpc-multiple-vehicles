@@ -123,7 +123,8 @@ class Vehicle(object):
         else:
             self.lat_cost = self.generate_lateral_cost(X, X_desired)
             self.s_cost = cas.sumsqr(X[5,-1])   
-        self.final_costs = self.generate_lateral_cost(X[:,-5:],X_desired[:,-5:]) + cas.sumsqr(X_desired[2,-5:]-X[2,-5:])
+        # self.final_costs = self.generate_lateral_cost(X[:,-5:],X_desired[:,-5:]) + cas.sumsqr(X_desired[2,-5:]-X[2,-5:])
+        self.final_costs = 0 # for now I've diactivated this
         self.v_cost = cas.sumsqr(X[4, :])
         self.phidot_cost = self.generate_phidot_cost(X)
         N = U.shape[1] 
