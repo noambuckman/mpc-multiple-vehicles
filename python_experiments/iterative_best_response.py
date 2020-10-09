@@ -105,8 +105,8 @@ parser.add_argument('--k-max-round-with-slack', type=int, default=np.infty, help
 
 
 parser.add_argument('--k-slack-d', type=float, default=1000)
-parser.add_argument('--k-CA-d', type=float, default=10)
-parser.add_argument('--k-CA-power', type=float, default=2)
+parser.add_argument('--k-CA-d', type=float, default=0.05)
+parser.add_argument('--k-CA-power', type=float, default=1.0)
 parser.add_argument('--wall-CA', action='store_true')
 
 
@@ -158,7 +158,7 @@ else:
     # This should be replaced with random placement
     MAX_VELOCITY = 25 * 0.447 # m/s
     VEHICLE_LENGTH = 4.5 #m
-    time_duration_s = (params["n_other"] * 3600.0 / params["car_density"] ) * 2 # amount of time to generate traffic
+    time_duration_s = (params["n_other"] * 3600.0 / params["car_density"] ) * 5 # amount of time to generate traffic
     initial_vehicle_positions = helper.poission_positions(params["car_density"], int(time_duration_s), params["n_lanes"] , MAX_VELOCITY, VEHICLE_LENGTH)
     position_list = initial_vehicle_positions[:params["n_other"]]
     if params['random_svo']:
@@ -216,7 +216,8 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
         for i in range(len(xothers_actual_prev)):
             xothers_actual[i][:, :t_end] = xothers_actual_prev[i][:, :t_end]
             uothers_actual[i][:, :t_end] = uothers_actual_prev[i][:, :t_end]
-
+        actual_t = i_mpc * number_ctrl_pts_executed
+        
     if i_mpc > 0:
         amb_x0 = xamb_executed[:, number_ctrl_pts_executed] 
         for i in range(len(all_other_x0)):
@@ -290,7 +291,8 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
         while solve_again and solve_number < params['k_max_solve_number']:
             # print("...Attempt %d / %d"%(solve_number, params['k_max_solve_number'] - 1)) 
             solver_params['k_slack'] = params['k_slack_d'] * 10**solve_number
-            solver_params['k_CA'] = params['k_CA_d'] * 2**solve_number
+            # solver_params['k_CA'] = params['k_CA_d'] * 2**solve_number
+            solver_params['k_CA'] = params['k_CA_d']
             solver_params['k_CA_power'] = params['k_CA_power']
             solver_params['wall_CA'] = params['wall_CA']
             if solve_number > 2:
@@ -321,7 +323,7 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
                 solve_again = False                    
             else:
                 # print("ipopt solved in %0.1f s"%(end_ipopt_time - start_ipopt_time))            
-                print("......Re-solve %d/%d:  Slack too large: %.05f > Max Threshold (%.05f).  Solver time: %0.1f s"%(solve_number, params['k_max_solve_number'], max_slack_ibr, params['k_max_slack'], end_ipopt_time - start_ipopt_time))
+                print("......Re-solve %d/%d:  Slack too large: %.05f > Max Threshold (%.05f).  Solver time: %0.1f s"%(solve_number+1, params['k_max_solve_number'], max_slack_ibr, params['k_max_slack'], end_ipopt_time - start_ipopt_time))
                 solve_again = True
                 solve_number += 1
 #             raise Exception("Test")
@@ -380,7 +382,8 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
             while solve_again and solve_number < params['k_max_solve_number']:
                 # print("SOLVING Agent %d:  Attempt %d / %d"%(response_i, solve_number+1, params['k_max_solve_number']))    
                 solver_params['k_slack'] = params['k_slack_d'] * 10**solve_number
-                solver_params['k_CA'] = params['k_CA_d'] * 2**solve_number    
+                # solver_params['k_CA'] = params['k_CA_d'] * 2**solve_number    
+                solver_params['k_CA'] = params['k_CA_d']
                 solver_params['k_CA_power'] = params['k_CA_power']
                 solver_params['wall_CA'] = params['wall_CA']
                 solver_params['n_warm_starts'] = solver_params['n_warm_starts'] + 5 * solve_number
