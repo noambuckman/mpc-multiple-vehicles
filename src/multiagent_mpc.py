@@ -106,7 +106,7 @@ class MultiMPC(object):
             for slack_var in self.slack_amb_other:
                 for i in range(slack_var.shape[0]):
                     for j in range(slack_var.shape[1]):
-                        self.slack_cost += slack_var[i,j]**2
+                        self.slack_cost += slack_var[i,j]**2 
         
         self.response_svo_cost = np.cos(self.responseMPC.theta_iamb)*self.car1_costs
         self.other_svo_cost = np.sin(self.responseMPC.theta_iamb)*self.amb_costs
@@ -138,7 +138,7 @@ class MultiMPC(object):
         self.pairwise_distances = [] #keep track of all the distances between ego and ado vehicles
         self.collision_cost = 0
         # Collision Avoidance
-        
+        self.k_ca2 = 0.77
         for k in range(N+1):
             # Compute response vehicles collision center points
             response_centers, response_radius = self.responseMPC.get_car_circles(self.x_opt[:,k]) 
@@ -159,7 +159,7 @@ class MultiMPC(object):
                         self.pairwise_distances += [dist]
                         self.opti.subject_to(dist >= (1 - self.slack_vars_list[i][center_i, k]))
                         distance_clipped = cas.fmax(dist, 0.00001) ## This can be a smaller distance if we'd like
-                        self.collision_cost += 1/distance_clipped**self.k_CA_power      
+                        self.collision_cost += 1/(distance_clipped - self.k_ca2)**self.k_CA_power           
                
                 if self.ambMPC:  # Don't forget the ambulance collision avoidance   
                     dist = self.minkowski_ellipse_collision_distance(self.responseMPC, self.ambMPC, 
@@ -169,7 +169,7 @@ class MultiMPC(object):
                     self.opti.subject_to(dist >= 1 - self.slack_amb[center_i, k] )         
                     self.pairwise_distances += [dist]
                     distance_clipped = cas.fmax(dist, 0.00001)
-                    self.collision_cost += 1/distance_clipped**self.k_CA_power  
+                    self.collision_cost += 1/(distance_clipped - self.k_ca2)**self.k_CA_power     
                 
                 if self.WALL_CA: #Add a collision cost related to distance from wall
                     dist_btw_wall_bottom =  response_circle_xy[1] - (self.responseMPC.min_y + self.responseMPC.W/2.0) 
@@ -198,7 +198,7 @@ class MultiMPC(object):
                                 
                                 self.opti.subject_to(dist >= (1 - self.slack_amb_other[i][ci, k]))
                                 distance_clipped = cas.fmax(dist, 0.0001) # could be buffered if we'd like
-                                self.collision_cost += 1/distance_clipped**self.k_CA_power     
+                                self.collision_cost += 1/(distance_clipped - self.k_ca2)**self.k_CA_power     
                         if self.WALL_CA: # Compute CA cost of ambulance and wall
                             dist_btw_wall_bottom =  ca_circle_xy[1] - (self.responseMPC.min_y + self.responseMPC.W/2.0) 
                             dist_btw_wall_top = (self.responseMPC.max_y - self.responseMPC.W/2.0) - ca_circle_xy[1]

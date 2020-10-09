@@ -60,8 +60,8 @@ def pullover_guess(N, all_other_MPC, all_other_x0):
     ''' Provide a 2deg turn for all the other vehicles on the road'''
 
     all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = [np.zeros(shape=(2, N)) for i in range(len(all_other_MPC))], [np.zeros(shape=(6, N+1)) for i in range(len(all_other_MPC))], [np.zeros(shape=(3, N+1)) for i in range(len(all_other_MPC))]
-    for i in range(len(all_other_MPC)):
-        if i%2==0:
+    for i in range(len(all_other_x0)):
+        if all_other_x0[i][1] <= 0.5:
             all_other_u_ibr[i][0,0] = -2 * np.pi/180  # This is a hack and should be explicit that it's lane change
         else:
             all_other_u_ibr[i][0,0] = 2 * np.pi/180  # This is a hack and should be explicit that it's lane change  
@@ -249,8 +249,8 @@ def initialize_cars(n_other, N, dt, world, svo_theta, no_grass = False, random_l
     amb_MPC.k_s = 0
     amb_MPC.k_x = 0
     amb_MPC.k_x_dot = -1.0 / 100.0
-    amb_MPC.k_x = -1.0/100
-    amb_MPC.k_x_dot = 0
+    # amb_MPC.k_x = -1.0/100
+    # amb_MPC.k_x_dot = 0
     amb_MPC.k_lat = 0.00001
     amb_MPC.k_lon = 0.0
     # amb_MPC.min_v = 0.8*initial_speed
@@ -327,8 +327,8 @@ def initialize_cars_from_positions(N, dt, world, svo_theta, no_grass = False, li
     amb_MPC.k_s = 0
     amb_MPC.k_x = 0
     amb_MPC.k_x_dot = -1.0 / 100.0
-    amb_MPC.k_x = -1.0/100
-    amb_MPC.k_x_dot = 0
+    # amb_MPC.k_x = -1.0/100
+    # amb_MPC.k_x_dot = 0
     amb_MPC.k_lat = 0.00001
     amb_MPC.k_lon = 0.0
     # amb_MPC.min_v = 0.8*initial_speed
@@ -348,25 +348,37 @@ def initialize_cars_from_positions(N, dt, world, svo_theta, no_grass = False, li
 
 def poission_positions(cars_per_hour, total_seconds, n_lanes, average_velocity, car_length):
     cars_per_second = cars_per_hour / 3600.0
+    dt = 0.20
+    cars_per_dt = cars_per_second * dt
     rng = np.random.default_rng()
-    n_cars_per_second = rng.poisson(cars_per_second, total_seconds)
+    n_cars_per_second = rng.poisson(cars_per_second, int(total_seconds))
+    total_dt = int(total_seconds / dt)
+    n_cars_per_dt = rng.poisson(cars_per_dt, int(total_dt))
+
     
-    vehicle_x_distance = [[average_velocity*(s + rng.uniform(0,1))]*n_cars_per_second[s] for s in range(len(n_cars_per_second))]
-    
+    vehicle_x_distance = [[(rng.uniform(0.95, 1.0)*average_velocity)*(s + rng.uniform(0,1))]*n_cars_per_second[s] for s in range(len(n_cars_per_second))]
+    vehicle_x_distance = [[average_velocity*(s*dt)]*n_cars_per_dt[s] for s in range(len(n_cars_per_second))]
+
+
     all_vehicle_positions = []
-    for s in range(len(vehicle_x_distance)):
-        if len(vehicle_x_distance[s]) == 0:
+
+    ### Random place vehicles in the lanes
+    for s in range(len(n_cars_per_dt)):
+        if n_cars_per_dt[s] == 0:
             continue
         else:
-            for j in range(len(vehicle_x_distance[s])):
-                all_vehicle_positions += [(rng.integers(0, n_lanes), vehicle_x_distance[s][j])]
+            for j in range(n_cars_per_dt[s]):
+                lane_number = rng.integers(0, n_lanes)
+                x_position = (average_velocity * rng.uniform(0.95, 1.05)) * (s * dt)
+                all_vehicle_positions += [(lane_number, x_position)]
+
 
     # Remove cars that would have collided
-    prev_car_lane = -9999 * np.ones(n_lanes)
+    prev_car_lane = -9999 * np.ones((n_lanes,1))
     prev_car_lane[0] = 0.0
     initial_vehicle_positions = []
     for (lane, x) in all_vehicle_positions:
-        if x > prev_car_lane[lane] + 1.1*car_length:
+        if x > prev_car_lane[lane] + 1.4*car_length:
             initial_vehicle_positions += [(lane, float(x))]
             prev_car_lane[lane] = x
 

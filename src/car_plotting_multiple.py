@@ -13,7 +13,7 @@ import src.traffic_world as tw
 import p_tqdm
 PROJECT_PATH = '/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-multiple-vehicles/'
 
-car_colors = ['green', 'blue', 'yellow', 'orange']
+car_colors = ['green', 'blue', 'red', 'purple']
 def get_car_color(i):
     return car_colors[i%len(car_colors)]
 
@@ -29,7 +29,18 @@ def get_frame(x, x_MPC, ax=None, car_name="red", alpha = 1.0):
     if car_name == "red":
         arr_img = plt.imread(PROJECT_PATH + 'images/red_car.png', format='png')
         car_width_px = 599
-        car_height_px = 310        
+        car_height_px = 310    
+    elif car_name == "purple":
+        arr_img = plt.imread(PROJECT_PATH + 'images/red_car.png', format='png')
+        arr_img[:, :, 2]= arr_img[:, :, 0] #Add equal amount blue
+        car_width_px = 599
+        car_height_px = 310     
+    elif car_name == "blue":
+        arr_img = plt.imread(PROJECT_PATH + 'images/red_car.png', format='png')
+        arr_img[:, :, 2] = arr_img[:, :, 0] # add blue
+        arr_img[:,:, 0] = np.where(np.logical_and(0.2 < arr_img[:,:, 0], arr_img[:,:, 0] < .9), 0.0, arr_img[:,:,0])  #remove red
+        car_width_px = 599
+        car_height_px = 310            
     elif car_name == "Amb":
         arr_img = plt.imread(PROJECT_PATH + 'images/ambulance.png', format='png')
         car_width_px = 1280
@@ -146,10 +157,8 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_sh
                     car_id = car_ids[i+1]  
                 else:
                     car_id = i
-                if (car_id%2)==0:
-                    color="red"
-                else:
-                    color="green"
+                color = get_car_color(car_id)
+
                 ax = get_frame(x1_plot[:,k], x_mpc, ax, color, alpha=1.0)
             
             ax = get_frame(xamb_plot[:,k], x_mpc, ax, "Amb")
@@ -186,7 +195,7 @@ def plot_cars(world, x_mpc, xamb_plot, xothers_plot, folder,
 
 def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder, 
                         car_plot_shape="Ellipse", camera_positions = None, car_labels = None, car_colors = None, 
-                        xamb_desired=None, xothers_desired=None,):
+                        xlim = None, xamb_desired=None, xothers_desired=None,):
     ''' This only has info from x_mpc but not any individual ones'''
     if camera_positions is None:
         camera_positions = [xamb_plot[0,0] + t*x_mpc.max_v*x_mpc.dt for t in range(xamb_plot.shape[1])]
@@ -207,6 +216,9 @@ def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder,
     center_frame = camera_positions[k]
     # center_frame = xamb_plot[0,0]
     axlim_minx, axlim_maxx = center_frame - 20, center_frame + 60,    
+    if xlim is not None:
+        axlim_minx = xlim[0]
+        axlim_maxx = xlim[1]
     ## 1080p = 1920×1080, 
     fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx ))
 
@@ -258,10 +270,10 @@ def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder,
         for i in range(len(xothers_plot)):
             x1_plot = xothers_plot[i]
             if 0.9*axlim_minx <= x1_plot[0,k] <= 1.1*axlim_maxx:
-                if (i%2)==0:
-                    color="red"
+                if car_colors is None:
+                    color = get_car_color(i)
                 else:
-                    color="green"
+                    color = car_colors[i]
                 ax = get_frame(x1_plot[:,k], x_mpc, ax, color, alpha=1.0)
         
         ax = get_frame(xamb_plot[:,k], x_mpc, ax, "Amb")
