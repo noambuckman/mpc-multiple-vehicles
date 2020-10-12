@@ -10,19 +10,22 @@ class MultiMPC(object):
     ### We always assume that car1 is the one being optimized
     def __init__(self, 
                 responseMPC : vehicle.Vehicle, 
-                ambulanceMPC : vehicle.Vehicle, 
+                ctrld_vehicles, 
                 otherMPClist,
                 world, 
                 solver_params = None):
 
         self.responseMPC = responseMPC
-        self.otherMPClist = otherMPClist   
-        self.ambMPC = ambulanceMPC
+        self.otherMPClist = otherMPClist  
+        
+        self.ctrld_vehicles = ctrld_vehicles
+        # self.other_nonctrld_vehicles = self.otherMPClist
+
         if solver_params is None:
             solver_params = {}
             self.k_slack = 99999
             self.k_CA = 0
-            self.k_CA_power = 8
+            self.k_CA_power = 1
             self.collision_cost = 0      
             self.WALL_CA = False
         else:
@@ -39,7 +42,7 @@ class MultiMPC(object):
 
 
 
-    def generate_optimization(self, N, T, x0, x0_amb, x0_other, slack=True, solve_amb=False, params = None, ipopt_params=None):
+    def generate_optimization(self, N, T, x0, x0_other_ctrl, x0_other, slack=True, solve_amb=False, params = None, ipopt_params=None):
 
         n_state, n_ctrl, n_desired = 6, 2, 3
         #Response (planning) Vehicle Variables
@@ -48,78 +51,83 @@ class MultiMPC(object):
         self.x_desired  = self.opti.variable(n_desired, N+1)
         p = self.opti.parameter(n_state, 1)
 
-        # Ambulance Variables
-        if self.ambMPC:
-            if solve_amb:
-                self.xamb_opt = self.opti.variable(n_state, N+1)
-                self.uamb_opt = self.opti.variable(n_ctrl, N)
-                self.xamb_desired = self.opti.variable(n_desired, N+1)                
-            else:
-                self.xamb_opt = self.opti.parameter(n_state, N+1)
-                self.uamb_opt = self.opti.parameter(n_ctrl, N)
-                self.xamb_desired = self.opti.parameter(n_desired, N+1)
-            pamb = self.opti.parameter(n_state, 1)
+        # Ctrld Vehicles become variables in the optimization
 
-        ### Variables of surrounding vehicles assumed fixed (TODO: This could probably be np arrays)
-        if len(self.otherMPClist) > 0:
-            self.allother_x_opt = [self.opti.parameter(n_state, N+1) for i in self.otherMPClist] 
-            self.allother_u_opt = [self.opti.parameter(n_ctrl, N) for i in self.otherMPClist] 
-            self.allother_x_desired = [self.opti.parameter(3, N+1) for i in self.otherMPClist]
-            self.allother_p = [self.opti.parameter(n_state, 1) for i in self.otherMPClist]
-        else:
-            self.allother_x_opt = [] 
-            self.allother_u_opt = [] 
-            self.allother_x_desired = []
-            self.allother_p = []            
-            
+        self.ctrld_vehicles_x = [self.opti.variable(n_state, N+1) for i in self.ctrld_vehicles]
+        self.ctrld_vehicles_u = [self.opti.variable(n_ctrl, N) for i in self.ctrld_vehicles]
+        self.ctrld_vehicles_xd = [self.opti.variable(n_desired, N+1) for i in self.ctrld_vehicles]
+        self.ctrld_vehicles_p = [self.opti.parameter(n_state, 1) for i in self.ctrld_vehicles]
+
+        ### Variables of surrounding vehicles assumed fixed as parameters for computation 
+        self.allother_x_opt = [self.opti.parameter(n_state, N+1) for i in self.otherMPClist] 
+        self.allother_u_opt = [self.opti.parameter(n_ctrl, N) for i in self.otherMPClist] 
+        self.allother_x_desired = [self.opti.parameter(3, N+1) for i in self.otherMPClist]
+        self.allother_p = [self.opti.parameter(n_state, 1) for i in self.otherMPClist]
+      
+ 
         #### Costs
         self.responseMPC.generate_costs(self.x_opt, self.u_opt, self.x_desired)
-        self.car1_costs, self.car1_costs_list, self.car1_cost_titles = self.responseMPC.total_cost()
+        self.response_costs, self.response_costs_list, self.response_cost_titles = self.responseMPC.total_cost()
 
-        if self.ambMPC:
-            self.ambMPC.generate_costs(self.xamb_opt, self.uamb_opt, self.xamb_desired)
-            self.amb_costs, self.amb_costs_list, self.amb_cost = self.ambMPC.total_cost()
-        else:
-            self.amb_costs, self.amb_costs_list = 0, []
+        
+        self.all_other_costs = []
+        #### SVO Cost for Other Vehicles
+        for idx in range(len(self.otherMPClist)):
+            svo_ij = self.responseMPC.get_theta_ij(self.otherMPClist[idx].agent_id)
+            if svo_ij > 0 :
+                self.otherMPClist[idx].generate_costs(self.allother_x_opt[idx], self.allother_u_opt[idx], self.allother_x_desired[idx])
+            else:
+                nonresponse_cost, nonresponse_costs_list, nonresponse_cost_titles = self.otherMPClist[idx].total_cost()
+                self.all_other_costs += [np.sin(svo_ij) * nonresponse_cost]
+        
+        
+        #### SVO Cost for Other (Ctrled) Vehicles
+        for idx in range(len(self.ctrled_vehicles)):
+            svo_ij = self.responseMPC.get_theta_ij(self.self.ctrled_vehicles[idx].agent_id)
+            if svo_ij > 0 :
+                self.self.ctrled_vehicles[idx].generate_costs(self.allother_x_opt[idx], self.allother_u_opt[idx], self.allother_x_desired[idx])
+            else:
+                nonresponse_cost, nonresponse_costs_list, nonresponse_cost_titles = self.ctrled_vehicles[idx].total_cost()
+                self.all_other_costs += [np.sin(svo_ij) * nonresponse_cost]
 
         ## Generate Slack Variables used as part of collision avoidance
-        if len(self.otherMPClist) > 0:
-            self.slack_vars_list = self.generate_slack_variables(slack, N, len(self.otherMPClist), n_ego_circles = self.responseMPC.n_circles)
-        else:
-            self.slack_vars_list = []
+        self.slack_i_jnc = self.opti.variable(len(self.otherMPClist), N+1)
+        self.slack_i_jc = self.opti.variable(len(self.ctrld_vehicles), N+1)
+        self.slack_ic_jnc = [self.opti.variable(len(self.otherMPClist), N+1) for ic in range(len(self.ctrld_vehicles))]
+        self.slack_ic_jc = [self.opti.variable(len(self.ctrld_vehicles), N+1) for ic in range(len(self.ctrld_vehicles))]
+        self.opti.subject_to(cas.vec(self.slack_i_jnc)>=0)
+        self.opti.subject_to(cas.vec(self.slack_i_jc)>=0)
+        for slack_var in self.slack_ic_jc:
+            self.opti.subject_to(cas.vec(slack_var)>=0)
+        for slack_var in self.slack_ic_jnc:
+            self.opti.subject_to(cas.vec(slack_var)>=0)
         
-        self.slack_cost = 0       
-        for agent_i in range(len(self.slack_vars_list)):
-            for ci in range(self.slack_vars_list[agent_i].shape[0]):
-                for t in range(self.slack_vars_list[agent_i].shape[1]):
-                    self.slack_cost += self.slack_vars_list[agent_i][ci,t]**2
-
-        if self.ambMPC:    
-            self.slack_amb = self.generate_slack_variables(slack, N, 1, n_ego_circles = self.responseMPC.n_circles)[0]
-            self.slack_cost += cas.sumsqr(self.slack_amb)            
-
-        if solve_amb and self.ambMPC:    
-            if len(self.otherMPClist) > 0:
-                self.slack_amb_other = self.generate_slack_variables(slack, N, len(self.otherMPClist), n_ego_circles = self.responseMPC.n_circles)
-            else:
-                self.slack_amb_other = []
-            for slack_var in self.slack_amb_other:
-                for i in range(slack_var.shape[0]):
-                    for j in range(slack_var.shape[1]):
-                        self.slack_cost += slack_var[i,j]**2 
+        self.slack_cost = 0    
+        for j in range(self.slack_i_jnc.shape[0]):
+            for t in range(self.slack_i_jnc.shape[0]):
+                self.slack_cost += self.slack_i_jnc[j,t]**2   
+        for j in range(self.slack_i_jc.shape[0]):
+            for t in range(self.slack_i_jc.shape[0]):
+                self.slack_cost += self.slack_i_jc[j,t]**2   
         
-        self.response_svo_cost = np.cos(self.responseMPC.theta_iamb)*self.car1_costs
-        self.other_svo_cost = np.sin(self.responseMPC.theta_iamb)*self.amb_costs
+        for ic in range(len(self.ctrld_vehicles)):
+            for jnc in range(self.slack_ic_jnc[ic].shape[0]):
+                for t in range(self.slack_ic_jnc[ic].shape[1]):
+                    self.slack_cost += self.slack_ic_jnc[ic][jnc, t]**2
+            for jc in range(self.slack_ic_jc[ic].shape[0]):
+                for t in range(self.slack_ic_jc[ic].shape[1]):
+                    self.slack_cost += self.slack_ic_jc[ic][jc, t]**2
 
-        ##### Add Constraints
+        self.response_svo_cost = np.cos(self.responseMPC.theta_i)*self.response_costs
+        self.other_svo_cost = np.mean(self.all_other_costs)
+        
+        ##### Add Constraints to Ctrld Vehicles
         self.responseMPC.add_dynamics_constraints(self.opti, self.x_opt, self.u_opt, self.x_desired, p)
         self.responseMPC.add_state_constraints(self.opti, self.x_opt, self.u_opt, self.x_desired, T)
-
+        for j in range(len(self.ctrl_vehicles)):
+            self.ctrld_vehicles[j].add_dynamics_constraints(self.ctrld_vehicles_x[j], self.ctrld_vehicles_u[j], self.ctrld_vehicles_xd[j], self.ctrld_vehicles_p[j])
+            self.ctrld_vehicles[j].add_state_constraints(self.ctrld_vehicles_x[j], self.ctrld_vehicles_u[j], self.ctrld_vehicles_xd[j], T)
         
-        if solve_amb and self.ambMPC: # only add constraints if we're solving ampMPC
-            self.ambMPC.add_dynamics_constraints(self.opti, self.xamb_opt, self.uamb_opt, self.xamb_desired, pamb)
-            self.ambMPC.add_state_constraints(self.opti, self.xamb_opt, self.uamb_opt, self.xamb_desired, T)
-
         ######################### Compute Collision Avoidance #########################
 
         # Proxy for the collision avoidance points on each vehicle
@@ -139,79 +147,81 @@ class MultiMPC(object):
         self.collision_cost = 0
         # Collision Avoidance
         self.k_ca2 = 0.77
+
+        ## TODO: Double check the slack variables and indexing
+
         for k in range(N+1):
             # Compute response vehicles collision center points
-            response_centers, response_radius = self.responseMPC.get_car_circles(self.x_opt[:,k]) 
-            for center_i in range(len(response_centers)):
-                response_circle_xy = response_centers[center_i]
-                for i in range(len(self.otherMPClist)):
-                    initial_displacement = x0_other[i] - x0
-                    initial_xy_distance = cas.sqrt(initial_displacement[0]**2 + initial_displacement[1]**2)
-                    if initial_xy_distance <= params["collision_avoidance_checking_distance"]: #collision avoidance distance for other cars 
-                        # buffer_distance, dist = self.generate_collision_ellipse(response_circle_xy[0], response_circle_xy[1], 
-                        #                                 self.allother_x_opt[i][0,k], self.allother_x_opt[i][1,k], self.allother_x_opt[i][2,k],
-                        #                                 alphas[i], betas[i], None)
+            for i in range(len(self.otherMPClist)):
+                initial_displacement = x0_other[i] - x0
+                initial_xy_distance = cas.sqrt(initial_displacement[0]**2 + initial_displacement[1]**2)
+                if initial_xy_distance <= params["collision_avoidance_checking_distance"]: #collision avoidance distance for other cars 
 
-                        dist = self.minkowski_ellipse_collision_distance(self.responseMPC, self.otherMPClist[i], 
-                                                                                self.x_opt[0, k], self.x_opt[1,k], self.x_opt[2,k], 
-                                                                                self.allother_x_opt[i][0,k], self.allother_x_opt[i][1,k], self.allother_x_opt[i][2,k])
-                        
-                        self.pairwise_distances += [dist]
-                        self.opti.subject_to(dist >= (1 - self.slack_vars_list[i][center_i, k]))
-                        distance_clipped = cas.fmax(dist, 0.00001) ## This can be a smaller distance if we'd like
-                        self.collision_cost += 1/(distance_clipped - self.k_ca2)**self.k_CA_power           
-               
-                if self.ambMPC:  # Don't forget the ambulance collision avoidance   
-                    dist = self.minkowski_ellipse_collision_distance(self.responseMPC, self.ambMPC, 
-                                                                        self.x_opt[0, k], self.x_opt[1,k], self.x_opt[2,k], 
-                                                                        self.xamb_opt[0,k], self.xamb_opt[1,k], self.xamb_opt[2,k])
-                        
-                    self.opti.subject_to(dist >= 1 - self.slack_amb[center_i, k] )         
+                    dist = self.minkowski_ellipse_collision_distance(self.responseMPC, self.otherMPClist[i], 
+                                                                            self.x_opt[0, k], self.x_opt[1,k], self.x_opt[2,k], 
+                                                                            self.allother_x_opt[i][0,k], self.allother_x_opt[i][1,k], self.allother_x_opt[i][2,k])
+                    
                     self.pairwise_distances += [dist]
-                    distance_clipped = cas.fmax(dist, 0.00001)
-                    self.collision_cost += 1/(distance_clipped - self.k_ca2)**self.k_CA_power     
+                    self.opti.subject_to(dist >= (1 - self.slack_i_jnc[i, k]))
+                    distance_clipped = cas.fmax(dist, 0.00001) ## This can be a smaller distance if we'd like
+                    self.collision_cost += 1/(distance_clipped - self.k_ca2)**self.k_CA_power           
+            for j in range(len(self.ctrld_vehicles)):
+                dist = self.minkowski_ellipse_collision_distance(self.responseMPC, self.ambMPC, 
+                                                                    self.x_opt[0, k], self.x_opt[1,k], self.x_opt[2,k], 
+                                                                    self.ctrld_vehicles_x[j][0,k], self.ctrld_vehicles_x[j][1,k], self.ctrld_vehicles_x[j][2,k])
+                    
+                self.opti.subject_to(dist >= 1 - self.slack_i_jc[j, k] )         
+                self.pairwise_distances += [dist]
+                distance_clipped = cas.fmax(dist, 0.00001)
+                self.collision_cost += 1/(distance_clipped - self.k_ca2)**self.k_CA_power     
+            
+            if self.WALL_CA: #Add a collision cost related to distance from wall
+                dist_btw_wall_bottom =  self.x_opt[1, k] - (self.responseMPC.min_y + self.responseMPC.W/2.0) 
+                dist_btw_wall_top = (self.responseMPC.max_y - self.responseMPC.W/2.0) - self.x_opt[1,k]
+
+                self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_bottom, 0.0001)**self.k_CA_power)
+                self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_top, 0.0001)**self.k_CA_power)
+        
+        for ic in range(len(self.ctrld_vehicles)):
+            for k in range(N+1):
+                ## Genereate collision circles for ctrld vehicles and other car
+                for j in range(len(self.otherMPClist)):
+                    initial_displacement = x0_other[j] - x0_other_ctrl[ic] 
+                    initial_xy_distance = cas.sqrt(initial_displacement[0]**2 + initial_displacement[1]**2)
+                    if initial_xy_distance <= params["collision_avoidance_checking_distance"]: #collision avoidance distance for other cars                        
+             
+                        dist = self.minkowski_ellipse_collision_distance(self.ctrld_vehicles[ic], self.otherMPClist[j], 
+                                                                        self.ctrld_vehicles_x[ic][0, k], self.ctrld_vehicles_x[ic][1,k], self.ctrld_vehicles_x[ic][2,k], 
+                                                                        self.allother_x_opt[j][0,k], self.allother_x_opt[j][1,k], self.allother_x_opt[j][2,k])
+                        
+                        self.opti.subject_to(dist >= (1 - self.slack_ic_jnc[ic][j, k]))
+                        distance_clipped = cas.fmax(dist, 0.0001) # could be buffered if we'd like
+                        self.collision_cost += 1/(distance_clipped - self.k_ca2)**self.k_CA_power     
+                for j in range(len(self.ctrld_vehicles)):
+                    if j == ic:
+                        continue
+                    else:
+                        initial_displacement = x0_other_ctrl[j] - x0_other_ctrl[ic]
+                        initial_xy_distance = cas.sqrt(initial_displacement[0]**2 + initial_displacement[1]**2)
+                        if initial_xy_distance <= params["collision_avoidance_checking_distance"]: #collision avoidance distance for other cars                        
                 
-                if self.WALL_CA: #Add a collision cost related to distance from wall
-                    dist_btw_wall_bottom =  response_circle_xy[1] - (self.responseMPC.min_y + self.responseMPC.W/2.0) 
-                    dist_btw_wall_top = (self.responseMPC.max_y - self.responseMPC.W/2.0) - response_circle_xy[1]
+                            dist = self.minkowski_ellipse_collision_distance(self.ctrld_vehicles[ic], self.otherMPClist[j], 
+                                                                            self.ctrld_vehicles_x[ic][0, k], self.ctrld_vehicles_x[ic][1,k], self.ctrld_vehicles_x[ic][2,k], 
+                                                                            self.ctrld_vehicles_x[j][0,k], self.ctrld_vehicles_x[j][1,k], self.ctrld_vehicles_x[j][2,k])
+                            
+                            self.opti.subject_to(dist >= (1 - self.slack_ic_jc[ic][j, k]))
+                            distance_clipped = cas.fmax(dist, 0.0001) # could be buffered if we'd like
+                            self.collision_cost += 1/(distance_clipped - self.k_ca2)**self.k_CA_power   
+                if self.WALL_CA: # Compute CA cost of ambulance and wall
+                    dist_btw_wall_bottom =  self.ctrld_vehicles_x[ic][1,k] - (self.responseMPC.min_y + self.responseMPC.W/2.0) 
+                    dist_btw_wall_top = (self.responseMPC.max_y - self.responseMPC.W/2.0) - self.ctrld_vehicles_x[ic][1,k][1]
 
                     self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_bottom, 0.0001)**self.k_CA_power)
-                    self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_top, 0.0001)**self.k_CA_power)
-        
-        if solve_amb and self.ambMPC:  
-            self.ca_vars = [self.opti.variable(2, N+1) for c in range(self.responseMPC.n_circles)]  
-            for k in range(N+1):
-                ## Genereate collision circles for ambulance and do collision avoidance
-                if solve_amb and self.ambMPC:
-                    for ci in range(len(self.ca_vars)):
-                        ca_circle_xy = self.ca_vars[ci]
-                        for i in range(len(self.otherMPClist)):
-                            initial_displacement = x0_other[i] - x0_amb
-                            initial_xy_distance = cas.sqrt(initial_displacement[0]**2 + initial_displacement[1]**2)
-                            if initial_xy_distance <= params["collision_avoidance_checking_distance"]: #collision avoidance distance for other cars                        
-                                # buffer_distance, dist = self.generate_collision_ellipse(ca_circle_xy[0], ca_circle_xy[1], 
-                                #                                 self.allother_x_opt[i][0,k], self.allother_x_opt[i][1,k], self.allother_x_opt[i][2,k],
-                                #                                 alphas[i], betas[i], None)                      
-                                dist = self.minkowski_ellipse_collision_distance(self.ambMPC, self.otherMPClist[i], 
-                                                                                self.xamb_opt[0, k], self.xamb_opt[1,k], self.xamb_opt[2,k], 
-                                                                                self.allother_x_opt[i][0,k], self.allother_x_opt[i][1,k], self.allother_x_opt[i][2,k])
-                                
-                                self.opti.subject_to(dist >= (1 - self.slack_amb_other[i][ci, k]))
-                                distance_clipped = cas.fmax(dist, 0.0001) # could be buffered if we'd like
-                                self.collision_cost += 1/(distance_clipped - self.k_ca2)**self.k_CA_power     
-                        if self.WALL_CA: # Compute CA cost of ambulance and wall
-                            dist_btw_wall_bottom =  ca_circle_xy[1] - (self.responseMPC.min_y + self.responseMPC.W/2.0) 
-                            dist_btw_wall_top = (self.responseMPC.max_y - self.responseMPC.W/2.0) - ca_circle_xy[1]
-
-                            self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_bottom, 0.0001)**self.k_CA_power)
-                            self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_top, 0.0001)**self.k_CA_power)                
+                    self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_top, 0.0001)**self.k_CA_power)                
             
         ###### Collision Braking Avoidance
         k_min_ttc = 1.0 ## Vehicle must have a time to collision greater than this number
-        if self.ambMPC:
-            self.generate_stopping_constraint_ttc(self.x_opt, self.xamb_opt, self.allother_x_opt, solve_amb, min_time_to_collision = k_min_ttc) ###
-        else:
-            self.generate_stopping_constraint_ttc(self.x_opt, None, self.allother_x_opt, False, min_time_to_collision = k_min_ttc) ###
+        self.generate_stopping_constraint_ttc(self.x_opt, self.ctrld_vehicles_x, self.allother_x_opt, solve_amb, min_time_to_collision = k_min_ttc) ###
 
         ######## optimization  ##################################
         self.total_svo_cost = self.response_svo_cost + self.other_svo_cost + self.k_slack * self.slack_cost + self.k_CA * self.collision_cost
@@ -222,8 +232,8 @@ class MultiMPC(object):
         self.opti.set_value(p, x0)
         for i in range(len(self.allother_p)):
             self.opti.set_value(self.allother_p[i], x0_other[i])
-        if self.ambMPC:    
-            self.opti.set_value(pamb, x0_amb) 
+        for j in range(len(x0_other_ctrl)):
+            self.opti.set_value(self.ctrld_vehicles_p[j], x0_other_ctrl[j])
 
         # Set the solver conditions
 
@@ -330,8 +340,8 @@ class MultiMPC(object):
             plt.show()
         print("%d Total Cost %.03f J_i %.03f,  J_j %.03f, Slack %.03f, CA  %.03f"%
                 (i, self.opti.debug.value(self.total_svo_cost), self.opti.debug.value(self.response_svo_cost), self.opti.debug.value(self.other_svo_cost), self.opti.debug.value(self.k_slack*self.slack_cost), self.opti.debug.value(self.k_CA*self.collision_cost)))
-        for i in range(len(self.car1_costs_list)):
-            print(" %.04f : %s"%(self.opti.debug.value(self.car1_costs_list[i]),self.car1_cost_titles[i]))        
+        for i in range(len(self.response_costs_list)):
+            print(" %.04f : %s"%(self.opti.debug.value(self.response_costs_list[i]),self.response_cost_titles[i]))        
 
     def plot_collision_slack_cost(self):
         '''Make a function that plots the contours for collision and slack
@@ -351,7 +361,7 @@ class MultiMPC(object):
             prod =    cas.mtimes([dX.T, R_o.T, M, R_o, dX])
 
 
-    def generate_stopping_constraint_ttc(self, x_opt, xamb_opt, xothers_opt, solve_amb, min_time_to_collision = 3.0):
+    def generate_stopping_constraint_ttc(self, x_opt, xctrld_opt, xothers_opt, solve_amb, min_time_to_collision = 3.0):
         ''' Add a velocity constraint on the ego vehicle so it doesn't go too fast behind a lead vehicle.
             Constrains the vehicle so that the time to collision is always less than time_to_collision seconds
             assuming that both ego and ado vehicle mantain constant velocity
@@ -367,11 +377,12 @@ class MultiMPC(object):
             v_ego = x_opt[4, k]
             v_ego_components = (v_ego * cas.cos(phi_ego), v_ego * cas.sin(phi_ego))
 
-            if xamb_opt is not None:
-                x_amb = xamb_opt[0, k]
-                y_amb = xamb_opt[1, k]
-                phi_amb = xamb_opt[2, k]
-                v_amb = xamb_opt[4, k]    
+            for j in range(len(xctrld_opt)):
+                ## Safety constraint between ego + ctrld vehicles
+                x_amb = xctrld_opt[j][0, k]
+                y_amb = xctrld_opt[j][1, k]
+                phi_amb = xctrld_opt[j][2, k]
+                v_amb = xctrld_opt[j][4, k]    
 
                 v_amb_components = (v_amb * cas.cos(phi_amb), v_amb * cas.sin(phi_amb))              
                 
@@ -379,12 +390,6 @@ class MultiMPC(object):
                 dyegoamb = (y_amb - y_ego) - car_width
                 dot_product = (v_ego_components[0] - v_amb_components[0])*dxegoamb + (v_ego_components[1] - v_amb_components[1])*dyegoamb
                 self.opti.subject_to(dot_product <= (dxegoamb**2 + dyegoamb**2) / (0.000001 + min_time_to_collision))
-                # dist_egoamb = cas.sqrt(dxegoamb**2 + dyegoamb**2)                
-                
-                # egobehind_amb = cas.fmax(-dxegoamb, 0) ## 0 if ego is beind, else should be >0
-
-                # v_max_constraint = cas.fmax((v_amb**2 - 2*a_maxbraking * (dist_egoamb - safety_buffer)), 999*egobehind_amb)
-                # self.opti.subject_to(v_ego**2 <= v_max_constraint)
             
             for j in range(len(xothers_opt)):
                 x_j = xothers_opt[j][0, k]
@@ -401,24 +406,22 @@ class MultiMPC(object):
                 
                 self.opti.subject_to(dot_product <= (dxego**2 + dyego**2) / (0.000001 + min_time_to_collision))
                 
-                # dist_ego = cas.sqrt(dxego**2 + dyego**2)
-                # ego_behind = cas.fmax(-dxego, 0) ###how many meters behind or 0 if ahead/same
-                # v_max_constraint = cas.fmax(v_j**2 - 2*a_maxbraking * (dist_ego - safety_buffer), 999*ego_behind)
-                # self.opti.subject_to(v_ego**2 <= v_max_constraint)
-
-                #### Add constraint betweem amb and j
-                if xamb_opt is not None and solve_amb:
-                    dxamb = (x_j - x_amb) - car_length
-                    dyamb = (y_j - y_amb) - car_width
+                #### Add constraint betweem ctrld vehicles and j
+                add_constraint_for_ctrld = False
+                if add_constraint_for_ctrld:
+                    for jc in range(len(xctrld_opt)):
+                        x_amb = xctrld_opt[jc][0, k]
+                        y_amb = xctrld_opt[jc][1, k]
+                        phi_amb = xctrld_opt[jc][2, k]
+                        v_amb = xctrld_opt[jc][4, k]    
+                        
+                        dxamb = (x_j - x_amb) - car_length
+                        dyamb = (y_j - y_amb) - car_width
+                        
+                        dot_product = (v_amb_components[0] - v_j_components[0])*dxamb + (v_amb_components[1] - v_j_components[1])*dyamb
+                        self.opti.subject_to(dot_product <= (dxamb**2 + dyamb**2) / (0.00000001 + min_time_to_collision))
                     
-                    dot_product = (v_amb_components[0] - v_j_components[0])*dxamb + (v_amb_components[1] - v_j_components[1])*dyamb
-                    self.opti.subject_to(dot_product <= (dxamb**2 + dyamb**2) / (0.00000001 + min_time_to_collision))
-                    
-                    # dist_amb = cas.sqrt(dxamb**2 + dyamb**2)
 
-                    # amb_behind = cas.fmax(-dxamb, 0) ## 0 if ambulance is beind, else should be >0
-                    # v_max_constraint = cas.fmax((v_j**2 - 2*a_maxbraking * (dist_amb - safety_buffer)), 999*amb_behind)
-                    # self.opti.subject_to(v_amb**2 <= v_max_constraint)
 
     def generate_stopping_constraint(self, x_opt, xamb_opt, xothers_opt, solve_amb, safety_buffer=0.50):
         ''' Add a velocity constraint on the ego vehicle so it doesn't go too fast behind a lead vehicle.
