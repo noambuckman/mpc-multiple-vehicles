@@ -69,32 +69,30 @@ def pullover_guess(N, all_other_MPC, all_other_x0):
     return all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr
 
 def solve_best_response(warm_key, warm_trajectory, 
-                        response_MPC, amb_MPC, nonresponse_MPC_list, 
-                        response_x0, amb_x0, nonresponse_x0_list,
+                        response_MPC, cntrld_vehicles, nonresponse_MPC_list, 
+                        response_x0, cntrld_x0, nonresponse_x0_list,
                         world, solver_params, params, ipopt_params,
                         nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list,
-                        uamb=None, xamb=None, xamb_des=None, return_bri=False):
+                        cntrld_u=[], cntrld_x=[], cntrld_xd=[], return_bri=False):
     '''Create the iterative best response object and solve.  Assumes that it receives warm start profiles.
     This really should only require a u_warm, x_warm, x_des_warm and then one level above we generate those values'''
     
     u_warm, x_warm, x_des_warm = warm_trajectory
-    bri = mpc.MultiMPC(response_MPC, amb_MPC, nonresponse_MPC_list, world, solver_params)
+    bri = mpc.MultiMPC(response_MPC, cntrld_vehicles, nonresponse_MPC_list, world, solver_params)
     params["collision_avoidance_checking_distance"] = 100
-    bri.generate_optimization(params["N"], params["T"], response_x0, amb_x0, nonresponse_x0_list,  slack=solver_params['slack'], solve_amb=solver_params['solve_amb'], params=params, ipopt_params=ipopt_params)
+    bri.generate_optimization(params["N"], params["T"], response_x0, cntrld_x0, nonresponse_x0_list,  slack=solver_params['slack'], solve_amb=solver_params['solve_amb'], params=params, ipopt_params=ipopt_params)
     print("Succesffully generated optimzation %d %d %d"%(len(nonresponse_MPC_list), len(nonresponse_x_list), len(nonresponse_u_list)))
     # u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]
     bri.opti.set_initial(bri.u_opt, u_warm)            
     bri.opti.set_initial(bri.x_opt, x_warm)
     bri.opti.set_initial(bri.x_desired, x_des_warm)   
 
-    if amb_MPC:
-        if solver_params['solve_amb']:
-            bri.opti.set_initial(bri.xamb_opt, xamb)
-            bri.opti.set_initial(bri.xamb_desired, xamb_des)                        
-        else:
-            bri.opti.set_value(bri.xamb_opt, xamb)
-            bri.opti.set_value(bri.xamb_desired, xamb_des)
+    # Set initial trajectories of cntrld vehicles
+    for ic in range(len(bri.cntrld_vehicles)):  
+        bri.opti.set_initial(bri.cntrld_vehicles_x[ic], cntrld_x[ic])
+        bri.opti.set_initial(bri.cntrld_vehicles_xd[ic], cntrld_xd[ic])     
 
+    # Set trajectories of non-cntrld vehicles
     for j in range(len(nonresponse_x_list)):
         bri.opti.set_value(bri.allother_x_opt[j], nonresponse_x_list[j])
         bri.opti.set_value(bri.allother_x_desired[j], nonresponse_xd_list[j])
@@ -102,13 +100,18 @@ def solve_best_response(warm_key, warm_trajectory,
     try:
         if "constant_v" in solver_params and solver_params["constant_v"]:
             bri.opti.subject_to(bri.u_opt[1,:] == 0)
-        bri.solve(uamb, nonresponse_u_list, solver_params['solve_amb'])
+        
+        bri.solve(cntrld_u, nonresponse_u_list, solver_params['solve_amb'])
         x_ibr, u_ibr, x_des_ibr, _, _, _, _, _, _ = bri.get_solution()
         current_cost = bri.solution.value(bri.total_svo_cost)
-        all_slack_vars = [bri.solution.value(s) for s in bri.slack_vars_list]
-        if amb_MPC:
-             all_slack_vars += [bri.solution.value(bri.slack_amb)]
+
+
+        all_slack_vars = [bri.slack_i_jnc] + [bri.slack_i_jc] + bri.slack_ic_jnc + bri.slack_ic_jc
+        all_slack_vars = [bri.solution.value(s) for s in all_slack_vars]
+        
+        print(len(all_slack_vars))
         max_slack = np.max([np.max(s) for s in all_slack_vars] + [0.000000000000])
+
         # max_slack = np.max([np.max(bri.solution.value(s)) for s in bri.slack_vars_list])                                                                         
         min_response_warm_ibr = None #<This used to return k_warm
         
@@ -127,18 +130,18 @@ def solve_best_response(warm_key, warm_trajectory,
         # ibr_sub_it +=1  
 
 def solve_warm_starts(ux_warm_profiles, 
-                    response_MPC, amb_MPC, nonresponse_MPC_list, 
-                    response_x0, amb_x0, nonresponse_x0_list, 
+                    response_MPC, cntrld_vehicles, nonresponse_MPC_list, 
+                    response_x0, cntrld_x0, nonresponse_x0_list, 
                     world, solver_params, params, ipopt_params,
                     nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list, 
-                    uamb=None, xamb=None, xamb_des=None, 
+                    cntrld_u=[], cntrld_x=[], cntrld_xd=[], 
                     debug_flag=False):
     warm_solve_partial  = functools.partial(solve_best_response, 
-                        response_MPC=response_MPC, amb_MPC=amb_MPC, nonresponse_MPC_list=nonresponse_MPC_list, 
-                        response_x0=response_x0, amb_x0=amb_x0, nonresponse_x0_list=nonresponse_x0_list, 
+                        response_MPC=response_MPC, cntrld_vehicles=cntrld_vehicles, nonresponse_MPC_list=nonresponse_MPC_list, 
+                        response_x0=response_x0, cntrld_x0=cntrld_x0, nonresponse_x0_list=nonresponse_x0_list, 
                         world=world, solver_params = solver_params, params=params, ipopt_params=ipopt_params,
                         nonresponse_u_list=nonresponse_u_list, nonresponse_x_list=nonresponse_x_list, nonresponse_xd_list=nonresponse_xd_list, 
-                        uamb=uamb, xamb=xamb, xamb_des=xamb_des, return_bri=False)
+                        cntrld_u=cntrld_u, cntrld_x=cntrld_x, cntrld_xd=cntrld_xd, return_bri=False)
     
     if params['n_processors']>1:
         pool = multiprocessing.Pool(processes=params['n_processors'])
@@ -190,7 +193,7 @@ def initialize_cars(n_other, N, dt, world, svo_theta, no_grass = False, random_l
     for i in range(n_other):
         x1_MPC = vehicle.Vehicle(dt)
         x1_MPC.n_circles = 3
-        x1_MPC.theta_iamb =  svo_theta
+        x1_MPC.theta_i =  svo_theta
         x1_MPC.N = N
 
 
@@ -239,7 +242,7 @@ def initialize_cars(n_other, N, dt, world, svo_theta, no_grass = False, random_l
 
     # Settings for Ambulance
     amb_MPC = cp.deepcopy(x1_MPC)
-    amb_MPC.theta_iamb = 0.0
+    amb_MPC.theta_i = 0.0
 
     amb_MPC.k_u_v = 0.0000
     amb_MPC.k_u_delta = .01
@@ -278,11 +281,13 @@ def initialize_cars_from_positions(N, dt, world, svo_theta, no_grass = False, li
     next_x0_1 = 0
     for i in range(len(list_of_positions)):
         x1_MPC = vehicle.Vehicle(dt)
+        x1_MPC.agent_id = i
         x1_MPC.n_circles = 3
+        x1_MPC.theta_i = 0 
         if list_of_svo is None:
-            x1_MPC.theta_iamb =  svo_theta
+            x1_MPC.theta_ij[-1] =  svo_theta
         else:
-            x1_MPC.theta_iamb = list_of_svo[i]
+            x1_MPC.theta_ij[-1] = list_of_svo[i]
         x1_MPC.N = N
 
 
@@ -317,7 +322,8 @@ def initialize_cars_from_positions(N, dt, world, svo_theta, no_grass = False, li
 
     # Settings for Ambulance
     amb_MPC = cp.deepcopy(x1_MPC)
-    amb_MPC.theta_iamb = 0.0
+    amb_MPC.agent_id = -1
+    amb_MPC.theta_i = 0.0
 
     amb_MPC.k_u_v = 0.0000
     amb_MPC.k_u_delta = .01

@@ -4,9 +4,11 @@ import scipy.optimize as optimize
 
 class Vehicle(object):
     def __init__(self, dt):
+        self.agent_id = 1
         self.dt = dt
         self.k_total = 1.0 # the overall weighting of the total costs
-        self.theta_iamb = np.pi/4 # my theta wrt to ambulance
+        self.theta_i = 0 # my theta wrt to ambulance
+        self.theta_ij = {-1: np.pi/4}
         self.L = 4.5
         self.W = 1.8
         self.n_circles = 2
@@ -397,4 +399,10 @@ class Vehicle(object):
         a_new = a+delta+r
         b_new = b+delta+r
         return a_new, b_new, delta, a, b
+    
+    def get_theta_ij(self, j):
+        if j in self.theta_ij:
+            return self.theta_ij[j]
+        else:
+            return self.theta_i    
 
