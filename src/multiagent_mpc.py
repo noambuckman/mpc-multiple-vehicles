@@ -161,7 +161,16 @@ class MultiMPC(object):
         self.k_ca2 = 0.77
 
         ## TODO: Double check the slack variables and indexing
-
+        self.top_wall_slack = self.opti.variable(1, N+1)
+        self.bottom_wall_slack = self.opti.variable(1, N+1)
+        self.opti.subject_to(cas.vec(self.top_wall_slack) >= 0)
+        self.opti.subject_to(cas.vec(self.bottom_wall_slack) >= 0)         
+        
+        self.top_wall_slack_c = [self.opti.variable(1, N+1) for i in range(len(self.cntrld_vehicles))]
+        self.bottom_wall_slack_c = [self.opti.variable(1, N+1) for i in range(len(self.cntrld_vehicles))]
+        for ic in range(len(self.cntrld_vehicles)):
+            self.opti.subject_to(cas.vec(self.top_wall_slack_c[ic]) >= 0)
+            self.opti.subject_to(cas.vec(self.bottom_wall_slack_c[ic]) >= 0)
         for k in range(N+1):
             # Compute response vehicles collision center points
             for i in range(len(self.otherMPClist)):
@@ -190,9 +199,12 @@ class MultiMPC(object):
             if self.WALL_CA: #Add a collision cost related to distance from wall
                 dist_btw_wall_bottom =  self.x_opt[1, k] - (self.responseMPC.min_y + self.responseMPC.W/2.0) 
                 dist_btw_wall_top = (self.responseMPC.max_y - self.responseMPC.W/2.0) - self.x_opt[1,k]
-
-                self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_bottom, 0.0001)**self.k_CA_power)
-                self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_top, 0.0001)**self.k_CA_power)
+                
+                self.opti.subject_to( dist_btw_wall_bottom >= 0 - self.bottom_wall_slack[0,k])
+                self.opti.subject_to( dist_btw_wall_top >= 0 - self.top_wall_slack[0,k])
+                self.slack_cost += self.top_wall_slack[0,k]**2 + self.bottom_wall_slack[0,k]**2
+                # self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_bottom, 0.0001)**self.k_CA_power)
+                # self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_top, 0.0001)**self.k_CA_power)
         
         for ic in range(len(self.cntrld_vehicles)):
             for k in range(N+1):
@@ -225,11 +237,16 @@ class MultiMPC(object):
                             distance_clipped = cas.fmax(dist, 0.0001) # could be buffered if we'd like
                             self.collision_cost += 1/(distance_clipped - self.k_ca2)**self.k_CA_power   
                 if self.WALL_CA: # Compute CA cost of ambulance and wall
-                    dist_btw_wall_bottom =  self.cntrld_vehicles_x[ic][1,k] - (self.responseMPC.min_y + self.responseMPC.W/2.0) 
-                    dist_btw_wall_top = (self.responseMPC.max_y - self.responseMPC.W/2.0) - self.cntrld_vehicles_x[ic][1,k][1]
+                    dist_btw_wall_bottom =  self.cntrld_vehicles_x[ic][1,k] - (self.cntrld_vehicles[ic].min_y + self.cntrld_vehicles[ic].W/2.0) 
+                    dist_btw_wall_top = (self.cntrld_vehicles[ic].max_y - self.cntrld_vehicles[ic].W/2.0) - self.cntrld_vehicles_x[ic][1,k]
+                    
+                    self.opti.subject_to( dist_btw_wall_bottom >= (0 - self.bottom_wall_slack_c[ic][0,k]))
+                    self.opti.subject_to( dist_btw_wall_top >= (0 - self.top_wall_slack_c[ic][0,k]))
 
-                    self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_bottom, 0.0001)**self.k_CA_power)
-                    self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_top, 0.0001)**self.k_CA_power)                
+                    self.slack_cost += self.top_wall_slack_c[ic][0,k]**2 + self.bottom_wall_slack_c[ic][0,k]**2
+
+                    # self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_bottom, 0.0001)**self.k_CA_power)
+                    # self.collision_cost += 0.1 * 1/(cas.fmax(dist_btw_wall_top, 0.0001)**self.k_CA_power)                
             
         ###### Collision Braking Avoidance
         k_min_ttc = 1.0 ## Vehicle must have a time to collision greater than this number
