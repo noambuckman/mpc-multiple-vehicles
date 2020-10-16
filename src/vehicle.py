@@ -183,8 +183,8 @@ class Vehicle(object):
         ''' Construct vehicle specific constraints that only rely on
         the ego vehicle's own state '''
         
-        opti.subject_to( opti.bounded(-1, X[0,:], np.infty )) #Constraints on X, Y
-        if self.strict_wall_constraint:
+        # opti.subject_to( opti.bounded(-1, X[0,:], np.infty )) #Constraints on X, Y
+        if self.strict_wall_constraint: #TODO, change this to when creating min_y and max_y
             opti.subject_to( opti.bounded(self.min_y+self.W/2.0, X[1,:], self.max_y-self.W/2.0) )
         opti.subject_to( opti.bounded(-np.pi/2, X[2,:], np.pi/2) ) #no crazy angle
         opti.subject_to(opti.bounded(self.min_v, X[4,:], self.max_v))    
@@ -268,14 +268,14 @@ class Vehicle(object):
         v_u = cas.MX.sym('v_u')
         x = cas.vertcat(X, Y, Phi, Delta, V, s)
         u = cas.vertcat(delta_u, v_u)
-
+        
         ode = cas.vertcat(V * cas.cos(Phi),
                         V * cas.sin(Phi),
                         V * cas.tan(Delta) / self.L,
                         delta_u,
                         v_u,
                         V)
-
+        ## SHOULD WE ADD A FRICTION PLACE FOR GRASS HERE?
         f = cas.Function('f',[x,u],[ode],['x','u'],['ode'])
         return f
     

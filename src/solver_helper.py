@@ -26,7 +26,6 @@ def get_min_dist_i(ambulance_x0, all_other_x0, restrict_greater=False):
     else:
         return np.argmin(all_dist_sqrd)
 
-
 def extend_last_mpc_ctrl(all_other_u_mpc, number_ctrl_pts_executed, N, all_other_MPC, all_other_x0):
     '''Copy the previous mpc and extend the last values with all zeros'''
     all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = [np.zeros(shape=(2, N)) for i in range(len(all_other_MPC))], [np.zeros(shape=(6, N+1)) for i in range(len(all_other_MPC))], [np.zeros(shape=(3, N+1)) for i in range(len(all_other_MPC))]
@@ -35,17 +34,19 @@ def extend_last_mpc_ctrl(all_other_u_mpc, number_ctrl_pts_executed, N, all_other
         all_other_x_ibr[i], all_other_x_des_ibr[i] = all_other_MPC[i].forward_simulate_all(all_other_x0[i].reshape(6,1), all_other_u_ibr[i])
     return all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr
 
-def extend_last_mpc_and_follow(all_other_u_mpc, number_ctrl_pts_executed, N, all_other_MPC, all_other_x0):
+def extend_last_mpc_and_follow(all_other_u_mpc, number_ctrl_pts_executed, N, all_other_MPC, all_other_x0, params, world):
     '''Copy the previous mpc and extend the last values with lane following control'''
     all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = [np.zeros(shape=(2, N)) for i in range(len(all_other_MPC))], [np.zeros(shape=(6, N+1)) for i in range(len(all_other_MPC))], [np.zeros(shape=(3, N+1)) for i in range(len(all_other_MPC))]
+    print("Ambulance guess of ado...")
     for i in range(len(all_other_MPC)):
+        print("...veh %03d"%i)
         # Ctrl and traj from previous MPC
         prev_ctrl = all_other_u_mpc[i][:, number_ctrl_pts_executed:]
         prev_traj, prev_traj_des = all_other_MPC[i].forward_simulate_all(all_other_x0[i].reshape(6,1), prev_ctrl)
         
         # Predicted portion of just lane following.  This is an estimated ctrl of ado vehicles.
-        initial_pt = prev_traj[:, -1]
-        lane_following_ctrl, lane_following_traj, lane_following_traj_des = mpc.centerline_following(number_ctrl_pts_executed, all_other_MPC[i], initial_pt)
+        initial_pt = prev_traj[:, -2]
+        lane_following_ctrl, lane_following_traj, lane_following_traj_des = lane_following_optimizations(number_ctrl_pts_executed, all_other_MPC[i], initial_pt, params, world)
 
         # Lane following traj's initial pt is redundant (since it is also in prev traj)
         lane_following_traj = lane_following_traj[:, 1:]
@@ -68,6 +69,18 @@ def pullover_guess(N, all_other_MPC, all_other_x0):
         all_other_x_ibr[i], all_other_x_des_ibr[i] = all_other_MPC[i].forward_simulate_all(all_other_x0[i].reshape(6,1), all_other_u_ibr[i])
     return all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr
 
+def lane_following_optimizations(N, response_MPC, response_x0, params, world):
+    cp_MPC = cp.deepcopy(response_MPC)    
+    bri = mpc.MultiMPC(cp_MPC, [], [], world)
+    bri.generate_optimization(params["N"], params["T"], response_x0, [], [], slack=True, solve_amb=False, params = params, ipopt_params={'print_level':5})
+    
+    bri.opti.subject_to(bri.u_opt[1,:] == 0)
+    bri.solution = bri.opti.solve()
+    x, u, x_des, _, _, _, _, _, _ = bri.get_solution()
+    del bri, cp_MPC
+    return u[:,:N], x[:,:N+1], x_des[:,:N+1]
+
+
 def solve_best_response(warm_key, warm_trajectory, 
                         response_MPC, cntrld_vehicles, nonresponse_MPC_list, 
                         response_x0, cntrld_x0, nonresponse_x0_list,
@@ -81,7 +94,7 @@ def solve_best_response(warm_key, warm_trajectory,
     bri = mpc.MultiMPC(response_MPC, cntrld_vehicles, nonresponse_MPC_list, world, solver_params)
     params["collision_avoidance_checking_distance"] = 100
     bri.generate_optimization(params["N"], params["T"], response_x0, cntrld_x0, nonresponse_x0_list,  slack=solver_params['slack'], solve_amb=solver_params['solve_amb'], params=params, ipopt_params=ipopt_params)
-    print("Succesffully generated optimzation %d %d %d"%(len(nonresponse_MPC_list), len(nonresponse_x_list), len(nonresponse_u_list)))
+    # print("Succesffully generated optimzation %d %d %d"%(len(nonresponse_MPC_list), len(nonresponse_x_list), len(nonresponse_u_list)))
     # u_warm, x_warm, x_des_warm = ux_warm_profiles[k_warm]
     bri.opti.set_initial(bri.u_opt, u_warm)            
     bri.opti.set_initial(bri.x_opt, x_warm)
@@ -106,12 +119,12 @@ def solve_best_response(warm_key, warm_trajectory,
         current_cost = bri.solution.value(bri.total_svo_cost)
 
 
-        all_slack_vars = [bri.slack_i_jnc] + [bri.slack_i_jc] + bri.slack_ic_jnc + bri.slack_ic_jc
-        all_slack_vars = [bri.solution.value(s) for s in all_slack_vars]
-        
-        print(len(all_slack_vars))
+        # all_slack_vars = [bri.slack_i_jnc] + [bri.slack_i_jc] + bri.slack_ic_jnc + bri.slack_ic_jc
+        # all_slack_vars = [bri.solution.value(s) for s in all_slack_vars]
+        all_slack_vars = [bri.solution.value(bri.slack_i_jnc), bri.solution.value(bri.slack_i_jc)] + [bri.solution.value(s) for s in bri.slack_ic_jc] + [bri.solution.value(s) for s in bri.slack_ic_jnc]
+        # print(len(all_slack_vars))
         max_slack = np.max([np.max(s) for s in all_slack_vars] + [0.000000000000])
-
+        # print("Max slack", max_slack)
         # max_slack = np.max([np.max(bri.solution.value(s)) for s in bri.slack_vars_list])                                                                         
         min_response_warm_ibr = None #<This used to return k_warm
         
@@ -178,7 +191,6 @@ def solve_warm_starts(ux_warm_profiles,
                 # file_name = folder + "data/"+'%03d'%ibr_sub_it
                 # mibr.save_state(file_name, xamb, uamb, xamb_des, all_other_x, all_other_u, all_other_x_des)
                 # mibr.save_costs(file_name, bri)                           
-
 
 
 
@@ -343,6 +355,7 @@ def initialize_cars_from_positions(N, dt, world, svo_theta, no_grass = False, li
     amb_MPC.k_phi_dot = 0.01
     amb_MPC.min_y = world.y_min        
     amb_MPC.max_y = world.y_max
+    amb_MPC.strict_wall_constraint = True
     if no_grass:
         amb_MPC.min_y += world.grass_width
         amb_MPC.max_y -= world.grass_width

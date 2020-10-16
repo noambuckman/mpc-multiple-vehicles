@@ -112,17 +112,14 @@ class MultiMPC(object):
         # Slack variables related to cntrld vehicles
         if len(self.cntrld_vehicles) > 0:
             self.slack_i_jc = self.opti.variable(len(self.cntrld_vehicles), N+1)
-            self.slack_ic_jc = [self.opti.variable(len(self.cntrld_vehicles), N+1) for ic in range(len(self.cntrld_vehicles))]
-            
             self.opti.subject_to(cas.vec(self.slack_i_jc)>=0)
-            for slack_var in self.slack_ic_jc:
-                self.opti.subject_to(cas.vec(slack_var)>=0)
-
-            for j in range(self.slack_i_jc.shape[0]):
+            for jc in range(self.slack_i_jc.shape[0]):
                 for t in range(self.slack_i_jc.shape[1]):
-                    self.slack_cost += self.slack_i_jc[j,t]**2    
-
+                    self.slack_cost += self.slack_i_jc[jc,t]**2    
+            
+            self.slack_ic_jc = [self.opti.variable(len(self.cntrld_vehicles), N+1) for ic in range(len(self.cntrld_vehicles))]
             for ic in range(len(self.cntrld_vehicles)):
+                self.opti.subject_to(cas.vec(self.slack_ic_jc[ic])>=0)
                 for jc in range(self.slack_ic_jc[ic].shape[0]):
                     for t in range(self.slack_ic_jc[ic].shape[1]):
                         self.slack_cost += self.slack_ic_jc[ic][jc, t]**2                
@@ -213,14 +210,14 @@ class MultiMPC(object):
                         distance_clipped = cas.fmax(dist, 0.0001) # could be buffered if we'd like
                         self.collision_cost += 1/(distance_clipped - self.k_ca2)**self.k_CA_power     
                 for j in range(len(self.cntrld_vehicles)):
-                    if j == ic:
-                        continue
+                    if j <= ic:
+                        self.opti.subject_to(self.slack_ic_jc[ic][j, k] == 0)
                     else:
                         initial_displacement = x0_other_ctrl[j] - x0_other_ctrl[ic]
                         initial_xy_distance = cas.sqrt(initial_displacement[0]**2 + initial_displacement[1]**2)
                         if initial_xy_distance <= params["collision_avoidance_checking_distance"]: #collision avoidance distance for other cars                        
                 
-                            dist = self.minkowski_ellipse_collision_distance(self.cntrld_vehicles[ic], self.otherMPClist[j], 
+                            dist = self.minkowski_ellipse_collision_distance(self.cntrld_vehicles[ic], self.cntrld_vehicles[j], 
                                                                             self.cntrld_vehicles_x[ic][0, k], self.cntrld_vehicles_x[ic][1,k], self.cntrld_vehicles_x[ic][2,k], 
                                                                             self.cntrld_vehicles_x[j][0,k], self.cntrld_vehicles_x[j][1,k], self.cntrld_vehicles_x[j][2,k])
                             
@@ -251,7 +248,8 @@ class MultiMPC(object):
             self.opti.set_value(self.cntrld_vehicles_p[j], x0_other_ctrl[j])
 
         # Set the solver conditions
-
+        if ipopt_params is None:
+            ipopt_params = {}
         self.opti.solver('ipopt',{}, ipopt_params)
 
 
