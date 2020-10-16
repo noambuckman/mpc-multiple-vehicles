@@ -170,7 +170,7 @@ else:
     i_mpc_start = args.mpc_start_iteration
 
     amb_MPC = pickle.load(open(folder + "data/mpcamb.p",'rb'))
-    all_other_MPC = [pickle.load(open(folder + "data/mpcother%02d.p"%i,'rb') for i in range(params["n_other"]))]
+    all_other_MPC = [pickle.load(open(folder + "data/mpcother%02d.p"%i,'rb')) for i in range(params["n_other"])]
     world = pickle.load(open(folder + "data/world.p",'rb'))
     params["pid"] = os.getpid()
 
@@ -208,7 +208,7 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
     min_slack = np.infty
 
     ###### Update the initial conditions for all vehicles
-    if i_mpc_start > 0 and i_mpc == i_mpc_start: #TODO: Should be moved above
+    if args.load_log_dir: #TODO: Should be moved above
         previous_mpc_file = folder + 'data/mpc_%02d'%(i_mpc_start - 1)
         xamb_executed, uamb_executed, _, all_other_x_executed, all_other_u_executed, _,  = mpc.load_state(previous_mpc_file, params['n_other'])
         all_other_u_mpc = all_other_u_executed
@@ -244,7 +244,9 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
 
     ############# Generate (if needed) the control inputs of other vehicles        
     if i_mpc == 0:
-        all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = helper.pullover_guess(N, all_other_MPC, all_other_x0)  # This is a hack and should be explicit that it's lane change                   
+        # all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = helper.pullover_guess(N, all_other_MPC, all_other_x0)  # This is a hack and should be explicit that it's lane change     
+        previous_all_other_u_mpc = [np.zeros((2,params["N"])) for i in range(len(all_other_MPC))]
+        all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = helper.extend_last_mpc_and_follow(previous_all_other_u_mpc, params["N"]-1, N, all_other_MPC, all_other_x0, params, world)  
     else:
         # all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = helper.extend_last_mpc_ctrl(all_other_u_mpc, number_ctrl_pts_executed, N, all_other_MPC, all_other_x0)  
         all_other_u_ibr, all_other_x_ibr, all_other_x_des_ibr = helper.extend_last_mpc_and_follow(all_other_u_mpc, number_ctrl_pts_executed, N, all_other_MPC, all_other_x0, params, world)  
