@@ -41,12 +41,11 @@ def extend_last_mpc_and_follow(all_other_u_mpc, number_ctrl_pts_executed, N, all
     for i in range(len(all_other_MPC)):
         print("...veh %03d"%i)
         # Ctrl and traj from previous MPC
-        prev_ctrl = all_other_u_mpc[i][:, number_ctrl_pts_executed:]
+        prev_ctrl = all_other_u_mpc[i][:, number_ctrl_pts_executed:-1] #take off the last position
         prev_traj, prev_traj_des = all_other_MPC[i].forward_simulate_all(all_other_x0[i].reshape(6,1), prev_ctrl)
-        
         # Predicted portion of just lane following.  This is an estimated ctrl of ado vehicles.
-        initial_pt = prev_traj[:, -2]
-        lane_following_ctrl, lane_following_traj, lane_following_traj_des = lane_following_optimizations(number_ctrl_pts_executed, all_other_MPC[i], initial_pt, params, world)
+        initial_pt = prev_traj[:, -1]
+        lane_following_ctrl, lane_following_traj, lane_following_traj_des = lane_following_optimizations(number_ctrl_pts_executed + 1, all_other_MPC[i], initial_pt, params, world)
 
         # Lane following traj's initial pt is redundant (since it is also in prev traj)
         lane_following_traj = lane_following_traj[:, 1:]
