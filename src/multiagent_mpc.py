@@ -250,7 +250,7 @@ class MultiMPC(object):
             
         ###### Collision Braking Avoidance
         k_min_ttc = 1.0 ## Vehicle must have a time to collision greater than this number
-        self.generate_stopping_constraint_ttc(self.x_opt, self.cntrld_vehicles_x, self.allother_x_opt, solve_amb, min_time_to_collision = k_min_ttc) ###
+        # self.generate_stopping_constraint_ttc(self.x_opt, self.cntrld_vehicles_x, self.allother_x_opt, solve_amb, min_time_to_collision = k_min_ttc) ###
 
         ######## optimization  ##################################
         self.total_svo_cost = self.response_svo_cost + self.other_svo_cost + self.k_slack * self.slack_cost + self.k_CA * self.collision_cost
@@ -390,7 +390,7 @@ class MultiMPC(object):
             prod =    cas.mtimes([dX.T, R_o.T, M, R_o, dX])
 
 
-    def generate_stopping_constraint_ttc(self, x_opt, xcntrld_opt, xothers_opt, solve_amb, min_time_to_collision = 3.0):
+    def generate_stopping_constraint_ttc(self, x_opt, xcntrld_opt, xothers_opt, solve_amb, min_time_to_collision = 3.0, k_ttc = 0.0):
         ''' Add a velocity constraint on the ego vehicle so it doesn't go too fast behind a lead vehicle.
             Constrains the vehicle so that the time to collision is always less than time_to_collision seconds
             assuming that both ego and ado vehicle mantain constant velocity
@@ -398,7 +398,8 @@ class MultiMPC(object):
 
         N = x_opt.shape[1]
         car_length = self.responseMPC.L
-        car_width = self.responseMPC.W        
+        car_width = self.responseMPC.W 
+        time_to_collision_cost = 0.0       
         for k in range(N):
             x_ego = x_opt[0, k]
             y_ego = x_opt[1, k]
@@ -411,20 +412,24 @@ class MultiMPC(object):
                 x_amb = xcntrld_opt[j][0, k]
                 y_amb = xcntrld_opt[j][1, k]
                 phi_amb = xcntrld_opt[j][2, k]
-                v_amb = xcntrld_opt[j][4, k]    
+                v_amb = xcntrld_opt[j][4, k] - 2*self.responseMPC.max_v_u     
 
                 v_amb_components = (v_amb * cas.cos(phi_amb), v_amb * cas.sin(phi_amb))              
                 
                 dxegoamb = (x_amb - x_ego) - car_length
                 dyegoamb = (y_amb - y_ego) - car_width
                 dot_product = (v_ego_components[0] - v_amb_components[0])*dxegoamb + (v_ego_components[1] - v_amb_components[1])*dyegoamb
+                positive_dot_product = cas.max(dot_product, 0) #if negative, negative_dot_product will be 0 so time_to_collision is very very large
+                
+                time_to_collision = (dxegoamb**2 + dyegoamb**2)/(dot_product + 0.000001)
+                time_to_collision_cost += k_ttc * 1/time_to_collision**2
                 self.opti.subject_to(dot_product <= (dxegoamb**2 + dyegoamb**2) / (0.000001 + min_time_to_collision))
             
             for j in range(len(xothers_opt)):
                 x_j = xothers_opt[j][0, k]
                 y_j = xothers_opt[j][1, k]
                 phi_j = xothers_opt[j][2, k]
-                v_j = xothers_opt[j][4, k]       
+                v_j = xothers_opt[j][4, k] - 2*self.responseMPC.max_v_u            
 
                 #### Add constraint between ego and j
                 dxego = (x_j - x_ego) - car_length
@@ -432,23 +437,30 @@ class MultiMPC(object):
                 
                 v_j_components = (v_j * cas.cos(phi_j), v_j * cas.sin(phi_j))
                 dot_product = (v_ego_components[0] - v_j_components[0])*dxego + (v_ego_components[1] - v_j_components[1])*dyego
-                
+                positive_dot_product = cas.max(dot_product, 0) #if negative, negative_dot_product will be 0 so time_to_collision is very very large
+                time_to_collision = (dxego**2 + dyego**2)/(positive_dot_product + 0.000001)
+                time_to_collision_cost += k_ttc * 1/time_to_collision**2
                 self.opti.subject_to(dot_product <= (dxego**2 + dyego**2) / (0.000001 + min_time_to_collision))
                 
                 #### Add constraint betweem cntrld vehicles and j
                 add_constraint_for_cntrld = False
                 if add_constraint_for_cntrld:
                     for jc in range(len(xcntrld_opt)):
-                        x_amb = xcntrld_opt[jc][0, k]
-                        y_amb = xcntrld_opt[jc][1, k]
-                        phi_amb = xcntrld_opt[jc][2, k]
-                        v_amb = xcntrld_opt[jc][4, k]    
+                        x_ctrl = xcntrld_opt[jc][0, k]
+                        y_ctrl = xcntrld_opt[jc][1, k]
+                        phi_ctrl = xcntrld_opt[jc][2, k]
+                        v_ctrl = xcntrld_opt[jc][4, k]    
+                        v_ctrl_components = (v_ctrl * cas.cos(phi_ctrl), v_ctrl * cas.sin(phi_ctrl))
+
+                        dxctrl = (x_j - x_ctrl) - car_length
+                        dyctrl = (y_j - y_ctrl) - car_width
                         
-                        dxamb = (x_j - x_amb) - car_length
-                        dyamb = (y_j - y_amb) - car_width
+                        dot_product = (v_ctrl_components[0] - v_j_components[0])*dxctrl + (v_ctrl_components[1] - v_j_components[1])*dyctrl
+                        positive_dot_product = cas.max(dot_product, 0) #if negative, negative_dot_product will be 0 so time_to_collision is very very large
+                        time_to_collision = (dxctrl**2 + dyctrl**2)/(positive_dot_product + 0.000001)
+                        time_to_collision_cost += k_ttc * 1/time_to_collision**2
                         
-                        dot_product = (v_amb_components[0] - v_j_components[0])*dxamb + (v_amb_components[1] - v_j_components[1])*dyamb
-                        self.opti.subject_to(dot_product <= (dxamb**2 + dyamb**2) / (0.00000001 + min_time_to_collision))
+                        self.opti.subject_to(dot_product <= (dxctrl**2 + dyctrl**2) / (0.00000001 + min_time_to_collision))
                     
 
 
