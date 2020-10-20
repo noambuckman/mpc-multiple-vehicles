@@ -48,7 +48,6 @@ def warm_profiles_subset(n_warm_keys, ux_warm_profiles):
     
     return ux_warm_profiles_subset
 ##########################################################
-svo_theta = np.pi/3.0
 # svo_theta = 0.0
 # random_seed = args.random_seed[0]
 # random_seed = 9
@@ -81,6 +80,7 @@ default_position_list = [
 
 parser = argparse.ArgumentParser(description='Run iterative best response with SVO')
 parser.add_argument('--load-log-dir',type=str, default=None, help="Load log")
+parser.add_argument('--log-subdir', type=str, default=None, help="If you'd like to specify the log subdir name, end without /")
 parser.add_argument('--mpc-start-iteration', type=int, default=0, help="At which mpc iteration should the simulation start")
 parser.add_argument('--save-solver-input', action='store_true')
 
@@ -93,7 +93,7 @@ parser.add_argument('--plot-flag', action='store_true')
 parser.add_argument('--print-flag', action='store_true')
 
 parser.add_argument('--n-other', type=int, default=10, help="Number of ado vehicles")
-parser.add_argument('--n-mpc', type=int, default=300)
+parser.add_argument('--n-mpc', type=int, default=100)
 parser.add_argument('--n-ibr', type=int, default=3, help="Number of rounds of iterative best response before excuting mpc")
 parser.add_argument('--n-processors', type=int, default=15, help="Number of processors used when solving a single mpc")
 parser.add_argument('--n-lanes', type=int, default=2, help="Number of lanes in the right direction")
@@ -114,6 +114,7 @@ parser.add_argument('--wall-CA', action='store_true')
 
 parser.add_argument('--default-n-warm-starts', type=int, default=15)
 parser.add_argument('--random-svo', type=int, default = 1, help="Randomly assign svo to other vehicles")
+parser.add_argument('--svo-theta', type=float, default=0.0, help="Setting a homogeneous svo, random-svo MUST be set as 0")
 parser.add_argument('--plan-fake-ambulance', action='store_true')
 parser.add_argument('--default-positions', action='store_true')
 parser.add_argument('--save-ibr', type=int, default=1, help="Save the IBR control inputs, 1=True, 0=False")
@@ -125,7 +126,10 @@ params = vars(args)
 if args.load_log_dir is None:
     params["start_time_string"] = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     alpha_num = string.ascii_lowercase[:8] + string.digits
-    subdir_name = ''.join(random.choice(alpha_num) for j in range(4)) + '-' + ''.join(random.choice(alpha_num) for j in range(4)) + "-" + params["start_time_string"]
+    if args.log_subdir is None:
+        subdir_name = ''.join(random.choice(alpha_num) for j in range(4)) + '-' + ''.join(random.choice(alpha_num) for j in range(4)) + "-" + params["start_time_string"]
+    else:
+        subdir_name = args.log_subdir
     folder = "/home/nbuckman/mpc_results/" + subdir_name + "/"
     for f in [folder+"imgs/", folder+"data/", folder+"vids/", folder+"plots/"]:
         os.makedirs(f, exist_ok = True)
@@ -133,7 +137,6 @@ if args.load_log_dir is None:
 
     params['N'] = max(1, int(params["T"]/params["dt"]))
     params['number_ctrl_pts_executed'] = max(1, int(np.floor(params['N']*params['p_exec'])))
-    params["svo_theta"] = svo_theta #TODO: make this an input arg
 
     ### THIS NEEDS TO BE ADDED TO LOADING
     world = tw.TrafficWorld(params["n_lanes"], 0, 999999)
