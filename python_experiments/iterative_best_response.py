@@ -51,9 +51,9 @@ def warm_profiles_subset(n_warm_keys, ux_warm_profiles):
 svo_theta = np.pi/3.0
 # svo_theta = 0.0
 # random_seed = args.random_seed[0]
-random_seed = 9
-if random_seed > 0:
-    np.random.seed(random_seed)
+# random_seed = 9
+# if random_seed > 0:
+#     np.random.seed(random_seed)
 #######################################################################
 default_position_list = [
     (0, 20),
@@ -150,8 +150,8 @@ if args.load_log_dir is None:
         if params['random_svo'] == 1:
             list_of_svo = [np.random.choice([0, np.pi/4.0, np.pi/2.01]) for i in range(params["n_other"])]
         else:
-            list_of_svo = None
-        amb_MPC, amb_x0, all_other_MPC, all_other_x0 = helper.initialize_cars_from_positions(params["N"], params["dt"], world, params["svo_theta"], 
+            list_of_svo = [params["svo_theta"] for i in range(params["n_other"])]
+        amb_MPC, amb_x0, all_other_MPC, all_other_x0 = helper.initialize_cars_from_positions(params["N"], params["dt"], world,  
                                                                     True, 
                                                                     position_list, list_of_svo)    
     
