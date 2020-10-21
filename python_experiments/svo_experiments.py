@@ -23,7 +23,7 @@ batch_subdir = args.svo_dir
 svo_theta = 0.0
 all_cmds = ""
 results_parent_dir = os.path.expanduser("~") + "/mpc_results/"
-os.makedirs(results_parent_dir + batch_subdir)
+os.makedirs(results_parent_dir + batch_subdir, exist_ok=True)
 
 for idx in range(args.seed_start, args.seed_end + 1):
     log_subdir = batch_subdir + "e%03d"%idx
