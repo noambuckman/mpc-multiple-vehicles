@@ -4,9 +4,9 @@ np.set_printoptions(precision=2)
 import matplotlib.pyplot as plt
 import casadi as cas
 import copy as cp
-PROJECT_PATHS = ['/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-multiple-vehicles/', '/Users/noambuckman/mpc-multiple-vehicles/']
-for p in PROJECT_PATHS:
-    sys.path.append(p)
+# PROJECT_PATHS = ['/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-multiple-vehicles/', '/Users/noambuckman/mpc-multiple-vehicles/']
+# for p in PROJECT_PATHS:
+#     sys.path.append(p)
 import src.traffic_world as tw
 import src.multiagent_mpc as mpc
 import src.car_plotting_multiple as cmplot
@@ -131,6 +131,7 @@ if args.load_log_dir is None:
     else:
         subdir_name = args.log_subdir
     folder = "/home/nbuckman/mpc_results/" + subdir_name + "/"
+    folder = os.path.expanduser("~") + "/mpc_results/"
     for f in [folder+"imgs/", folder+"data/", folder+"vids/", folder+"plots/"]:
         os.makedirs(f, exist_ok = True)
     i_mpc_start = 0
