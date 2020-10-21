@@ -8,8 +8,8 @@ import argparse
 
 parser = argparse.ArgumentParser(description='Run iterative best response with SVO')
 parser.add_argument('svo_dir',type=str, default=None, help="Load log")
-parser.add_argument('seed-start', type=int, default=-1)
-parser.add_argument('seed-end', type=int, default=-1)
+parser.add_argument('seed_start', type=int, default=-1)
+parser.add_argument('seed_end', type=int, default=-1)
 args = parser.parse_args()
 
 ## Settings we will override during each call
