@@ -109,7 +109,7 @@ parser.add_argument('--k-max-round-with-slack', type=int, default=np.infty, help
 parser.add_argument('--k-slack-d', type=float, default=1000)
 parser.add_argument('--k-CA-d', type=float, default=0.05)
 parser.add_argument('--k-CA-power', type=float, default=1.0)
-parser.add_argument('--wall-CA', action='store_true')
+parser.add_argument('--wall-CA', type=int, default=1)
 
 
 parser.add_argument('--default-n-warm-starts', type=int, default=15)
@@ -159,7 +159,7 @@ if args.load_log_dir is None:
                                                                     position_list, list_of_svo)    
     
     for i in range(len(all_other_MPC)):
-        pickle.dump(all_other_MPC[i], open(folder + "data/mpcother%02d.p"%i,'wb'))
+        pickle.dump(all_other_MPC[i], open(folder + "data/mpcother%03d.p"%i,'wb'))
     pickle.dump(amb_MPC, open(folder + "data/mpcamb.p",'wb'))
     pickle.dump(world, open(folder + "data/world.p",'wb'))
     params['save_flag'] = True
@@ -211,13 +211,13 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
     min_slack = np.infty
 
     ###### Update the initial conditions for all vehicles
-    if args.load_log_dir: #TODO: Should be moved above
-        previous_mpc_file = folder + 'data/mpc_%02d'%(i_mpc_start - 1)
+    if args.load_log_dir and i_mpc==i_mpc_start: #TODO: Should be moved above
+        previous_mpc_file = folder + 'data/mpc_%03d'%(i_mpc_start - 1)
         xamb_executed, uamb_executed, _, all_other_x_executed, all_other_u_executed, _,  = mpc.load_state(previous_mpc_file, params['n_other'])
         all_other_u_mpc = all_other_u_executed
         uamb_mpc = uamb_executed
         print("Loaded initial positions from %s"%(previous_mpc_file))
-        previous_all_file = folder + 'data/all_%02d'%(i_mpc_start -1)
+        previous_all_file = folder + 'data/all_%03d'%(i_mpc_start -1)
         xamb_actual_prev, uamb_actual_prev, _, xothers_actual_prev, uothers_actual_prev, _ = mpc.load_state(previous_all_file, params['n_other'], ignore_des=True)
         t_end = xamb_actual_prev.shape[1]
         xamb_actual[:, :t_end] = xamb_actual_prev[:, :t_end]
@@ -318,7 +318,6 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
             # solver_params['k_CA'] = params['k_CA_d'] * 2**solve_number
             solver_params['k_CA'] = params['k_CA_d']
             solver_params['k_CA_power'] = params['k_CA_power']
-            solver_params['wall_CA'] = params['wall_CA']
             if solve_number > 2:
                 debug_flag = True
 
@@ -428,7 +427,6 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
                 # solver_params['k_CA'] = params['k_CA_d'] * 2**solve_number    
                 solver_params['k_CA'] = params['k_CA_d']
                 solver_params['k_CA_power'] = params['k_CA_power']
-                solver_params['wall_CA'] = params['wall_CA']
                 solver_params['n_warm_starts'] = solver_params['n_warm_starts'] + 5 * solve_number
                 if solve_number > 2:
                     debug_flag = True
@@ -499,16 +497,16 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
         xothers_actual[i][:,actual_t:actual_t+number_ctrl_pts_executed+1], uothers_actual[i][:,actual_t:actual_t+number_ctrl_pts_executed] = all_other_x_executed[i], all_other_u_executed[i]
 
     ### SAVE STATES AND PLOT
-    file_name = folder + "data/"+'mpc_%02d'%(i_mpc)
+    file_name = folder + "data/"+'mpc_%03d'%(i_mpc)
     if SAVE_FLAG:
         mpc.save_state(file_name, xamb_mpc, uamb_mpc, xamb_des_mpc, all_other_x_mpc, all_other_u_mpc, all_other_x_des_mpc)
-        print("Saving MPC Rd %02d / %02d to ... %s" % (i_mpc, params['n_mpc']-1, file_name))
+        print("Saving MPC Rd %03d / %03d to ... %s" % (i_mpc, params['n_mpc']-1, file_name))
         # mpc.save_costs(file_name, bri_mpc) 
-        file_name = folder + "data/"+'all_%02d'%(i_mpc)        
+        file_name = folder + "data/"+'all_%03d'%(i_mpc)        
         mpc.save_state(file_name, xamb_actual, uamb_actual, None, xothers_actual, uothers_actual, None, end_t = actual_t+number_ctrl_pts_executed+1)
       
     mean_amb_v = np.mean(xamb_executed[4,:])
-    im_dir = folder + '%02d/'%i_mpc
+    im_dir = folder + '%03d/'%i_mpc
     os.makedirs(im_dir+"imgs/", exist_ok=True)    
     end_frame = actual_t + number_ctrl_pts_executed + 1
     start_frame = max(0, end_frame - 20)
@@ -527,7 +525,7 @@ for i in range(len(xothers_actual)):
 print("Plotting all")
 cmplot.plot_cars(world, response_MPC, xamb_actual, xothers_actual, folder, None, None, False, False, 0)
 
-file_name = folder + "data/"+'all%02d'%(i_mpc)
+file_name = folder + "data/"+'all%03d'%(i_mpc)
 print("Saving Actual Positions to...  ", file_name)
 mpc.save_state(file_name, xamb_actual, uamb_mpc, xamb_des_mpc, xothers_actual, all_other_u_mpc, all_other_x_des_mpc)
 

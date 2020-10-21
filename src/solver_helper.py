@@ -71,7 +71,7 @@ def pullover_guess(N, all_other_MPC, all_other_x0):
 def lane_following_optimizations(N, response_MPC, response_x0, params, world):
     cp_MPC = cp.deepcopy(response_MPC)    
     bri = mpc.MultiMPC(cp_MPC, [], [], world)
-    bri.generate_optimization(params["N"], params["T"], response_x0, [], [], slack=True, solve_amb=False, params = params, ipopt_params={'print_level':5})
+    bri.generate_optimization(N, N*params["dt"], response_x0, [], [], slack=True, solve_amb=False, params = params, ipopt_params={'print_level':0})
     
     bri.opti.subject_to(bri.u_opt[1,:] == 0)
     bri.solution = bri.opti.solve()
@@ -318,7 +318,7 @@ def initialize_cars_from_positions(N, dt, world, no_grass = False, list_of_posit
         if no_grass:
                 x1_MPC.min_y += world.grass_width
                 x1_MPC.max_y -= world.grass_width        
-        x1_MPC.strict_wall_constraint = True
+        x1_MPC.strict_wall_constraint = False
 
         lane_number, next_x0 = list_of_positions[i]
             

@@ -27,12 +27,10 @@ class MultiMPC(object):
             self.k_CA = 0
             self.k_CA_power = 1
             self.collision_cost = 0      
-            self.WALL_CA = False
         else:
             self.k_slack = solver_params['k_slack']
             self.k_CA = solver_params['k_CA']
             self.k_CA_power = solver_params['k_CA_power']
-            self.WALL_CA = solver_params['wall_CA']
         
         self.world = world
 
@@ -196,7 +194,7 @@ class MultiMPC(object):
                 distance_clipped = cas.fmax(dist, 0.00001)
                 self.collision_cost += 1/(distance_clipped - self.k_ca2)**self.k_CA_power     
             
-            if self.WALL_CA: #Add a collision cost related to distance from wall
+            if params["wall_CA"] == 1: #Add a collision cost related to distance from wall
                 dist_btw_wall_bottom =  self.x_opt[1, k] - (self.responseMPC.min_y + self.responseMPC.W/2.0) 
                 dist_btw_wall_top = (self.responseMPC.max_y - self.responseMPC.W/2.0) - self.x_opt[1,k]
                 
@@ -236,7 +234,7 @@ class MultiMPC(object):
                             self.opti.subject_to(dist >= (1 - self.slack_ic_jc[ic][j, k]))
                             distance_clipped = cas.fmax(dist, 0.0001) # could be buffered if we'd like
                             self.collision_cost += 1/(distance_clipped - self.k_ca2)**self.k_CA_power   
-                if self.WALL_CA: # Compute CA cost of ambulance and wall
+                if params["wall_CA"] == 1: # Compute CA cost of ambulance and wall
                     dist_btw_wall_bottom =  self.cntrld_vehicles_x[ic][1,k] - (self.cntrld_vehicles[ic].min_y + self.cntrld_vehicles[ic].W/2.0) 
                     dist_btw_wall_top = (self.cntrld_vehicles[ic].max_y - self.cntrld_vehicles[ic].W/2.0) - self.cntrld_vehicles_x[ic][1,k]
                     
