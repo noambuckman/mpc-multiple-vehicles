@@ -11,11 +11,13 @@ n_lanes = 2
 n_cntrld = 2
 random_svo = 0
 ##
-batch_subdir = "svo_10_19/"
-n_experiments = 2
+batch_subdir = "svo_10_20/"
+n_experiments = 3
 ######## Egoistic
 svo_theta = 0.0
 all_cmds = ""
+results_parent_dir = "/home/nbuckman/mpc_results/"
+os.makedirs(results_parent_dir + batch_subdir)
 
 for idx in range(n_experiments):
     log_subdir = batch_subdir + "e%03d"%idx
