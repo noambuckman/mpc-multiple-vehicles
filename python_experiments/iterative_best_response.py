@@ -130,8 +130,7 @@ if args.load_log_dir is None:
         subdir_name = ''.join(random.choice(alpha_num) for j in range(4)) + '-' + ''.join(random.choice(alpha_num) for j in range(4)) + "-" + params["start_time_string"]
     else:
         subdir_name = args.log_subdir
-    folder = "/home/nbuckman/mpc_results/" + subdir_name + "/"
-    folder = os.path.expanduser("~") + "/mpc_results/"
+    folder = os.path.expanduser("~") + "/mpc_results/"  + subdir_name + "/"
     for f in [folder+"imgs/", folder+"data/", folder+"vids/", folder+"plots/"]:
         os.makedirs(f, exist_ok = True)
     i_mpc_start = 0
