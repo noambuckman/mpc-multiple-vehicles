@@ -43,3 +43,19 @@ The main settings that can be changed:
 - MPC Time Horizon (T), % of ctrl pts executed, time discretization (dt)
 - Iterative Best Response:  # rounds of IBR, allowed amount of slack
 -  Vehicle Preferences:  SVO wrt ambulance, collision costs, 
+
+
+
+Notes on installing on Supercloud:
+1. curl -sL \
+  "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh" > \
+  "Miniconda3.sh"
+2. bash Miniconda3.sh
+  accept the license
+3. source ~/.bashrc
+4. git clone https://github.com/noambuckman/mpc-multiple-vehicles.git 
+  requires username/password
+5. conda env create -f env.yml
+6. (temp) cp iterative_best_response.py to mpc-multiple-vehicles
+7. call python iterative response
+8.  Mv the data to my storage??
