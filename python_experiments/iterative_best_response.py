@@ -83,7 +83,7 @@ parser.add_argument('--load-log-dir',type=str, default=None, help="Load log")
 parser.add_argument('--log-subdir', type=str, default=None, help="If you'd like to specify the log subdir name, end without /")
 parser.add_argument('--mpc-start-iteration', type=int, default=0, help="At which mpc iteration should the simulation start")
 parser.add_argument('--save-solver-input', action='store_true')
-
+parser.add_argument('--seed',type=int, default=None)
 parser.add_argument('--T', type=int, default=5)
 parser.add_argument('--dt', type=float, default=0.2)
 parser.add_argument('--p-exec', type=float, default=0.4, help="Percent of MPC points executed")
@@ -148,7 +148,7 @@ if args.load_log_dir is None:
         MAX_VELOCITY = 25 * 0.447 # m/s
         VEHICLE_LENGTH = 4.5 #m
         time_duration_s = (params["n_other"] * 3600.0 / params["car_density"] ) * 10 # amount of time to generate traffic
-        initial_vehicle_positions = helper.poission_positions(params["car_density"], int(time_duration_s), params["n_lanes"] , MAX_VELOCITY, VEHICLE_LENGTH)
+        initial_vehicle_positions = helper.poission_positions(params["car_density"], int(time_duration_s), params["n_lanes"] , MAX_VELOCITY, VEHICLE_LENGTH, position_random_seed = params["seed"])
         position_list = initial_vehicle_positions[:params["n_other"]]
         if params['random_svo'] == 1:
             list_of_svo = [np.random.choice([0, np.pi/4.0, np.pi/2.01]) for i in range(params["n_other"])]
@@ -173,7 +173,7 @@ else:
     i_mpc_start = args.mpc_start_iteration
 
     amb_MPC = pickle.load(open(folder + "data/mpcamb.p",'rb'))
-    all_other_MPC = [pickle.load(open(folder + "data/mpcother%02d.p"%i,'rb')) for i in range(params["n_other"])]
+    all_other_MPC = [pickle.load(open(folder + "data/mpcother%03d.p"%i,'rb')) for i in range(params["n_other"])]
     world = pickle.load(open(folder + "data/world.p",'rb'))
     params["pid"] = os.getpid()
 

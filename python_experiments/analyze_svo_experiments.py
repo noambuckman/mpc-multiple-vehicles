@@ -56,11 +56,15 @@ experiment_dirs = {
 x_traveled_experiments = {}
 for svo_type, experiments in experiment_dirs.items():
     x_traveled_experiments[svo_type] = np.zeros(shape=(1, len(experiments)))
-
     for idx, log_directory in enumerate(experiments):
         with open(log_directory + "params.json",'rb') as fp:
                 params = json.load(fp)    
-        data_filename = log_directory + 'data/all_%02d'%end_mpc
+        
+        data_filename = log_directory + 'data/all_%03d'%end_mpc
+        if os.path.isfile(data_filename + "xamb.npy"):
+            pass
+        else:        
+            data_filename = log_directory + 'data/all_%02d'%end_mpc
         xamb_actual, _, _, xothers_actual, _, _, = mpc.load_state(data_filename, params['n_other'], ignore_des=True)
         end_frame = xamb_actual.shape[1] #Not exactly sure why we need minus 1
 

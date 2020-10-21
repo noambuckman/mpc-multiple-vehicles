@@ -361,19 +361,14 @@ def initialize_cars_from_positions(N, dt, world, no_grass = False, list_of_posit
     return amb_MPC, x0_amb, all_other_MPC, all_other_x0
 
 
-def poission_positions(cars_per_hour, total_seconds, n_lanes, average_velocity, car_length):
+def poission_positions(cars_per_hour, total_seconds, n_lanes, average_velocity, car_length, position_random_seed=None):
     cars_per_second = cars_per_hour / 3600.0
     dt = 0.20
     cars_per_dt = cars_per_second * dt
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(position_random_seed)
     n_cars_per_second = rng.poisson(cars_per_second, int(total_seconds))
     total_dt = int(total_seconds / dt)
     n_cars_per_dt = rng.poisson(cars_per_dt, int(total_dt))
-
-    
-    vehicle_x_distance = [[(rng.uniform(0.95, 1.0)*average_velocity)*(s + rng.uniform(0,1))]*n_cars_per_second[s] for s in range(len(n_cars_per_second))]
-    vehicle_x_distance = [[average_velocity*(s*dt)]*n_cars_per_dt[s] for s in range(len(n_cars_per_second))]
-
 
     all_vehicle_positions = []
 
