@@ -17,6 +17,7 @@ n_other = 30
 n_lanes = 2
 n_cntrld = 2
 random_svo = 0
+save_ibr = 0
 ##
 batch_subdir = args.svo_dir
 ######## Egoistic
@@ -27,8 +28,8 @@ os.makedirs(results_parent_dir + batch_subdir, exist_ok=True)
 
 for idx in range(args.seed_start, args.seed_end + 1):
     log_subdir = batch_subdir + "e%03d"%idx
-    cmd = "python iterative_best_response.py --seed %d --n-other %s --n-lanes %s --n-cntrld %s --random-svo %s --svo-theta %0.06f --log-subdir %s &"%(idx, n_other, n_lanes, n_cntrld, random_svo, 
-                                                                                                                    svo_theta, log_subdir)
+    cmd = "python iterative_best_response.py --seed %d --n-other %s --n-lanes %s --n-cntrld %s --random-svo %s --svo-theta %0.06f --log-subdir %s --save-ibr %d &"%(idx, n_other, n_lanes, n_cntrld, random_svo, 
+                                                                                                                    svo_theta, log_subdir, save_ibr)
     all_cmds += cmd
     all_cmds += "\n"
     print(cmd)
@@ -38,8 +39,8 @@ for idx in range(args.seed_start, args.seed_end + 1):
 svo_theta = np.pi/4.0
 for idx in range(args.seed_start, args.seed_end + 1):
     log_subdir = batch_subdir + "p%03d"%idx
-    cmd = "python iterative_best_response.py --seed %d --n-other %s --n-lanes %s --n-cntrld %s --random-svo %s --svo-theta %0.06f --log-subdir %s &"%(idx, n_other, n_lanes, n_cntrld, random_svo, 
-                                                                                                                    svo_theta, log_subdir)
+    cmd = "python iterative_best_response.py --seed %d --n-other %s --n-lanes %s --n-cntrld %s --random-svo %s --svo-theta %0.06f --log-subdir %s --save-ibr %d &"%(idx, n_other, n_lanes, n_cntrld, random_svo, 
+                                                                                                                    svo_theta, log_subdir, save_ibr)
     print(cmd)
     all_cmds += cmd
     all_cmds += "\n"
@@ -49,8 +50,8 @@ for idx in range(args.seed_start, args.seed_end + 1):
 svo_theta = np.pi/2.01
 for idx in range(args.seed_start, args.seed_end + 1):
     log_subdir = batch_subdir + "a%03d"%idx
-    cmd = "python iterative_best_response.py --seed %d --n-other %s --n-lanes %s --n-cntrld %s --random-svo %s --svo-theta %0.06f --log-subdir %s &"%(idx, n_other, n_lanes, n_cntrld, random_svo, 
-                                                                                                                    svo_theta, log_subdir)
+    cmd = "python iterative_best_response.py --seed %d --n-other %s --n-lanes %s --n-cntrld %s --random-svo %s --svo-theta %0.06f --log-subdir %s --save-ibr %d &"%(idx, n_other, n_lanes, n_cntrld, random_svo, 
+                                                                                                                    svo_theta, log_subdir, save_ibr)
     print(cmd)
     all_cmds += cmd
     all_cmds += "\n"
