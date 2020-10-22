@@ -47,15 +47,11 @@ The main settings that can be changed:
 
 
 Notes on installing on Supercloud:
-1. curl -sL \
-  "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh" > \
-  "Miniconda3.sh"
+1. curl -sL "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh" > "Miniconda3.sh"
 2. bash Miniconda3.sh
-  accept the license
 3. source ~/.bashrc
 4. git clone https://github.com/noambuckman/mpc-multiple-vehicles.git 
-  requires username/password
 5. conda env create -f env.yml
-6. (temp) cp iterative_best_response.py to mpc-multiple-vehicles
-7. call python iterative response
-8.  Mv the data to my storage??
+6. conda activate mpc
+7. python iterative response
+8. mv results to /afs/csail.mit.edu/u/n/nbuckman/mpc_results_afs/
