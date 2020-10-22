@@ -477,13 +477,15 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
             if params["save_ibr"] == 1:
                 file_name = folder + "data/"+'ibr_m%03di%03da%03d'%(i_mpc, i_rounds_ibr, response_i)
                 mpc.save_state(file_name, xamb_ibr, uamb_ibr, xamb_des_ibr, all_other_x_ibr, all_other_u_ibr, all_other_x_des_ibr)                                                                                                                           
+        
+        
+        xamb_ibr_g = cp.deepcopy(xamb_ibr)
+        xamb_ibr_g[0,:] += amb_x0_g[0]
+        all_other_x_ibr_g = [x for x in cp.deepcopy(all_other_x_ibr)]
+        for j in range(len(all_other_x_ibr_g)):
+            all_other_x_ibr_g[j][0,:] += amb_x0_g[0]        
         if params["save_ibr"] == 1:
-            file_name = folder + "data/"+'ibr_m%03di%03d'%(i_mpc, i_rounds_ibr)
-            xamb_ibr_g = cp.deepcopy(xamb_ibr)
-            xamb_ibr_g[0,:] += amb_x0_g[0]
-            all_other_x_ibr_g = [x for x in cp.deepcopy(all_other_x_ibr)]
-            for j in range(len(all_other_x_ibr_g)):
-                all_other_x_ibr_g[j][0,:] += amb_x0_g[0]
+            file_name = folder + "data/"+'ibr_m%03di%03d'%(i_mpc, i_rounds_ibr)            
             mpc.save_state(file_name, xamb_ibr_g, uamb_ibr, xamb_des_ibr, all_other_x_ibr_g, all_other_u_ibr, all_other_x_des_ibr)
 
     ################ SAVE THE BEST RESPONSE SOLUTION FOR THE CURRENT PLANNING HORIZONG/MPC ITERATION ###########################

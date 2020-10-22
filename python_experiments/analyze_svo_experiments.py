@@ -11,7 +11,7 @@ for p in PROJECT_PATHS:
 import src.multiagent_mpc as mpc
 # import src.car_plotting_multiple as cmplot
 # import src.solver_helper as helper
-
+np.set_printoptions(precision=3)
 import json
 # import string, random
 import glob
@@ -77,7 +77,17 @@ print("SVO:  Mean   Median")
 for svo_type, x_traveled in x_traveled_experiments.items():
     print("%s:  %0.03f %0.03f"%(svo_type, np.mean(x_traveled), np.median(x_traveled)))
 
+print("Latex")
 
+
+
+print("& SVO: &Mean   &Median  &Std")
+for svo_type, x_traveled in x_traveled_experiments.items():
+    print("& %s:  & %0.02f & %0.02f & %0.02f"%(svo_type, np.mean(x_traveled), np.median(x_traveled), np.std(x_traveled)))
+
+print("Number of Experiments:")
+for svo_type, x_traveled in x_traveled_experiments.items():
+    print("%s: %d"%(svo_type, x_traveled.shape[1]))
 # print(prosocial_experiments)
 # print(egoistic_experiments)
 # print(altruistic_experiments)
