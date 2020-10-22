@@ -130,10 +130,10 @@ params = vars(args)
 if args.load_log_dir is None:
     params["start_time_string"] = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     alpha_num = string.ascii_lowercase[:8] + string.digits
-    if args.log_subdir is None:
+    if params["log_subdir"] is None:
         subdir_name = ''.join(random.choice(alpha_num) for j in range(4)) + '-' + ''.join(random.choice(alpha_num) for j in range(4)) + "-" + params["start_time_string"]
     else:
-        subdir_name = args.log_subdir
+        subdir_name = params["log_subdir"]
     folder = os.path.expanduser("~") + "/mpc_results/"  + subdir_name + "/"
     for f in [folder+"imgs/", folder+"data/", folder+"vids/", folder+"plots/"]:
         os.makedirs(f, exist_ok = True)
