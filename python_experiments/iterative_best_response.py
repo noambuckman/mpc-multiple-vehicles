@@ -327,7 +327,8 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
 
             solver_params['n_warm_starts'] = solver_params['n_warm_starts'] + 5 * solve_number
             ux_warm_profiles_subset = warm_profiles_subset(solver_params['n_warm_starts'], ux_warm_profiles)
-            if psutil.virtual_memory().percent >= 90.0:
+            if psutil.virtual_memory().percent >= 95.0:
+                print("Virtual Memory is too high, exiting to save computer")
                 raise Exception("Virtual Memory is too high, exiting to save computer")
             start_ipopt_time = time.time()
             with redirect_stdout(f):
@@ -434,7 +435,8 @@ for i_mpc in range(i_mpc_start, params['n_mpc']):
                 solver_params['n_warm_starts'] = solver_params['n_warm_starts'] + 5 * solve_number
                 if solve_number > 2:
                     debug_flag = True
-                if psutil.virtual_memory().percent >= 90.0:
+                if psutil.virtual_memory().percent >= 95.0:
+                    print("Virtual Memory is too high, exiting to save computer")
                     raise Exception("Virtual Memory is too high, exiting to save computer")                
 
                 ux_warm_profiles_subset = warm_profiles_subset(solver_params['n_warm_starts'], ux_warm_profiles)
