@@ -51,8 +51,8 @@ else:
     ### Find the max end_mpc
 
 print("End MPC:", end_mpc, " Directory that reached end_mpc: ", max_dir)
-experiment_dirs = {"e": [], "p": [], "a": [], }
-experiment_seeds = {"e": [], "p": [], "a": [],}
+experiment_dirs = {"e": [], "p": [], "a": [], "s":[]}
+experiment_seeds = {"e": [], "p": [], "a": [], "s": []}
 all_seeds = set()
 for log_directory in list_of_experiments:
     string_split = log_directory.split('/')
@@ -66,11 +66,11 @@ for log_directory in list_of_experiments:
 
 set_of_experiments = set(list_of_experiments)
 
-x_traveled_experiments = {"a": [], "e":[], "p":[]}
-final_set_of_experiments = {"a": [], "e":[], "p":[]}
+x_traveled_experiments = {"e": [], "p": [], "a": [], "s":[]}
+final_set_of_experiments = {"e": [], "p": [], "a": [], "s":[]}
 final_seeds = []
 for seed in all_seeds:
-    if (seed in experiment_seeds["e"]) and (seed in experiment_seeds["a"]) and (seed in experiment_seeds["p"]):
+    if (seed in experiment_seeds["e"]) and (seed in experiment_seeds["a"]) and (seed in experiment_seeds["p"]) and (seed in experiment_seeds["s"]):
         for svo_type in x_traveled_experiments.keys():
             log_directory = args.svo_dir + svo_type + seed + "/"
             with open(log_directory + "params.json",'rb') as fp:
@@ -94,7 +94,10 @@ print(final_set_of_experiments["e"])
 print(" ")
 print(final_set_of_experiments["p"])
 
-for svo_type in {"a", "e", "p"}:
+print(" ")
+print(final_set_of_experiments["s"])
+
+for svo_type in {"a", "e", "p", "s"}:
     x_traveled_experiments[svo_type] = np.array(x_traveled_experiments[svo_type])
 
 # for svo_type, experiments in experiment_dirs.items():
@@ -135,7 +138,7 @@ for svo_type in {"a", "e", "p"}:
 #         x_traveled_experiments[svo_type][0,idx] = xamb_actual[0, end_frame-1]
 #     print(svo_type, x_traveled_experiments[svo_type])
 print(final_seeds)
-svo_types = ["e", "p", "a"]
+svo_types = ["e", "s", "p", "a"]
 ##### Print Table
 print("SVO:  Mean   Median")
 for svo_type in svo_types:
