@@ -101,7 +101,7 @@ parser.add_argument('--n-mpc', type=int, default=100)
 parser.add_argument('--n-ibr', type=int, default=3, help="Number of rounds of iterative best response before excuting mpc")
 parser.add_argument('--n-processors', type=int, default=15, help="Number of processors used when solving a single mpc")
 parser.add_argument('--n-lanes', type=int, default=2, help="Number of lanes in the right direction")
-parser.add_argument('--n-cntrld', type=int, default=0, help="How many cars does the response control in planning")
+parser.add_argument('--n-cntrld', type=int, default=2, help="How many cars does the response control in planning")
 
 parser.add_argument('--rnds-shrd-cntrl', type=int, default=2)
 parser.add_argument('--k-max-slack', type=float, default=0.01, help="Maximum allowed collision slack/overlap between vehicles")

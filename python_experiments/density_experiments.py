@@ -18,7 +18,7 @@ n_other = 30
 n_lanes = 2
 n_cntrld = 2
 random_svo = 0
-save_ibr = 0
+save_ibr = 1
 n_mpc = 50
 ##
 batch_subdir = args.svo_dir
