@@ -393,3 +393,49 @@ def poission_positions(cars_per_hour, total_seconds, n_lanes, average_velocity, 
             prev_car_lane[lane] = x
 
     return initial_vehicle_positions
+
+
+def poission_positions_multiple(cars_per_hour_list, n_other, total_seconds, n_lanes, average_velocity, car_length, position_random_seed=None):
+    # n_segments = len(cars_per_hour_list)
+    # cars_per_segment = np.ceil(float(n_other)/n_segments)
+    
+    initial_vehicle_positions = []
+    prev_car_lane = -9999 * np.ones((n_lanes,1))
+    prev_car_lane[0] = 0.0    
+    segment_start_x = 0
+    for lane_segment_idx in range(len(cars_per_hour_list)):
+        cars_per_hour, p_cars_per_segment = cars_per_hour_list[lane_segment_idx]
+        print(cars_per_hour, p_cars_per_segment)
+        cars_per_segment = np.ceil(n_other * p_cars_per_segment)
+        cars_per_second = cars_per_hour / 3600.0
+        dt = 0.20
+        cars_per_dt = cars_per_second * dt
+        rng = np.random.default_rng(position_random_seed)
+        n_cars_per_second = rng.poisson(cars_per_second, int(total_seconds))
+        total_dt = int(total_seconds / dt)
+        n_cars_per_dt = rng.poisson(cars_per_dt, int(total_dt))
+
+        all_vehicle_positions = []
+
+        ### Random place vehicles in the lanes
+        for s in range(len(n_cars_per_dt)):
+            if n_cars_per_dt[s] == 0:
+                continue
+            else:
+                for j in range(n_cars_per_dt[s]):
+                    lane_number = rng.integers(0, n_lanes)
+                    x_position = segment_start_x + (average_velocity * rng.uniform(0.95, 1.05)) * (s * dt)
+                    all_vehicle_positions += [(lane_number, x_position)]
+
+        car_counter = 0
+        # Remove cars that would have collided
+        for (lane, x) in all_vehicle_positions:
+            if x > prev_car_lane[lane] + 1.4*car_length: # Collision free, add vehicle
+                initial_vehicle_positions += [(lane, float(x))]
+                prev_car_lane[lane] = x
+                car_counter += 1
+            if car_counter == cars_per_segment:
+                break
+        segment_start_x = x
+        
+    return initial_vehicle_positions
