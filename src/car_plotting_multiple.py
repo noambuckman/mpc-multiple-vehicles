@@ -76,7 +76,7 @@ def get_frame(x, x_MPC, ax=None, car_name="red", alpha = 1.0):
     return ax    
 
 def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_shape="Ellipse", parallelize=True, 
-                            camera_speed = None, plot_range = None, car_ids = None, xamb_desired=None, xothers_desired=None):
+                            camera_speed = None, plot_range = None, car_ids = None, xlims = None, xamb_desired=None, xothers_desired=None):
     '''Plots the progression of all cars in one frame'''
     if camera_speed is None:
         camera_speed = x_mpc.max_v
@@ -93,8 +93,10 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_sh
     k = 0
     center_frame = xamb_plot[0,0] + k*camera_speed*x_mpc.dt
     # center_frame = xamb_plot[0,0]
-    axlim_minx, axlim_maxx = center_frame - 40, center_frame + 100,    
-
+    if xlims is None:
+        axlim_minx, axlim_maxx = center_frame - 40, center_frame + 100,    
+    else:
+        axlim_minx, axlim_maxx = xlims[0], xlims[1]
     fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx ))
     fig, ax = plt.subplots(figsize=(figwidth_in, fig_height), dpi=144)
     ax.axis('square')
@@ -103,19 +105,20 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_sh
 
     add_lanes(ax, world)
     add_grass(ax, world, k)   
-    if car_plot_shape.lower() not in ["ellipse", "both", "ellipses", "image"]:
+    if car_plot_shape.lower() not in ["ellipse", "both", "ellipses", "image", "dot"]:
         raise Exception("Incorrect car_plot_shape")
     if plot_range is None:
         plot_range = range(xamb_plot.shape[1])
     for ki in range(len(plot_range)):
-        k = plot_range[ki]             
+        k = plot_range[ki]       
+        if len(plot_range) == 1:
+            alpha_k = 1.0
+        else:
+            alpha_k = .5 + float(ki/(len(plot_range) - 1)) * (1 - .5)
         if car_plot_shape.lower() == "ellipse" or car_plot_shape.lower() == "both" or car_plot_shape.lower() == "ellipses":
             # Plot the ambulance as circles
             centers, radius = x_mpc.get_car_circles_np(xamb_plot[:,k:k+1])
-            if len(plot_range) == 1:
-                alpha_k = 1.0
-            else:
-                alpha_k = .25 + float(ki/(len(plot_range) - 1)) * (1 - .25)
+
             # for ci in range(len(centers)):
             #     xy_f = centers[ci]
             #     circle_patch_f = patches.Circle((xy_f[0], xy_f[1]), radius=radius, color='red',alpha=alpha_k)
@@ -123,7 +126,7 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_sh
             
             x, y, phi = xamb_plot[0,k], xamb_plot[1,k], xamb_plot[2,k]
             a, b = x_mpc.ax, x_mpc.by
-            ellipse_patch = patches.Ellipse((x, y), 2*a, 2*b, angle=np.rad2deg(phi), fill=False, color='black', alpha=alpha_k)
+            ellipse_patch = patches.Ellipse((x, y), 2*a, 2*b, angle=np.rad2deg(phi), fill=True, color='black', alpha=alpha_k)
             ax.add_patch(ellipse_patch)                
 
             for i in range(len(xothers_plot)):
@@ -142,7 +145,7 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_sh
                 x1_plot = xothers_plot[i]
                 x, y, phi = x1_plot[0,k], x1_plot[1,k], x1_plot[2,k]
                 a, b = x_mpc.ax, x_mpc.by
-                ellipse_patch = patches.Ellipse((x, y), 2*a, 2*b, angle=np.rad2deg(phi), fill=False, color=color, alpha=alpha_k)
+                ellipse_patch = patches.Ellipse((x, y), 2*a, 2*b, angle=np.rad2deg(phi), fill=True, color=color, alpha=alpha_k)
                 ax.add_patch(ellipse_patch)
                 if car_ids is not None:
                     ax.annotate(str(car_id), (x,y))
@@ -159,9 +162,21 @@ def plot_single_frame(world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_sh
                     car_id = i
                 color = get_car_color(car_id)
 
-                ax = get_frame(x1_plot[:,k], x_mpc, ax, color, alpha=1.0)
+                ax = get_frame(x1_plot[:,k], x_mpc, ax, color, alpha=alpha_k)
             
-            ax = get_frame(xamb_plot[:,k], x_mpc, ax, "Amb")
+            ax = get_frame(xamb_plot[:,k], x_mpc, ax, "Amb", alpha=alpha_k)
+        if car_plot_shape.lower() == "dot":
+            for i in range(len(xothers_plot)):
+                x1_plot = xothers_plot[i]
+                if car_ids is not None:
+                    car_id = car_ids[i+1]  
+                else:
+                    car_id = i
+                color = get_car_color(car_id)
+
+                ax.plot(x1_plot[0,k], x1_plot[1,k], '.', c=color, alpha=alpha_k)
+            ax.plot(xamb_plot[0,k], xamb_plot[1,k], '.', c='black', alpha=alpha_k)
+
     fig = plt.gcf()
     if folder is not None:
         fig.savefig(folder + 'imgs/' '{:03d}.png'.format(k))
@@ -223,6 +238,8 @@ def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder,
     fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx ))
 
     # fig, ax = plt.subplots(figsize=(figwidth_in, fig_height), dpi=144)
+    # fig, ax = plt.subplots(figsize=(200, 20), dpi=144)
+
     fig, ax = plt.subplots(figsize=(1920/144, 1080/144), dpi=144)
     ax.axis('square')
     ax.set_ylim((ymin, ymax))
@@ -280,12 +297,14 @@ def plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder,
     fig = plt.gcf()
     ax = plt.gca()
     ax.get_yaxis().set_visible(False)
+    # ax.get_xaxis().set_visible(False)
     if folder is not None:
         fig.savefig(folder + 'imgs/' '{:03d}.png'.format(k))
         plt.close(fig)    
         gc.collect()
     else:
         plt.show()
+        return fig, ax
 
 def generate_camera_positions(xamb_plot, amb_veh):
     ''' we assume a bang-bang controller for the camera in single x-dimension '''
@@ -360,8 +379,8 @@ def add_lanes(ax, world):
             topline_y = centerline_y + world.lane_width/2.0       
             ax.plot([xmin1, xmax1], [topline_y, topline_y], dashes=[10,10],color='0.5')
     
-def animate(folder, vid_fname):
-    cmd = 'ffmpeg -r 16 -f image2 -i {}imgs/%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p {}'.format(folder, vid_fname)
+def animate(folder, vid_fname, fps=16):
+    cmd = 'ffmpeg -r {} -f image2 -i {}imgs/%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p {}'.format(fps, folder, vid_fname)
     os.system(cmd)
     # print('Saving video to: {}'.format(vid_fname))
     return vid_fname
