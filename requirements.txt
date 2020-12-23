@@ -3,14 +3,14 @@
 # platform: linux-64
 _libgcc_mutex=0.1=main
 blas=1.0=mkl
-ca-certificates=2020.10.14=0
+ca-certificates=2020.12.8=h06a4308_0
 casadi=3.5.5=py38h0db4cc3_2
-certifi=2020.6.20=py38_0
+certifi=2020.12.5=py38h06a4308_0
 cffi=1.14.0=py38he30daa8_1
 chardet=3.0.4=py38_1003
 conda=4.9.0=py38_0
 conda-package-handling=1.6.1=py38h7b6447c_0
-cryptography=2.9.2=py38h1ba5d50_0
+cryptography=3.3.1=py38h3c74f83_0
 cycler=0.10.0=py38_0
 dbus=1.13.18=hb2f20db_0
 dill=0.3.2=pypi_0
@@ -55,7 +55,7 @@ ncurses=6.2=he6710b0_1
 numpy=1.19.1=py38hbc911f0_0
 numpy-base=1.19.1=py38hfa32c7d_0
 olefile=0.46=py_0
-openssl=1.1.1h=h7b6447c_0
+openssl=1.1.1i=h27cfd23_0
 p-tqdm=1.3.3=pypi_0
 pathos=0.2.6=pypi_0
 pcre=8.44=he6710b0_0
