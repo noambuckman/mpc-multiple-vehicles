@@ -97,6 +97,10 @@ print(final_set_of_experiments["p"])
 print(" ")
 print(final_set_of_experiments["s"])
 
+
+print("end_mpc", end_mpc)
+print("end_frame", end_frame)
+
 for svo_type in {"a", "e", "p", "s"}:
     x_traveled_experiments[svo_type] = np.array(x_traveled_experiments[svo_type])
 

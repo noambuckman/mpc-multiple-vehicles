@@ -223,7 +223,7 @@ for lidx, log_directory in enumerate(args.log_directories):
         grid_i = j//grid_w
         grid_j = j%grid_w
     #     print(grid_i, grid_j)
-        ag_id = veh_idxs[j]
+        ag_id = veh_idxs[j] + 1  #In the paper, we index ado vehicles starting with 1
         axs5[grid_i, grid_j].set_title("Agent %d"%ag_id)
         for i_mpc in range(Uother.shape[2]):
             delta_U_mpc = np.diff(Uother[:, :, i_mpc, :, j], axis=2)
@@ -238,7 +238,7 @@ for lidx, log_directory in enumerate(args.log_directories):
     # plt.ylabel("$|u^s_{t+1} - u^s_{t}|$")
     if lidx == 0:
         fig5.text(0.5, 0.00, 'Rounds of IBR', ha='center')
-        fig5.text(0.0, 0.5, '$|u^s_{t+1} - u^s_{t}|$', va='center', rotation='vertical')
+        fig5.text(0.0, 0.5, '$|\Delta_k(t)|$', va='center', rotation='vertical')
     # plt.show()
     plt.tight_layout()
 
@@ -255,21 +255,24 @@ fig6, ax6 = plt.subplots()
 d_ibr = range(1, delta0_norm_avg.shape[0] + 1)
 ax6.plot(d_ibr, delta0_norm_avg)
 plt.fill_between(d_ibr, delta0_norm_avg - delta0_norm_std, delta0_norm_avg + delta0_norm_std, alpha=0.25)
-ax6.set_xlabel("Rounds of Best Response")
-ax6.set_ylabel("$|u^s_{t+1} - u^s_{t}|$")
+ax6.set_xlabel("Rounds of IBR", fontsize=12)
+ax6.set_ylabel("$|\Delta_k|$", fontsize=12)
+
 save_fig_custom(fig6, log_directory + "plots/" + "amb_avg_std_0" , args.image_format)
 
 delta0_norm_50 = np.quantile(delta0_norm_all, .50, axis = 0)
 delta0_norm_25 = np.quantile(delta0_norm_all, .25, axis = 0)
 delta0_norm_75 = np.quantile(delta0_norm_all, .75, axis = 0)
 
-fig7, ax7 = plt.subplots()
+golden_ratio = (5**.5 - 1) / 2
+fig7, ax7 = plt.subplots(figsize=(3.5, 3.5*golden_ratio))
 d_ibr = range(1, delta0_norm_50.shape[0] + 1)
 ax7.plot(d_ibr, delta0_norm_50, color='red', label="Median")
 plt.fill_between(d_ibr, delta0_norm_25, delta0_norm_75, alpha=0.25, color='red', label="25-75th Quantile")
-ax7.set_xlabel("Rounds of Best Response")
-ax7.set_ylabel("$|u^s_{t+1} - u^s_{t}|$")
+ax7.set_xlabel("Rounds of IBR")
+ax7.set_ylabel("$|\Delta_k|$")
 plt.legend()
+plt.tight_layout()
 save_fig_custom(fig7, log_directory + "plots/" + "amb_med_iqr_0" , args.image_format)
 
 # Repeat with all the agents
@@ -285,6 +288,9 @@ plot_w_i = 3
 plot_h_i = 3
 fig_w = plot_w_i * grid_w
 fig_h = plot_h_i * grid_h
+
+fig_w = 3.5
+fig_h = 2* fig_w 
 fig8, axs8 = plt.subplots(grid_h, grid_w, sharex=True, sharey=True, figsize=(fig_w, fig_h)) #w, h
 
 
@@ -296,7 +302,7 @@ for j in range(delta0_norm_all_other.shape[0]):
     grid_i = j//grid_w
     grid_j = j%grid_w
 #     print(grid_i, grid_j)
-    ag_id = veh_idxs[j]
+    ag_id = veh_idxs[j] + 1
     axs8[grid_i, grid_j].set_title("Agent %d"%ag_id)
     # for i_mpc in range(Uother.shape[2]):
     #     delta_U_mpc = np.diff(Uother[:, :, i_mpc, :, j], axis=2)
@@ -316,8 +322,9 @@ for j in range(delta0_norm_all_other.shape[0]):
 # d_ibr = range(1, delta0_norm_50.shape[0] + 1)
 # ax7.plot(d_ibr, delta0_norm_50, color='red', label="Median")
 fig8.text(0.5, 0.00, 'Rounds of IBR', ha='center')
-fig8.text(0.0, 0.5, '$|u^s_{t+1} - u^s_{t}|$', va='center', rotation='vertical')
+fig8.text(0.0, 0.5, '$|\Delta_k|$', va='center', rotation='vertical')
 # plt.legend()
+plt.tight_layout()
 save_fig_custom(fig8, log_directory + "plots/" + "other_med_iqr_0" , args.image_format)
 print("Imgs Saved to...", log_directory + "plots/")
 
