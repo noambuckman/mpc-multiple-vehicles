@@ -13,3 +13,5 @@ trash/
 results/
 january_notebooks/
 *code-workspace
+*tfevents.*
+*.pt*
