@@ -169,7 +169,7 @@ class Vehicle(object):
         total_cost = np.sum(all_costs)
         return total_cost, all_costs, cost_titles
 
-    def add_state_constraints(self, opti, X, U, X_desired, T):
+    def add_state_constraints(self, opti, X, U):
         ''' Construct vehicle specific constraints that only rely on
         the ego vehicle's own state '''
 

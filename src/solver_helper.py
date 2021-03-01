@@ -127,13 +127,7 @@ def pullover_guess(N, all_other_MPC, all_other_x0):
 def lane_following_optimizations(N, response_MPC, response_x0, params, world):
     cp_MPC = cp.deepcopy(response_MPC)
     bri = mpc.MultiMPC(cp_MPC, [], [], world)
-    bri.generate_optimization(N,
-                              N * params["dt"],
-                              response_x0, [], [],
-                              slack=True,
-                              solve_amb=False,
-                              params=params,
-                              ipopt_params={'print_level': 0})
+    bri.generate_optimization(N, response_x0, [], [], params=params, ipopt_params={'print_level': 0})
 
     bri.opti.subject_to(bri.u_ego[1, :] == 0)
     bri.solution = bri.opti.solve()
@@ -168,12 +162,9 @@ def solve_best_response(warm_key,
     bri = mpc.MultiMPC(response_MPC, cntrld_vehicles, nonresponse_MPC_list, world, solver_params)
     params["collision_avoidance_checking_distance"] = 100
     bri.generate_optimization(params["N"],
-                              params["T"],
                               response_x0,
                               cntrld_x0,
                               nonresponse_x0_list,
-                              slack=solver_params['slack'],
-                              solve_amb=solver_params['solve_amb'],
                               params=params,
                               ipopt_params=ipopt_params)
     # print("Succesffully generated optimzation %d %d %d"%(len(nonresponse_MPC_list), len(nonresponse_x_list), len(nonresponse_u_list)))
