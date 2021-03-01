@@ -490,7 +490,7 @@ def poission_positions(cars_per_hour, total_seconds, n_lanes, average_velocity, 
     prev_car_lane[0] = 0.0
     initial_vehicle_positions = []
     for (lane, x) in all_vehicle_positions:
-        if x > prev_car_lane[lane] + 1.4 * car_length:
+        if x > prev_car_lane[lane] + 2.0 * car_length:
             initial_vehicle_positions += [(lane, float(x))]
             prev_car_lane[lane] = x
 
@@ -547,3 +547,88 @@ def poission_positions_multiple(cars_per_hour_list,
         segment_start_x = x
 
     return initial_vehicle_positions
+
+
+def IDM_acceleration(bumper_distance, lead_vehicle_velocity, current_speed, desired_speed, idm_params=None):
+    ''' predict the trajectory of a vehicle based on Intelligent Driver Model 
+    based on: Kesting, A., Treiber, M., & Helbing, D. (2010). Enhanced intelligent driver model to access the impact of driving strategies 
+    on traffic capacity. Philosophical Transactions of the Royal Society A: Mathematical, Physical and Engineering Sciences
+
+    v_0:  desired speed
+    delta:  free acceleration exponent
+    T: desired time gap
+    S_0:  jam distance
+    '''
+    default_idm_params = {
+        "free_acceleration_exponent": 4,
+        "desired_time_gap": 2.0,
+        "jam_distance": 2.0,
+        "maximum_acceleration": 1.4,
+        "desired_deceleration": 2.0,
+        "coolness_factor": 0.99,
+    }
+    if idm_params is not None:
+        for param in idm_params:
+            try:
+                default_idm_params[param] = idm_params[param]
+            except KeyError:
+                raise Exception("Invalid IDM Param: check if param key correct")
+
+    # set variable to match the paper for ease of reading
+    v_0 = desired_speed
+    v = current_speed
+    s = bumper_distance
+    delta = default_idm_params["free_acceleration_exponent"]
+    T = default_idm_params["desired_time_gap"]
+    s_0 = default_idm_params["jam_distance"]
+    a = default_idm_params["maximum_acceleration"]
+    b = default_idm_params["desired_deceleration"]
+    c = default_idm_params["coolness_factor"]
+    delta_v = v - lead_vehicle_velocity
+
+    def s_star(v, delta_v, s_0=s_0, a=a, b=b, T=T):
+        '''  Deceleration strategy [eq 2.2] 
+        '''
+        deceleration = s_0 + v * T + v * delta_v / (s * np.sqrt(a * b))
+
+        return deceleration
+
+    # print("decel", -(a * s_star(v, delta_v) / s)**2)
+    # print("free accel", -a * (v / v_0)**delta)
+    # print("accel", a)
+    a_IDM = a * (1 - (v / v_0)**delta - (s_star(v, delta_v) / s)**2)  #[eq 2.1]
+    # print("IDM accel", a_IDM)
+    return a_IDM
+
+
+def IDM_trajectory_prediction(veh, N, X_0, X_lead=None, desired_speed=None, idm_params=None):
+    ''' Compute an IDM trajectory for a vehicle based on a speed following vehicle
+    '''
+    if X_lead is None:
+        X_lead = X_0 + 99999
+
+    if desired_speed is None:
+        desired_speed = veh.max_v
+
+    # idm_params = {}
+    idm_params["maximum_acceleration"] = veh.max_acceleration / veh.dt  # correct for previous multiple in dt
+
+    # for t in range(N):
+    bumper_distance = X_lead[0] - X_0[0] - veh.L
+    current_speed = X_0[4] * np.cos(X_0[2])
+    lead_vehicle_velocity = X_lead[4] * np.cos(X_lead[2])
+
+    # print("Dist", bumper_distance, "Lead V", lead_vehicle_velocity)
+    # print("Current Speed", current_speed, "Desired Speed", desired_speed, idm_params)
+    a_IDM = IDM_acceleration(bumper_distance, lead_vehicle_velocity, current_speed, desired_speed, idm_params)
+
+    U_ego = np.zeros((2, 1))
+    U_ego[0, 0] = 0  # assume no steering
+    U_ego[1, 0] = a_IDM
+    # print("a_idm", a_IDM)
+    x, x_des = veh.forward_simulate_all(X_0, U_ego)
+    # print("x", x)
+    # print("x_des", x_des)
+    return U_ego, x, x_des
+    X_ego[:, t + 1] = x[:, 1]
+    X_des[:, t:t + 2] = x_des  # update two points at a time since it computes both x_d(t) and x_d(t+1)
