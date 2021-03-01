@@ -389,3 +389,6 @@ class Vehicle(object):
             return self.theta_ij[j]
         else:
             return self.theta_i
+
+    def update_desired_lane(self, world, lane_number, right_direction=True):
+        self.fd = self.gen_f_desired_lane(world, lane_number, right_direction)
