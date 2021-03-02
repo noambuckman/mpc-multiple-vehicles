@@ -1,16 +1,15 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.offsetbox as offsetbox
-import datetime, os, psutil
-import multiprocessing, functools
+import os, psutil
+import functools
 import numpy as np
-# import scipy.misc
 import scipy.ndimage as ndimage
-# from scipy import ndimage
 import gc
-import tqdm
-import src.traffic_world as tw
 import p_tqdm
+from src.traffic_world import TrafficWorld
+from src.vehicle import Vehicle
+from typing import List
 PROJECT_PATH = '/home/nbuckman/mpc-multiple-vehicles/'
 
 car_colors = ['green', 'blue', 'red', 'purple']
@@ -20,9 +19,9 @@ def get_car_color(i):
     return car_colors[i % len(car_colors)]
 
 
-def get_frame(x, x_MPC, ax=None, car_name="red", alpha=1.0):
-    '''Plots a car at a single state x.  Assumes red_car and ambulance.png'''
-    L = x_MPC.L
+def get_car(x, vehicle, ax=None, car_name="red", alpha=1.0):
+    ''' Plots a car at a single state x.  Assumes red_car and ambulance.png'''
+    L = vehicle.L
     if ax is None:
         fig, ax = plt.subplots(figsize=(12, 12))
     else:
@@ -79,22 +78,19 @@ def get_frame(x, x_MPC, ax=None, car_name="red", alpha=1.0):
     return ax
 
 
-def plot_single_frame(world,
-                      x_mpc,
-                      xamb_plot,
-                      xothers_plot,
-                      folder,
-                      car_plot_shape="Ellipse",
-                      parallelize=True,
-                      camera_speed=None,
+def plot_single_frame(world: TrafficWorld,
+                      vehicle: Vehicle,
+                      xamb_plot: np.array,
+                      xothers_plot: List[np.array],
+                      folder: str,
+                      car_plot_shape: str = "Ellipse",
+                      camera_speed: float = None,
                       plot_range=None,
                       car_ids=None,
-                      xlims=None,
-                      xamb_desired=None,
-                      xothers_desired=None):
+                      xlims=None):
     '''Plots the progression of all cars in one frame'''
     if camera_speed is None:
-        camera_speed = x_mpc.max_v
+        camera_speed = vehicle.max_v
     figsize = "LARGE"
     if figsize == "LARGE":
         figwidth_in = 12.0
@@ -102,11 +98,9 @@ def plot_single_frame(world,
         figwidth_in = 6.0
     ymax = world.y_max
     ymin = world.y_min
-    # initial_speed = 0.9 * x_mpc.max_v
-    # center_frame = xamb_plot[0,k]
 
     k = 0
-    center_frame = xamb_plot[0, 0] + k * camera_speed * x_mpc.dt
+    center_frame = xamb_plot[0, 0] + k * camera_speed * vehicle.dt
     # center_frame = xamb_plot[0,0]
     if xlims is None:
         axlim_minx, axlim_maxx = center_frame - 40, center_frame + 100,
@@ -130,10 +124,9 @@ def plot_single_frame(world,
             alpha_k = 1.0
         else:
             alpha_k = .5 + float(ki / (len(plot_range) - 1)) * (1 - .5)
-        if car_plot_shape.lower() == "ellipse" or car_plot_shape.lower() == "both" or car_plot_shape.lower(
-        ) == "ellipses":
+        if car_plot_shape.lower() in {"ellipse", "both", "ellipses"}:
             # Plot the ambulance as circles
-            centers, radius = x_mpc.get_car_circles_np(xamb_plot[:, k:k + 1])
+            centers, radius = vehicle.get_car_circles_np(xamb_plot[:, k:k + 1])
 
             # for ci in range(len(centers)):
             #     xy_f = centers[ci]
@@ -141,7 +134,7 @@ def plot_single_frame(world,
             #     ax.add_patch(circle_patch_f)
 
             x, y, phi = xamb_plot[0, k], xamb_plot[1, k], xamb_plot[2, k]
-            a, b = x_mpc.ax, x_mpc.by
+            a, b = vehicle.ax, vehicle.by
             ellipse_patch = patches.Ellipse((x, y),
                                             2 * a,
                                             2 * b,
@@ -159,14 +152,10 @@ def plot_single_frame(world,
                     car_id = i
 
                 color = get_car_color(car_id)
-                # if (car_id%2)==0:
-                #     color="red"
-                # else:
-                #     color="green"
 
                 x1_plot = xothers_plot[i]
                 x, y, phi = x1_plot[0, k], x1_plot[1, k], x1_plot[2, k]
-                a, b = x_mpc.ax, x_mpc.by
+                a, b = vehicle.ax, vehicle.by
                 ellipse_patch = patches.Ellipse((x, y),
                                                 2 * a,
                                                 2 * b,
@@ -178,9 +167,7 @@ def plot_single_frame(world,
                 if car_ids is not None:
                     ax.annotate(str(car_id), (x, y))
 
-            centers, radius = x_mpc.get_car_circles_np(xamb_plot[:, k:k + 1])
-
-        if car_plot_shape.lower() == "image" or car_plot_shape.lower() == "both":
+        if car_plot_shape.lower() in {"image", "both"}:
             for i in range(len(xothers_plot)):
                 x1_plot = xothers_plot[i]
                 if car_ids is not None:
@@ -189,9 +176,9 @@ def plot_single_frame(world,
                     car_id = i
                 color = get_car_color(car_id)
 
-                ax = get_frame(x1_plot[:, k], x_mpc, ax, color, alpha=alpha_k)
+                ax = get_car(x1_plot[:, k], vehicle, ax, color, alpha=alpha_k)
 
-            ax = get_frame(xamb_plot[:, k], x_mpc, ax, "Amb", alpha=alpha_k)
+            ax = get_car(xamb_plot[:, k], vehicle, ax, "Amb", alpha=alpha_k)
         if car_plot_shape.lower() == "dot":
             for i in range(len(xothers_plot)):
                 x1_plot = xothers_plot[i]
@@ -213,8 +200,8 @@ def plot_single_frame(world,
         plt.show()
 
 
-def plot_cars(world,
-              x_mpc,
+def plot_cars(world: TrafficWorld,
+              vehicle: Vehicle,
               xamb_plot,
               xothers_plot,
               folder,
@@ -222,27 +209,26 @@ def plot_cars(world,
               camera_speed=None,
               car_labels=None,
               car_colors=None,
-              n_processors=8,
-              xamb_desired=None,
-              xothers_desired=None):
-    '''TODO: Cleanup and document'''
+              n_processors=8):
+    '''
+    Note:  The vehicle should not be instantiated in a MPC Optimization or it may mess
+            with the parallelization.  You can feed in a dummy vehicle Vehicle(dt) just
+            for plotting
+    '''
     N = xamb_plot.shape[1]
-    # if car_plot_shape:
     if psutil.virtual_memory().percent >= 90.0:
         raise Exception("Virtual Memory is too high, exiting to save computer")
 
-    camera_positions = generate_camera_positions(xamb_plot, x_mpc)
+    camera_positions = generate_camera_positions(xamb_plot, vehicle)
     if n_processors > 1:
         # pool = multiprocessing.Pool(processes=n_processors)
         plot_partial = functools.partial(plot_multiple_cars,
-                                         x_mpc=x_mpc,
-                                         xothers_plot=xothers_plot,
-                                         xamb_plot=xamb_plot,
-                                         car_plot_shape=car_plot_shape,
-                                         xothers_desired=xothers_desired,
-                                         xamb_desired=xamb_desired,
-                                         folder=folder,
                                          world=world,
+                                         vehicle=vehicle,
+                                         xamb_plot=xamb_plot,
+                                         xothers_plot=xothers_plot,
+                                         folder=folder,
+                                         car_plot_shape=car_plot_shape,
                                          camera_positions=camera_positions,
                                          car_labels=car_labels,
                                          car_colors=car_colors)
@@ -252,29 +238,25 @@ def plot_cars(world,
         p_tqdm.p_map(plot_partial, range(N), num_cpus=n_processors)
     else:
         for k in range(N):
-            plot_multiple_cars(k, world, x_mpc, xamb_plot, xothers_plot, folder, car_plot_shape, camera_positions,
-                               car_labels, car_colors, xamb_desired, xothers_desired)
+            plot_multiple_cars(k, world, vehicle, xamb_plot, xothers_plot, folder, car_plot_shape, camera_positions,
+                               car_labels, car_colors)
     return None
 
 
-def plot_multiple_cars(
-    k,
-    world,
-    x_mpc,
-    xamb_plot,
-    xothers_plot,
-    folder,
-    car_plot_shape="Ellipse",
-    camera_positions=None,
-    car_labels=None,
-    car_colors=None,
-    xlim=None,
-    xamb_desired=None,
-    xothers_desired=None,
-):
-    ''' This only has info from x_mpc but not any individual ones'''
+def plot_multiple_cars(k,
+                       world: TrafficWorld,
+                       vehicle: Vehicle,
+                       xamb_plot: np.array,
+                       xothers_plot: np.array,
+                       folder: str,
+                       car_plot_shape="Ellipse",
+                       camera_positions=None,
+                       car_labels: List[str] = None,
+                       car_colors: List[str] = None,
+                       xlim=None):
+    ''' This only has info from vehicle but not any individual ones'''
     if camera_positions is None:
-        camera_positions = [xamb_plot[0, 0] + t * x_mpc.max_v * x_mpc.dt for t in range(xamb_plot.shape[1])]
+        camera_positions = [xamb_plot[0, 0] + t * vehicle.max_v * vehicle.dt for t in range(xamb_plot.shape[1])]
     figsize = "LARGE"
     if figsize == "LARGE":
         figwidth_in = 12.0
@@ -313,7 +295,7 @@ def plot_multiple_cars(
         # Plot the ambulance as circles
 
         x, y, phi = xamb_plot[0, k], xamb_plot[1, k], xamb_plot[2, k]
-        a, b = x_mpc.ax, x_mpc.by
+        a, b = vehicle.ax, vehicle.by
         ellipse_patch = patches.Ellipse((x, y), 2 * a, 2 * b, angle=np.rad2deg(phi), fill=False, color='black')
         ax.add_patch(ellipse_patch)
 
@@ -329,7 +311,7 @@ def plot_multiple_cars(
             x1_plot = xothers_plot[i]
             if 0.9 * axlim_minx <= x1_plot[0, k] <= 1.1 * axlim_maxx:
                 x, y, phi = x1_plot[0, k], x1_plot[1, k], x1_plot[2, k]
-                a, b = x_mpc.ax, x_mpc.by
+                a, b = vehicle.ax, vehicle.by
                 if car_colors is None:
                     color = get_car_color(i)
                 else:
@@ -346,7 +328,7 @@ def plot_multiple_cars(
                 if car_labels is not None:
                     ax.annotate(str(car_labels[i]), xy=(x, y))
 
-        centers, radius = x_mpc.get_car_circles_np(xamb_plot[:, k:k + 1])
+        # centers, radius = vehicle.get_car_circles_np(xamb_plot[:, k:k + 1])
 
     if car_plot_shape.lower() == "image" or car_plot_shape.lower() == "both":
         for i in range(len(xothers_plot)):
@@ -356,9 +338,9 @@ def plot_multiple_cars(
                     color = get_car_color(i)
                 else:
                     color = car_colors[i]
-                ax = get_frame(x1_plot[:, k], x_mpc, ax, color, alpha=1.0)
+                ax = get_car(x1_plot[:, k], vehicle, ax, color, alpha=1.0)
 
-        ax = get_frame(xamb_plot[:, k], x_mpc, ax, "Amb")
+        ax = get_car(xamb_plot[:, k], vehicle, ax, "Amb")
     fig = plt.gcf()
     ax = plt.gca()
     ax.get_yaxis().set_visible(False)

@@ -1,5 +1,5 @@
 import numpy as np
-from src.vehicle import Vehicle
+# from src.vehicle import Vehicle
 from src.traffic_world import TrafficWorld
 from typing import List
 
@@ -56,6 +56,13 @@ def IDM_acceleration(bumper_distance, lead_vehicle_velocity, current_speed, desi
     return a_IDM
 
 
+def CAH_acceleration():
+    ''' constant-acceleration heuristic '''
+    raise NotImplementedError()
+    a_CAH = None
+    return a_CAH
+
+
 def IDM_trajectory_prediction(veh, N, X_0, X_lead=None, desired_speed=None, idm_params=None):
     ''' Compute an IDM trajectory for a vehicle based on a speed following vehicle
     '''
@@ -66,32 +73,30 @@ def IDM_trajectory_prediction(veh, N, X_0, X_lead=None, desired_speed=None, idm_
         desired_speed = veh.max_v
 
     # idm_params = {}
-    idm_params["maximum_acceleration"] = veh.max_acceleration / veh.dt  # correct for previous multiple in dt
+    idm_params["maximum_acceleration"] = veh.max_acceleration  # correct for previous multiple in dt
 
     # for t in range(N):
     bumper_distance = X_lead[0] - X_0[0] - veh.L
     current_speed = X_0[4] * np.cos(X_0[2])
     lead_vehicle_velocity = X_lead[4] * np.cos(X_lead[2])
 
-    # print("Dist", bumper_distance, "Lead V", lead_vehicle_velocity)
-    # print("Current Speed", current_speed, "Desired Speed", desired_speed, idm_params)
     a_IDM = IDM_acceleration(bumper_distance, lead_vehicle_velocity, current_speed, desired_speed, idm_params)
 
     U_ego = np.zeros((2, 1))
     U_ego[0, 0] = 0  # assume no steering
-    U_ego[1, 0] = a_IDM
-    # print("a_idm", a_IDM)
+    U_ego[1, 0] = a_IDM * veh.dt  # control is change in velocity (discrete)
+
     x, x_des = veh.forward_simulate_all(X_0, U_ego)
-    # print("x", x)
-    # print("x_des", x_des)
+
     return U_ego, x, x_des
 
 
 def MOBIL_lanechange(driver_x0: np.array,
-                     driver_veh: Vehicle,
+                     driver_veh,
                      all_other_x0: List[np.array],
-                     all_other_veh: List[Vehicle],
+                     all_other_veh,
                      world: TrafficWorld,
+                     use_desired_lane=True,
                      MOBIL_params: dict = None,
                      IDM_params: dict = None):
     ''' MOBIL lane changing rules '''
@@ -120,11 +125,19 @@ def MOBIL_lanechange(driver_x0: np.array,
     best_new_lane = None
     for new_lane in driver_new_lanes:
 
-        new_follower_idx = get_prev_vehicle_lane(driver_x0, all_other_x0, new_lane, world)
-        new_leader_idx = get_next_vehicle_lane(driver_x0, all_other_x0, new_lane, world)
+        if use_desired_lane:
+            new_follower_idx = get_prev_vehicle_from_desired_lane(driver_x0, all_other_x0, all_other_veh, new_lane)
+            new_leader_idx = get_next_vehicle_from_desired_lane(driver_x0, all_other_x0, all_other_veh, new_lane)
 
-        old_follower_idx = get_prev_vehicle_lane(driver_x0, all_other_x0, driver_old_lane, world)
-        old_leader_idx = get_next_vehicle_lane(driver_x0, all_other_x0, driver_old_lane, world)
+            old_follower_idx = get_prev_vehicle_from_desired_lane(driver_x0, all_other_x0, all_other_veh,
+                                                                  driver_old_lane)
+            old_leader_idx = get_next_vehicle_from_desired_lane(driver_x0, all_other_x0, all_other_veh, driver_old_lane)
+        else:
+            new_follower_idx = get_prev_vehicle_lane(driver_x0, all_other_x0, new_lane, world)
+            new_leader_idx = get_next_vehicle_lane(driver_x0, all_other_x0, new_lane, world)
+
+            old_follower_idx = get_prev_vehicle_lane(driver_x0, all_other_x0, driver_old_lane, world)
+            old_leader_idx = get_next_vehicle_lane(driver_x0, all_other_x0, driver_old_lane, world)
 
         # Calculate the new acceleration of the new follower
 
@@ -163,9 +176,9 @@ def MOBIL_lanechange(driver_x0: np.array,
             else:
                 bumper_distance = all_other_x0[lead_idx][0] - follower_x0[0] - follower_veh.L
                 lead_velocity = all_other_x0[lead_idx][4] * np.cos(all_other_x0[lead_idx][2])
-            if lead_idx == -1:
-                print(key, follower_idx, lead_idx)
-                print(bumper_distance)
+            # if lead_idx == -1:
+            # print(key, follower_idx, lead_idx)
+            # print(bumper_distance)
             if bumper_distance < 0:
                 lane_gap = False  #checks if there is even a gap between lead vehicle in next lane
             a_follower = IDM_acceleration(bumper_distance, lead_velocity, current_speed, desired_speed, IDM_params)
@@ -219,7 +232,37 @@ def get_prev_vehicle_lane(x0, all_other_x0, lane, world):
     ''' get previous vehicle in a lane '''
 
     idx_in_lane = [world.get_lane_from_x0(all_other_x0[idx]) == lane for idx in range(len(all_other_x0))]
-    idx_forward = [all_other_x0[idx][0] - x0[0] < 0 for idx in range(len(all_other_x0))]
+    idx_forward = [all_other_x0[idx][0] - x0[0] <= 0 for idx in range(len(all_other_x0))]
+    idx_dist_sorted = np.argsort([np.abs(all_other_x0[idx][0] - x0[0]) for idx in range(len(all_other_x0))])
+
+    idx_dist_sorted_valid = [idx for idx in idx_dist_sorted if idx_in_lane[idx] and idx_forward[idx]]
+    if len(idx_dist_sorted_valid) > 0:
+        return idx_dist_sorted_valid[0]
+    else:
+        return None
+
+
+def get_prev_vehicle_from_desired_lane(x0, all_other_x0, all_other_vehicles, lane):
+    ''' Find the previous vehicle in the lane computed by their advertised desired lane.
+        This should account for vehicles that are in the middle of a lane change
+    '''
+    idx_in_lane = [all_other_vehicles[idx].desired_lane == lane for idx in range(len(all_other_x0))]
+    idx_forward = [all_other_x0[idx][0] - x0[0] <= 0 for idx in range(len(all_other_x0))]
+    idx_dist_sorted = np.argsort([np.abs(all_other_x0[idx][0] - x0[0]) for idx in range(len(all_other_x0))])
+
+    idx_dist_sorted_valid = [idx for idx in idx_dist_sorted if idx_in_lane[idx] and idx_forward[idx]]
+    if len(idx_dist_sorted_valid) > 0:
+        return idx_dist_sorted_valid[0]
+    else:
+        return None
+
+
+def get_next_vehicle_from_desired_lane(x0, all_other_x0, all_other_vehicles, lane):
+    ''' Find the previous vehicle in the lane computed by their advertised desired lane.
+        This should account for vehicles that are in the middle of a lane change
+    '''
+    idx_in_lane = [all_other_vehicles[idx].desired_lane == lane for idx in range(len(all_other_x0))]
+    idx_forward = [all_other_x0[idx][0] - x0[0] > 0 for idx in range(len(all_other_x0))]
     idx_dist_sorted = np.argsort([np.abs(all_other_x0[idx][0] - x0[0]) for idx in range(len(all_other_x0))])
 
     idx_dist_sorted_valid = [idx for idx in idx_dist_sorted if idx_in_lane[idx] and idx_forward[idx]]

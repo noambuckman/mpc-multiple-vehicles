@@ -4,16 +4,21 @@ import matplotlib.pyplot as plt
 from typing import List
 from src.traffic_world import TrafficWorld
 from src.car_plotting_multiple import plot_cars
-from src.vehicle import Vehicle
+# from src.vehicle import Vehicle
 
 
 class MultiMPC(object):
-    ### We always assume that car1 is the one being optimized
+    ''' Optimization class contains all the object related to a best response optimization.
+        We assume that each vehicle has a dynamics model (f), costs function, and constraints.
+
+       The optimization currently solves assuming a Kinmeatic Bicycle Dynamics Model, assuming
+       control inputs steering + acceleration.  
+    '''
     def __init__(
         self,
-        response_vehicle: Vehicle,
-        cntrld_vehicles: List[Vehicle],
-        other_vehicle_list: List[Vehicle],
+        response_vehicle,
+        cntrld_vehicles,
+        other_vehicle_list,
         world: TrafficWorld,
         solver_params: dict = None,
     ):
@@ -56,26 +61,26 @@ class MultiMPC(object):
         '''
 
         n_state, n_ctrl, n_desired = 6, 2, 3
+
         # Response (planning) Vehicle Variables
         self.x_ego = self.opti.variable(n_state, N + 1)
         self.u_ego = self.opti.variable(n_ctrl, N)
         self.xd_ego = self.opti.variable(n_desired, N + 1)
         p_ego = self.opti.parameter(n_state, 1)
 
-        # cntrld Vehicles become variables in the optimization
-
+        # Cntrld Vehicles become variables in the optimization
         self.x_ctrld = [self.opti.variable(n_state, N + 1) for i in self.vehs_ctrld]
         self.u_ctrld = [self.opti.variable(n_ctrl, N) for i in self.vehs_ctrld]
         self.xd_ctrld = [self.opti.variable(n_desired, N + 1) for i in self.vehs_ctrld]
         self.p_cntrld = [self.opti.parameter(n_state, 1) for i in self.vehs_ctrld]
 
-        ### Variables of surrounding vehicles assumed fixed as parameters for computation
+        # Variables of surrounding vehicles assumed fixed as parameters for computation
         self.x_other = [self.opti.parameter(n_state, N + 1) for i in self.other_vehicle_list]
         self.u_other = [self.opti.parameter(n_ctrl, N) for i in self.other_vehicle_list]
         self.xd_other = [self.opti.parameter(3, N + 1) for i in self.other_vehicle_list]
         self.allother_p = [self.opti.parameter(n_state, 1) for i in self.other_vehicle_list]
 
-        #### Costs
+        # Generate costs for each vehicle
         self.ego_veh.generate_costs(self.x_ego, self.u_ego, self.xd_ego)
         self.response_costs, self.response_costs_list, self.response_cost_titles = self.ego_veh.total_cost()
 
@@ -87,7 +92,7 @@ class MultiMPC(object):
             params["wall_CA"] = True
 
         self.all_other_costs = []
-        # SVO Cost for Other Vehicles
+        # Generate SVO cost for other (non-cntrld) vehicles
         for idx in range(len(self.other_vehicle_list)):
             svo_ij = self.ego_veh.get_theta_ij(self.other_vehicle_list[idx].agent_id)
             if svo_ij > 0:
@@ -95,7 +100,7 @@ class MultiMPC(object):
                 nonresponse_cost, _, _ = self.other_vehicle_list[idx].total_cost()
                 self.all_other_costs += [np.sin(svo_ij) * nonresponse_cost]
 
-        # SVO Cost for Other (Ctrled) Vehicles
+        # SVO cost for Other (ctrld) Vehicles
         for idx in range(len(self.vehs_ctrld)):
             svo_ij = self.ego_veh.get_theta_ij(self.vehs_ctrld[idx].agent_id)
             if svo_ij > 0:
@@ -108,7 +113,6 @@ class MultiMPC(object):
                 self.all_other_costs += [np.sin(svo_ij) * nonresponse_cost]
 
         # Generate Slack Variables used as part of collision avoidance
-        # Slack variables related to non-cntrld vehicles
         self.slack_cost = 0
         if len(self.other_vehicle_list) > 0:
             self.slack_i_jnc = self.opti.variable(len(self.other_vehicle_list), N + 1)
@@ -163,25 +167,11 @@ class MultiMPC(object):
                                                         self.p_cntrld[j])
             self.vehs_ctrld[j].add_state_constraints(self.opti, self.x_ctrld[j], self.u_ctrld[j])
 
-        ######################### Compute Collision Avoidance #########################
-
-        # Proxy for the collision avoidance points on each vehicle
-
-        # # Compute the ellipse alpha beta geometry parameters for the other vehicles #
-        # alphas = []
-        # betas = []
-        # rv, response_radius = self.responseMPC.get_car_circles(self.x_opt[:,0])
-        # for i in range(len(self.otherMPClist)):
-        #     a_other, b_other, delta, a, b = self.otherMPClist[i].get_collision_ellipse(response_radius)
-        #     alphas += [a_other]
-        #     betas += [b_other]
-
-        self.pairwise_distances = ([])  # keep track of all the distances between ego and ado vehicles
+        # Compute Collision Avoidance ellipses using Minkowski sum
+        self.pairwise_distances = []  # keep track of all the distances between ego and ado vehicles
         self.collision_cost = 0
-        # Collision Avoidance
         self.k_ca2 = 0.77  # TODO: when should this number change?
 
-        # TODO: Double check the slack variables and indexing
         self.top_wall_slack = self.opti.variable(1, N + 1)
         self.bottom_wall_slack = self.opti.variable(1, N + 1)
         self.opti.subject_to(cas.vec(self.top_wall_slack) >= 0)
@@ -281,11 +271,10 @@ class MultiMPC(object):
 
                     self.slack_cost += (self.top_wall_slack_c[ic][0, k]**2 + self.bottom_wall_slack_c[ic][0, k]**2)
 
-        ######## optimization  ##################################
+        # Total optimization costs
         self.total_svo_cost = (self.response_svo_cost + self.other_svo_cost + self.k_slack * self.slack_cost +
                                self.k_CA * self.collision_cost)
         self.opti.minimize(self.total_svo_cost)
-        ##########################################################
 
         # Set the initial conditions
         self.opti.set_value(p_ego, x0)
@@ -780,7 +769,7 @@ def centerline_following(N, car_mpc, car_x0):
     return [u_warm, x, x_des]
 
 
-def generate_warm_u(N: int, car_mpc: Vehicle, car_x0):
+def generate_warm_u(N: int, car_mpc, car_x0):
     """ Warm starts that return a trajectory in u (control) -space
     N:  Number of control points
     car_mpc:  Vehicle instance
@@ -857,7 +846,7 @@ def generate_warm_u(N: int, car_mpc: Vehicle, car_x0):
     return u_warm_profiles, ux_warm_profiles
 
 
-def generate_warm_starts(vehicle: Vehicle,
+def generate_warm_starts(vehicle,
                          world: TrafficWorld,
                          x0: np.array,
                          other_veh_info,

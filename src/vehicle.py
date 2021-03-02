@@ -13,6 +13,8 @@ class Vehicle(object):
         self.L = 4.5
         self.W = 1.8
         self.n_circles = 2
+
+        self.desired_lane = -1
         ## State Costs Constants
 
         self.k_x = 0
@@ -58,13 +60,20 @@ class Vehicle(object):
         ####
 
         # Constraints
-        self.max_delta_u = 5 * np.pi / 180 * self.dt  ### THIS IS THE DELTA< NEEDS TO BE A FUNCTION OF DT
-        self.max_acceleration = 4 * self.dt  #4 m/s^2
-        self.max_v_u = self.max_acceleration
-        self.min_v_u = -self.max_v_u
+        self.max_steering_rate = 5  # deg/sec
+        self.max_delta_u = 5 * np.pi / 180 * self.dt  # rad (change in steering angle)
 
+        self.max_acceleration = 4  #m/s^2
+        self.max_v_u = self.max_acceleration * self.dt  # m/s (change in velocity)
+
+        self.max_deceleration = 4  #m/s^2
+        self.min_v_u = -self.max_deceleration * self.dt  # m/s  (change in velocity)
+
+        # Speed limit
         self.max_v = 25 * 0.447  # m/s
         self.min_v = 0.0
+
+        # Spatial constraints
         self.max_y = np.infty
         self.min_y = -np.infty
         self.strict_wall_constraint = True
@@ -72,6 +81,7 @@ class Vehicle(object):
         self.max_X_dev = np.infty
         self.max_Y_dev = np.infty
 
+        # Initialize vehicle dynamics
         self.f = self.gen_f_vehicle_dynamics()
         self.fd = None
 
@@ -173,19 +183,14 @@ class Vehicle(object):
         ''' Construct vehicle specific constraints that only rely on
         the ego vehicle's own state '''
 
-        # opti.subject_to( opti.bounded(-1, X[0,:], np.infty )) #Constraints on X, Y
         if self.strict_wall_constraint:  #TODO, change this to when creating min_y and max_y
             opti.subject_to(opti.bounded(self.min_y + self.W / 2.0, X[1, :], self.max_y - self.W / 2.0))
         opti.subject_to(opti.bounded(-np.pi / 2, X[2, :], np.pi / 2))  #no crazy angle
         opti.subject_to(opti.bounded(self.min_v, X[4, :], self.max_v))
 
+        # constraints on the control inputs
         opti.subject_to(opti.bounded(-self.max_delta_u, U[0, :], self.max_delta_u))
         opti.subject_to(opti.bounded(self.min_v_u, U[1, :], self.max_v_u))  # 0-60 around 4 m/s^2
-
-        # # Lane Deviations
-        # if self.max_X_dev < np.infty:
-        #     opti.subject_to( opti.bounded(-self.max_X_dev, X[0,:] - X_desired[0,:], self.max_X_dev))
-        # opti.subject_to( opti.bounded(-self.max_Y_dev, X[1,:] - X_desired[1,:], self.max_Y_dev))
 
     def add_dynamics_constraints(self, opti, X, U, X_desired, x0):
         ''' Construct any dynamic constraints based on the kinematic bicycle model
@@ -216,7 +221,7 @@ class Vehicle(object):
 
         return x_next
 
-    def forward_simulate_all(self, x_0, u_all):
+    def forward_simulate_all(self, x_0: np.array, u_all: np.array):
         ''' Take an an initial state (x_0) and control inputs
         u_all (of shape 2, N) and compute the state trajectory
         
@@ -240,33 +245,35 @@ class Vehicle(object):
 
         return x, x_des
 
-    def gen_f_vehicle_dynamics(self):
+    def gen_f_vehicle_dynamics(self, model: str = "kinematic_bicycle"):
         ''' Vehicle dynamics using a kinematic bike model.
         Returns a CASADI function that outputs xdot.
         '''
+        if model == "kinematic_bicycle":
+            X = cas.MX.sym('X')  # horizontal distance
+            Y = cas.MX.sym('Y')  # vertical distance
+            Phi = cas.MX.sym('Phi')  # orientation (angle from x-axis)
+            Delta = cas.MX.sym('Delta')  # steering angle
+            V = cas.MX.sym('V')  # speed
+            s = cas.MX.sym('s')  # progression along contour
 
-        X = cas.MX.sym('X')
-        Y = cas.MX.sym('Y')
-        Phi = cas.MX.sym('Phi')
-        Delta = cas.MX.sym('Delta')
-        V = cas.MX.sym('V')
-        s = cas.MX.sym('s')
+            delta_u = cas.MX.sym('delta_u')  # change in steering angle
+            v_u = cas.MX.sym('v_u')  # change in velocity
+            x = cas.vertcat(X, Y, Phi, Delta, V, s)
+            u = cas.vertcat(delta_u, v_u)
 
-        delta_u = cas.MX.sym('delta_u')
-        v_u = cas.MX.sym('v_u')
-        x = cas.vertcat(X, Y, Phi, Delta, V, s)
-        u = cas.vertcat(delta_u, v_u)
+            ode = cas.vertcat(V * cas.cos(Phi), V * cas.sin(Phi), V * cas.tan(Delta) / self.L, delta_u, v_u, V)
 
-        ode = cas.vertcat(V * cas.cos(Phi), V * cas.sin(Phi), V * cas.tan(Delta) / self.L, delta_u, v_u, V)
-        ## SHOULD WE ADD A FRICTION PLACE FOR GRASS HERE?
-        f = cas.Function('f', [x, u], [ode], ['x', 'u'], ['ode'])
+            f = cas.Function('f', [x, u], [ode], ['x', 'u'], ['ode'])
+        else:
+            raise Exception("Have not implemented non-kinematic bicycle: %s" % model)
         return f
 
     def gen_f_desired_lane(self, world, lane_number, right_direction=True):
         ''' Generates a function the vehicle progression along a desired trajectory '''
         if right_direction == False:
             raise Exception("Haven't implemented left lanes")
-
+        self.desired_lane = lane_number
         s = cas.MX.sym('s')
         xd = s
         yd = world.get_lane_centerline_y(lane_number, right_direction)
@@ -276,6 +283,64 @@ class Vehicle(object):
 
         return fd
 
+    def get_ellipse(self, L, W):
+        '''Solve for the minimal inscribing ellipse.
+        Inputs:  
+            L: Length of vehicle
+            W: Width of vehicle
+        Returns:
+            ax [float]: half length of the major axis  
+            by [float]: half length of the minor axis
+        '''
+        min_elipse_a = lambda a: (1 - L**2 / (2 * a)**2 - W**2 / (2 * a + W - L)**2)
+
+        ax = optimize.fsolve(min_elipse_a, L / 2.0)
+        by = ax + .5 * (W - L)
+
+        return ax, by
+
+    def get_collision_ellipse(self, r, L_other=None, W_other=None):
+        '''Generate a vehicle's collision ellipse wrt another circle with radius r
+        
+        Any point xy in collision_ellipse corresponds to an equivalent circle 
+        of radius intersection with ellipse with original axis a and b.
+
+        Inputs:  
+            r: Radius of vehicle circle
+            L_other:   Length of other vehicle
+            W_other:   Width of other vehicle
+
+        Outputs:
+            a_new:  Major (horizontal) axis of collision ellipse
+            b_new: Minor (vertical) axis of collision ellipse
+        '''
+        #By default, we assume that the dimensions of other vehicle is the
+        # the same as the ego vehicle
+        if L_other is None:
+            L_other = self.L
+        if W_other is None:
+            W_other = self.W
+        a, b = self.get_ellipse(L_other, W_other)  #Generate an ellipse of other vehilce
+
+        #Extend that ellipse to include collision circle using eqn from Alonso-Moro
+        minimal_positive_root = lambda delta: (2 * (delta + r)**2 * (2 * a * b + a * (delta + r) + b * (delta + r))) / (
+            (a + b) * (a + b + 2 * delta + 2 * r)) - r**2
+        delta = optimize.fsolve(minimal_positive_root, r)
+        a_new = a + delta + r
+        b_new = b + delta + r
+
+        return a_new, b_new, delta, a, b
+
+    def get_theta_ij(self, j):
+        if j in self.theta_ij:
+            return self.theta_ij[j]
+        else:
+            return self.theta_i
+
+    def update_desired_lane(self, world, lane_number, right_direction=True):
+        self.fd = self.gen_f_desired_lane(world, lane_number, right_direction)
+
+    # Old code:  used to use when we modeled cars as circles
     def get_car_circles(self, X):
         ''' Compuute circles that cover the vehicle area to be used for 
         faster collision checking.
@@ -337,58 +402,3 @@ class Vehicle(object):
             raise Exception("self.n_circles was not set with a correct number")
 
         return centers, radius
-
-    def get_ellipse(self, L, W):
-        '''Solve for the minimal inscribing ellipse.
-        Inputs:  
-            L: Length of vehicle
-            W: Width of vehicle
-        Returns:
-            ax [float]: half length of the major axis  
-            by [float]: half length of the minor axis
-        '''
-        min_elipse_a = lambda a: (1 - L**2 / (2 * a)**2 - W**2 / (2 * a + W - L)**2)
-
-        ax = optimize.fsolve(min_elipse_a, L / 2.0)
-        by = ax + .5 * (W - L)
-
-        return ax, by
-
-    def get_collision_ellipse(self, r, L_other=None, W_other=None):
-        '''Generate a vehicle's collision ellipse wrt another circle with radius r
-        
-        Any point xy in collision_ellipse corresponds to an equivalent circle 
-        of radius intersection with ellipse with original axis a and b.
-
-        Inputs:  
-            r: Radius of vehicle circle
-            L_other:   Length of other vehicle
-            W_other:   Width of other vehicle
-
-        Outputs:
-            a_new:  Major (horizontal) axis of collision ellipse
-            b_new: Minor (vertical) axis of collision ellipse
-        '''
-        #By default, we assume that the dimensions of other vehicle is the
-        # the same as the ego vehicle
-        if L_other is None:
-            L_other = self.L
-        if W_other is None:
-            W_other = self.W
-        a, b = self.get_ellipse(L_other, W_other)  #Generate an ellipse of other vehilce
-        #Extend that ellipse to include collision circle using eqn from Alonso-Moro
-        minimal_positive_root = lambda delta: (2 * (delta + r)**2 * (2 * a * b + a * (delta + r) + b * (delta + r))) / (
-            (a + b) * (a + b + 2 * delta + 2 * r)) - r**2
-        delta = optimize.fsolve(minimal_positive_root, r)
-        a_new = a + delta + r
-        b_new = b + delta + r
-        return a_new, b_new, delta, a, b
-
-    def get_theta_ij(self, j):
-        if j in self.theta_ij:
-            return self.theta_ij[j]
-        else:
-            return self.theta_i
-
-    def update_desired_lane(self, world, lane_number, right_direction=True):
-        self.fd = self.gen_f_desired_lane(world, lane_number, right_direction)
