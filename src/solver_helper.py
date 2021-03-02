@@ -490,7 +490,7 @@ def poission_positions(cars_per_hour, total_seconds, n_lanes, average_velocity, 
     prev_car_lane[0] = 0.0
     initial_vehicle_positions = []
     for (lane, x) in all_vehicle_positions:
-        if x > prev_car_lane[lane] + 1.4 * car_length:
+        if x > prev_car_lane[lane] + 2.0 * car_length:
             initial_vehicle_positions += [(lane, float(x))]
             prev_car_lane[lane] = x
 
