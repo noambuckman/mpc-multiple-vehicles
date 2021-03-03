@@ -9,9 +9,12 @@ conda activate mpc
 export PYTHONPATH=$PYTHONPATH:/home/gridsan/nbuckman/mpc-multiple-vehicles
 cd mpc-multiple-vehicles
 
+N_CNTRLD=2
+
+
+
 N_OTHER=20
 N_LANES=2
-N_CNTRLD=2
 RANDOM_SVO=1
 SAVE_IBR=1
 N_MPC=30
