@@ -3,9 +3,6 @@
 #SBATCH --cpus-per-task 8
 #SBATCH -a 0-9
 
-# echo $(date +%H%m%s)
-printf -v date '%(%Y-%m-%d)T\n' -1 
-
 # put current date as yyyy-mm-dd HH:MM:SS in $date
 printf -v date '%(%m-%d-%Y-%H%M%S)T\n' -1 
 echo $date
@@ -13,14 +10,14 @@ echo $date
 
 conda activate mpc
 export PYTHONPATH=$PYTHONPATH:/home/gridsan/nbuckman/mpc-multiple-vehicles
-cd mpc-multiple-vehicles
+cd /home/gridsan/nbuckman/mpc-multiple-vehicles
 
-N_CNTRLD=3
+N_CNTRLD=0
 
 N_OTHER=20
 N_LANES=2
 SAVE_IBR=0
-N_MPC=40
+N_MPC=30
 
 CAR_DENSITY=3000
 
