@@ -1,4 +1,4 @@
-from argparse import ArgumentParser
+from argparse import ArgumentParser, ArgumentTypeError
 import numpy as np
 
 
@@ -51,13 +51,21 @@ class IBRParser(ArgumentParser):
                           help="Number of rounds of iterative best response before excuting mpc")
         self.add_argument('--n-cntrld', type=int, default=2, help="How many cars does the response control in planning")
         self.add_argument('--rnds-shrd-cntrl', type=int, default=2)
+        self.add_argument('--shrd-cntrl-scheduler', type=str, default="constant")
+
         self.add_argument('--k-solve-amb-max-ibr',
                           type=int,
                           default=2,
                           help="Max number iterations where ado solves for ambulance controls, afterwards only ado")
         self.add_argument('--plan-fake-ambulance', action='store_true')
-        self.add_argument('--save-ibr', type=bool, default=False, help="Save the IBR control inputs, 1=True, 0=False")
-        self.add_argument('--save-state', type=bool, default=False, help="Save the states at each round of MPC inputs")
+        self.add_argument('--save-ibr',
+                          type=str2bool,
+                          default=False,
+                          help="Save the IBR control inputs, 1=True, 0=False")
+        self.add_argument('--save-state',
+                          type=str2bool,
+                          default=False,
+                          help="Save the states at each round of MPC inputs")
 
         # MPC Solver & Cost Settings
         self.add_argument('--default-n-warm-starts',
@@ -82,3 +90,15 @@ class IBRParser(ArgumentParser):
         self.add_argument('--k-CA-power', type=float, default=1.0, help="Default collision avoidance power")
         self.add_argument('--wall-CA', type=int, default=1, help="Add collision avoidance cost for approaching walls")
         self.add_argument('--print-level', type=int, default=0, help="Print level for IPOPT solver")
+        self.add_argument('--k-lat', type=float, default=None, help="lateral cost for vehicles")
+
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise ArgumentTypeError('Boolean value expected.')

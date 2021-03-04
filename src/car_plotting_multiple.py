@@ -193,7 +193,7 @@ def plot_single_frame(world: TrafficWorld,
 
     fig = plt.gcf()
     if folder is not None:
-        fig.savefig(folder + 'imgs/' '{:03d}.png'.format(k))
+        fig.savefig(folder + '{:03d}.png'.format(k))
         plt.close(fig)
         gc.collect()
     else:
@@ -346,7 +346,7 @@ def plot_multiple_cars(k,
     ax.get_yaxis().set_visible(False)
     # ax.get_xaxis().set_visible(False)
     if folder is not None:
-        fig.savefig(folder + 'imgs/' '{:03d}.png'.format(k))
+        fig.savefig(folder + '{:03d}.png'.format(k))
         plt.close(fig)
         gc.collect()
     else:
@@ -437,7 +437,7 @@ def add_lanes(ax, world):
 
 
 def animate(folder, vid_fname, fps=16):
-    cmd = 'ffmpeg -r {} -f image2 -i {}imgs/%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p {}'.format(
+    cmd = 'ffmpeg -r {} -f image2 -i {}/%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p {}'.format(
         fps, folder, vid_fname)
     os.system(cmd)
     # print('Saving video to: {}'.format(vid_fname))
