@@ -51,6 +51,8 @@ class IBRParser(ArgumentParser):
                           help="Number of rounds of iterative best response before excuting mpc")
         self.add_argument('--n-cntrld', type=int, default=2, help="How many cars does the response control in planning")
         self.add_argument('--rnds-shrd-cntrl', type=int, default=2)
+        self.add_argument('--shrd-cntrl-scheduler', type=str, default="constant")
+
         self.add_argument('--k-solve-amb-max-ibr',
                           type=int,
                           default=2,
@@ -88,6 +90,7 @@ class IBRParser(ArgumentParser):
         self.add_argument('--k-CA-power', type=float, default=1.0, help="Default collision avoidance power")
         self.add_argument('--wall-CA', type=int, default=1, help="Add collision avoidance cost for approaching walls")
         self.add_argument('--print-level', type=int, default=0, help="Print level for IPOPT solver")
+        self.add_argument('--k-lat', type=float, default=None, help="lateral cost for vehicles")
 
 
 def str2bool(v):

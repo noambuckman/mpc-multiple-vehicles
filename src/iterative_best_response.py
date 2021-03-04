@@ -133,12 +133,13 @@ def run_iterative_best_response(params, log_dir, load_log_dir, i_mpc_start, amb_
         for i_rounds_ibr in range(params["n_ibr"]):
             print("MPC %d, IBR %d / %d" % (i_mpc, i_rounds_ibr, params["n_ibr"] - 1))
 
-            # Define which vehicles are best response vehicles, shared control vehicles, and fixed control vehicles (for collision avoidance) in the ambulance's best response
+            # Define which vehicles are best response vehicles, shared control vehicles, and fixed control vehicles (for collision avoidance)
+            # in the ambulance's best response
 
             response_veh_info = amb_ibr_info
             veh_idxs_in_amb_mpc = vehicles_within_range(other_x0, amb_x0, 20 * ambulance.L)
-            # Select which cars the ambulance should imagine shared control
 
+            # Select which cars the ambulance should imagine shared control
             fake_amb_i = -1
             cntrld_vehicle_info = []
             if params["plan_fake_ambulance"]:  #TODO:  Add comments or description
@@ -229,9 +230,20 @@ def run_iterative_best_response(params, log_dir, load_log_dir, i_mpc_start, amb_
                 ]
 
                 cntrld_vehicle_info = []
-                # cntrld_x0, cntrld_vehicles, cntrld_u, cntrld_x, cntrld_xd = [], [], [], [], []
+
                 # Choose which vehicles should be in the shared control
-                if params["n_cntrld"] > 0 and i_rounds_ibr < params["rnds_shrd_cntrl"]:
+                cntrld_scheduler = params["shrd_cntrl_scheduler"]
+                if cntrld_scheduler == "constant":
+                    if i_rounds_ibr >= params["rnds_shrd_cntrl"]:
+                        n_cntrld = 0
+                    else:
+                        n_cntrld = params["n_cntrld"]
+                elif cntrld_scheduler == "linear":
+                    n_cntrld = max(0, params["n_cntrld"] - i_rounds_ibr)
+                else:
+                    raise Exception("Shrd Controller Not Specified")
+
+                if n_cntrld > 0:
                     delta_x = [response_veh_info.x0[0] - x[0] for x in other_x0]
                     sorted_i = [
                         i for i in np.argsort(delta_x)
