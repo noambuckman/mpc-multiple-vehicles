@@ -382,7 +382,8 @@ def run_iterative_best_response(params, log_dir, load_log_dir, i_mpc_start, amb_
         actual_t += params["number_ctrl_pts_executed"]
 
     out_file.close()
-    print("Simulation Done!  Runtime: %.1d" % (time.time() - t_start_time))
+
+    print("Simulation Done!  Runtime: %s" % (datetime.timedelta(seconds=(time.time() - t_start_time))))
 
     return xamb_actual, xothers_actual
 
