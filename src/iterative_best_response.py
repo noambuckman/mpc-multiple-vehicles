@@ -434,7 +434,8 @@ if __name__ == "__main__":
         ### Save the vehicles and world for this simulation
         for i in range(len(all_other_vehicles)):
             pickle.dump(all_other_vehicles[i], open(log_dir + "data/mpcother%03d.p" % i, "wb"))
-        pickle.dump(ambulance, open(log_dir + "data/mpcamb.p", "wb"))
+        pickle.dump(all_other_vehicles, open(log_dir + "/other_vehicles.p", "wb"))
+        pickle.dump(ambulance, open(log_dir + "/ambulance.p", "wb"))
         pickle.dump(world, open(log_dir + "data/world.p", "wb"))
         print("Results saved in log %s:" % log_dir)
     else:
