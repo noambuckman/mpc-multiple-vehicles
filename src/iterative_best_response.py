@@ -444,6 +444,9 @@ if __name__ == "__main__":
          all_other_x0) = helper.initialize_cars_from_positions(params["N"], params["dt"], world, True, position_list,
                                                                list_of_svo)
 
+        if params["k_lat"]:
+            for vehicle in all_other_vehicles:
+                vehicle.k_lat = params["k_lat"]
         ### Save the vehicles and world for this simulation
         for i in range(len(all_other_vehicles)):
             pickle.dump(all_other_vehicles[i], open(log_dir + "data/mpcother%03d.p" % i, "wb"))
