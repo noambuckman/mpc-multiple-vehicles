@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --cpus-per-task 8
-#SBATCH -a 1-2
+#SBATCH -a 1-8
 
 # echo $(date +%H%m%s)
 printf -v date '%(%Y-%m-%d)T\n' -1 
@@ -19,10 +19,10 @@ N_CNTRLD=3
 
 
 
-N_OTHER=20
+N_OTHER=5
 N_LANES=2
 SAVE_IBR=0
-N_MPC=30
+N_MPC=5
 
 CAR_DENSITY=3000
 
