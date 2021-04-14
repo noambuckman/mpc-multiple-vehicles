@@ -1,22 +1,15 @@
-import time, datetime, os, sys, pickle, psutil, json, string, random
+import time, datetime, os, pickle, psutil, json, string, random
 import numpy as np
 import copy as cp
 from contextlib import redirect_stdout
 
-### TODO:  I'm not sure why this exists?
-PROJECT_PATHS = [
-    "/home/nbuckman/Dropbox (MIT)/DRL/2020_01_cooperative_mpc/mpc-multiple-vehicles/",
-    "/Users/noambuckman/mpc-multiple-vehicles/",
-    os.path.expanduser("~") + "/mpc-multiple-vehicles/",
-]
-for p in PROJECT_PATHS:
-    sys.path.append(p)
-
-import src.solver_helper as helper
 from src.traffic_world import TrafficWorld
-from src.ibr_argument_parser import IBRParser
-from src.solver_helper import nonresponse_subset, warm_profiles_subset
-from src.multiagent_mpc import load_state, save_state, generate_warm_starts
+from src.multiagent_mpc import load_state, save_state
+from src.warm_starts import generate_warm_starts
+
+from src.utils.ibr_argument_parser import IBRParser
+import src.utils.solver_helper as helper
+from src.utils.solver_helper import warm_profiles_subset
 
 
 def convert_to_global_units(ambulance_x0_global, x):
@@ -29,6 +22,7 @@ def convert_to_global_units(ambulance_x0_global, x):
 
 
 class VehicleMPCInformation:
+    ''' Helper class that holds the state of each vehicle and vehicle information'''
     def __init__(self, vehicle, x0, u=None, x=None, xd=None):
         self.vehicle = vehicle
         self.x0 = x0
@@ -401,7 +395,7 @@ if __name__ == "__main__":
     params = vars(args)
 
     if args.load_log_dir is None:
-        ### Generate directory structure and log name
+        # Generate directory structure and log name
         params["start_time_string"] = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         alpha_num = string.ascii_lowercase[:8] + string.digits
         if params["log_subdir"] is None:
@@ -413,15 +407,15 @@ if __name__ == "__main__":
         for f in [log_dir + "imgs/", log_dir + "data/", log_dir + "vids/", log_dir + "plots/"]:
             os.makedirs(f, exist_ok=True)
 
-        ### Determine number of control points in the optimization
+        # Determine number of control points in the optimization
         i_mpc_start = 0
         params["N"] = max(1, int(params["T"] / params["dt"]))
         params["number_ctrl_pts_executed"] = max(1, int(np.floor(params["N"] * params["p_exec"])))
 
-        ### Create the world and vehicle objects
+        # Create the world and vehicle objects
         world = TrafficWorld(params["n_lanes"], 0, 999999)
 
-        ### Create the vehicle placement based on a Poisson distribution
+        # Create the vehicle placement based on a Poisson distribution
         MAX_VELOCITY = 25 * 0.447  # m/s
         VEHICLE_LENGTH = 4.5  # m
         time_duration_s = (params["n_other"] * 3600.0 /
@@ -434,7 +428,7 @@ if __name__ == "__main__":
                                                               position_random_seed=params["seed"])
         position_list = initial_vehicle_positions[:params["n_other"]]
 
-        ### Create the SVOs for each vehicle
+        # Create the SVOs for each vehicle
         if params["random_svo"] == 1:
             list_of_svo = [np.random.choice([0, np.pi / 4.0, np.pi / 2.01]) for i in range(params["n_other"])]
         else:
@@ -447,7 +441,7 @@ if __name__ == "__main__":
         if params["k_lat"]:
             for vehicle in all_other_vehicles:
                 vehicle.k_lat = params["k_lat"]
-        ### Save the vehicles and world for this simulation
+        # Save the vehicles and world for this simulation
         for i in range(len(all_other_vehicles)):
             pickle.dump(all_other_vehicles[i], open(log_dir + "data/mpcother%03d.p" % i, "wb"))
         pickle.dump(all_other_vehicles, open(log_dir + "/other_vehicles.p", "wb"))
@@ -467,9 +461,9 @@ if __name__ == "__main__":
         world = pickle.load(open(log_dir + "data/world.p", "rb"))
         params["pid"] = os.getpid()
 
-        ### We need to get initial conditions for the iterative best response
+        # We need to get initial conditions for the iterative best response
 
-    #### Initialize the state and control arrays
+    # Initialize the state and control arrays
     params["pid"] = os.getpid()
     if params["n_other"] != len(all_other_vehicles):
         raise Exception("n_other larger than  position list")

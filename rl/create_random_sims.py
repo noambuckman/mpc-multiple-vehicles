@@ -1,13 +1,13 @@
 import os, pickle, datetime, string, random
 import numpy as np
-from src.ibr_argument_parser import IBRParser
+from src.utils.ibr_argument_parser import IBRParser
 from tqdm import trange
+import json
 
 from src.traffic_world import TrafficWorld
-import src.solver_helper as helper
-
 from src.iterative_best_response import run_iterative_best_response
-import json
+
+import src.utils.solver_helper as helper
 
 
 def run_simulation(log_dir, params, theta_ij):
@@ -90,7 +90,7 @@ if __name__ == "__main__":
     parser.add_argument('--svo-file',
                         type=str,
                         default=None,
-                        help="load a pickl file with list of svos for non ambulance")
+                        help="load a pickle file with list of svos for non ambulance")
 
     parser.set_defaults(
         n_other=4,
