@@ -92,6 +92,8 @@ class IBRParser(ArgumentParser):
         self.add_argument('--print-level', type=int, default=0, help="Print level for IPOPT solver")
         self.add_argument('--k-lat', type=float, default=None, help="lateral cost for vehicles")
 
+        self.add_argument('--k-politeness', type=float, default=None, help="parameter for IDM")
+
 
 def str2bool(v):
     if isinstance(v, bool):
