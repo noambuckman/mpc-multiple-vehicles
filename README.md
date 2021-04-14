@@ -1,6 +1,8 @@
 # mpc-multiple-vehicles
 Code for a multiple cooperative-mpc for multiple vehicles (esp. ambulance)
 
+Video: https://www.youtube.com/watch?v=iwibkEfj8CI
+
 Screenshot: ![Screenshot](https://github.com/noambuckman/mpc-multiple-vehicles/blob/master/images/sample_sim.gif)
 
 
