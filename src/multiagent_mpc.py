@@ -2,9 +2,10 @@ import numpy as np
 import casadi as cas
 import matplotlib.pyplot as plt
 from typing import List
+
 from src.traffic_world import TrafficWorld
-from src.car_plotting_multiple import plot_cars
-# from src.vehicle import Vehicle
+from src.utils.plotting.car_plotting import plot_cars
+# from src.warm_starts import generate_warm_x, centerline_following, generate_warm_u, generate_warm_starts
 
 
 class MultiMPC(object):
@@ -14,14 +15,12 @@ class MultiMPC(object):
        The optimization currently solves assuming a Kinmeatic Bicycle Dynamics Model, assuming
        control inputs steering + acceleration.  
     '''
-    def __init__(
-        self,
-        response_vehicle,
-        cntrld_vehicles,
-        other_vehicle_list,
-        world: TrafficWorld,
-        solver_params: dict = None,
-    ):
+    def __init__(self,
+                 response_vehicle,
+                 cntrld_vehicles,
+                 other_vehicle_list,
+                 world: TrafficWorld,
+                 solver_params: dict = None):
 
         self.ego_veh = response_vehicle
         self.vehs_ctrld = cntrld_vehicles
@@ -41,7 +40,6 @@ class MultiMPC(object):
         self.world = world
 
         self.opti = cas.Opti()
-        self.min_dist = 2 * 1.5  # 2 times the radius of 1.5
 
     def generate_optimization(self,
                               N: int,
@@ -296,20 +294,14 @@ class MultiMPC(object):
         self.solution = self.opti.solve()
 
     def get_bestresponse_solution(self):
-        x1, u1, x1_des, = (
-            self.solution.value(self.x_ego),
-            self.solution.value(self.u_ego),
-            self.solution.value(self.xd_ego),
-        )
+        x1, u1, x1_des, = (self.solution.value(self.x_ego), self.solution.value(self.u_ego),
+                           self.solution.value(self.xd_ego))
 
         return x1, u1, x1_des
 
     def get_solution(self):
-        x1, u1, x1_des, = (
-            self.solution.value(self.x_ego),
-            self.solution.value(self.u_ego),
-            self.solution.value(self.xd_ego),
-        )
+        x1, u1, x1_des, = (self.solution.value(self.x_ego), self.solution.value(self.u_ego),
+                           self.solution.value(self.xd_ego))
 
         cntrld_x = [self.solution.value(self.x_ctrld[i]) for i in range(len(self.vehs_ctrld))]
         cntrld_u = [self.solution.value(self.u_ctrld[i]) for i in range(len(self.vehs_ctrld))]
@@ -321,25 +313,7 @@ class MultiMPC(object):
 
         return x1, u1, x1_des, cntrld_x, cntrld_u, cntrld_des, other_x, other_u, other_des
 
-    def generate_slack_variables(self, slack_bool, N_time_steps, number_other_vehicles, n_ego_circles):
-        """CURRENTLY NOT USED"""
-        if slack_bool:
-            slack_vars = []
-            for i in range(number_other_vehicles):
-                slack_vars += [self.opti.variable(n_ego_circles, N_time_steps + 1)]
-            for slack_v in slack_vars:
-                self.opti.subject_to(cas.vec(slack_v) >= 0)
-                # self.opti.subject_to(slack<=1.0)
-        else:
-            slack_vars = []
-            for i in range(number_other_vehicles):
-                slack_vars += [self.opti.parameter(n_ego_circles, N_time_steps + 1)]
-            for slack_v in slack_vars:
-                self.opti.set_value(slack_v, np.zeros((n_ego_circles, N_time_steps + 1)))
-
-        return slack_vars
-
-    def generate_collision_ellipse(self, x_e, y_e, x_o, y_o, phi_o, alpha_o, beta_o, slack_var):
+    def generate_collision_ellipse(self, x_e, y_e, x_o, y_o, phi_o, alpha_o, beta_o):
         """ alpha_o:  major axis of length"""
         dx = x_e - x_o
         dy = y_e - y_o
@@ -408,14 +382,7 @@ class MultiMPC(object):
             dX = np.stack((dx, dy), axis=2)
             prod = cas.mtimes([dX.T, R_o.T, M, R_o, dX])
 
-    def generate_stopping_constraint_ttc(
-        self,
-        x_opt,
-        xcntrld_opt,
-        xothers_opt,
-        min_time_to_collision=3.0,
-        k_ttc=0.0,
-    ):
+    def generate_stopping_constraint_ttc(self, x_opt, xcntrld_opt, xothers_opt, min_time_to_collision=3.0, k_ttc=0.0):
         """ Add a velocity constraint on the ego vehicle so it doesn't go too fast behind a lead vehicle.
             Constrains the vehicle so that the time to collision is always less than time_to_collision seconds
             assuming that both ego and ado vehicle mantain constant velocity
@@ -659,6 +626,7 @@ def save_costs(file_name, ibr):
 
 def load_costs(file_name):
     ''' Load all the cost values '''
+    ''' This is rarely used, maybe we should remove it '''
     car1_costs_list = np.load(file_name + "car1_costs_list.npy", allow_pickle=False)
     amb_costs_list = np.load(file_name + "amb_costs_list.npy", allow_pickle=False)
     svo_cost = np.load(file_name + "svo_cost.npy", allow_pickle=False)
@@ -669,6 +637,7 @@ def load_costs(file_name):
 
 
 def load_costs_int(i):
+    '''TODO: This code is rarely/not used, perhaps it should be removed'''
 
     car1_costs_list = np.load("%03dcar1_costs_list.npy" % i, allow_pickle=False)
     amb_costs_list = np.load("%03damb_costs_list.npy" % i, allow_pickle=False)
@@ -677,219 +646,3 @@ def load_costs_int(i):
     total_svo_cost = np.load("%03dtotal_svo_cost.npy" % i, allow_pickle=False)
 
     return car1_costs_list, amb_costs_list, svo_cost, other_svo_cost, total_svo_cost
-
-
-def generate_warm_x(car_mpc, world, x0, average_v=None):
-    """ Warm starts that return a trajectory in x (control) -space
-    N:  Number of control points
-    car_mpc:  Vehicle instance
-    car_x0:  Initial position
-    
-    Return:  x_warm_profiles [dict]
-                keys: label of warm start [str]
-                values: 6xn state vector
-
-            ux_warm_profiles [dict]
-                keys: label of warm start [str]
-                values:  control vector (initialized as zero), state vector, x desired vector
-    """
-
-    x_warm_profiles = {}
-    N = car_mpc.N
-    lane_width = world.lane_width
-    if average_v is None:
-        constant_v = car_mpc.max_v
-    else:
-        constant_v = average_v
-    t_array = np.arange(0, car_mpc.dt * (N + 1) - 0.000001, car_mpc.dt)
-    x = x0[0] + t_array * constant_v
-    y0 = x0[1]
-    x_warm_default = np.repeat(x0.reshape(6, 1), N + 1, 1)
-    x_warm_default[0, :] = x
-    x_warm_default[1, :] = y0
-    x_warm_default[2, :] = np.zeros((1, N + 1))
-    x_warm_default[3, :] = np.zeros((1, N + 1))
-    x_warm_default[4, :] = constant_v
-    x_warm_default[5, :] = t_array * constant_v
-    x_warm_profiles["0constant v"] = x_warm_default
-    # lane change up
-    y_up = y0 + lane_width
-    for percent_change in [0.00, 0.5, 0.75]:
-        key = "0up %d" % (int(100 * percent_change))
-        x_up = np.copy(x_warm_default)
-        ti_lane_change = int(percent_change * (N + 1))
-        y = y_up * np.ones((1, N + 1))
-        y[:, :ti_lane_change] = x0[1] * np.ones((1, ti_lane_change))
-        x_up[1, :] = y
-        x_warm_profiles[key] = x_up
-
-    y_down = y0 - lane_width
-    for percent_change in [0.00, 0.5, 0.75]:
-        key = "0down %d" % (int(100 * percent_change))
-        x_up = np.copy(x_warm_default)
-        ti_lane_change = int(percent_change * (N + 1))
-        y = y_down * np.ones((1, N + 1))
-        y[:, :ti_lane_change] = x0[1] * np.ones((1, ti_lane_change))
-        x_up[1, :] = y
-        x_warm_profiles[key] = x_up
-
-    ux_warm_profiles = {}
-    for k_warm in x_warm_profiles.keys():
-        u_warm = np.zeros((2, N))
-        x_warm = x_warm_profiles[k_warm]
-        x_des_warm = np.zeros(shape=(3, N + 1))
-        for k in range(N + 1):
-            x_des_warm[:, k:k + 1] = car_mpc.fd(x_warm[-1, k])
-        ux_warm_profiles[k_warm] = [u_warm, x_warm, x_des_warm]
-
-    return x_warm_profiles, ux_warm_profiles
-
-
-def centerline_following(N, car_mpc, car_x0):
-    y_follow = car_x0[1]
-
-    u_warm = np.zeros((2, N))
-    u_warm[1, :] = np.zeros(shape=(1, N))  ### No acceleration
-
-    x = np.zeros(shape=(6, N + 1))
-    x[:, 0:1] = car_x0.reshape(6, 1)
-    for k in range(N):
-        k_u = 0.1
-        u_turn = -k_u * (x[1, k] - y_follow)
-        u_turn = np.clip(u_turn, -car_mpc.max_delta_u, car_mpc.max_delta_u)
-        x_k = x[:, k]
-        u_warm[0, k:k + 1] = u_turn
-        x_knext = car_mpc.F_kutta(car_mpc.f, x_k, u_warm[:, k])
-        x[:, k + 1:k + 2] = x_knext
-
-    x_des = np.zeros(shape=(3, N + 1))
-    for k in range(N + 1):
-        x_des[:, k:k + 1] = car_mpc.fd(x[-1, k])
-
-    return [u_warm, x, x_des]
-
-
-def generate_warm_u(N: int, car_mpc, car_x0):
-    """ Warm starts that return a trajectory in u (control) -space
-    N:  Number of control points
-    car_mpc:  Vehicle instance
-    car_x0:  Initial position
-    
-    Return:  u_warm_profiles [dict]
-                keys: label of warm start [str]
-                values: 2xn control vector
-
-            ux_warm_profiles [dict]
-                keys: label of warm start [str]
-                values:  control vector, state vector, x desired vector
-    """
-
-    u0_warm_profiles = {}
-    u1_warm_profiles = {}
-    # braking
-    u_warm = np.zeros((2, N))
-    u_warm[0, :] = np.zeros(shape=(1, N))
-    u_warm[1, :] = np.ones(shape=(1, N)) * car_mpc.min_v_u
-    u1_warm_profiles["braking"] = u_warm
-
-    # accelerate
-    u_warm = np.zeros((2, N))
-    u_warm[0, :] = np.zeros(shape=(1, N))
-    u_warm[1, :] = np.ones(shape=(1, N)) * car_mpc.max_v_u
-    u1_warm_profiles["accelerating"] = u_warm
-
-    u_warm = np.zeros((2, N))
-    u_warm[0, :] = np.zeros(shape=(1, N))
-    t_half = int(N)
-    u_warm[1, :t_half] = np.ones(shape=(1, t_half)) * car_mpc.max_v_u / 3.0
-
-    # no accelerate
-    u_warm = np.zeros((2, N))
-    u1_warm_profiles["none"] = u_warm
-
-    # lane change left
-    u_warm = np.zeros((2, N))
-    u_l1 = 0
-    u_r1 = int(N / 3)
-    u_l2 = int(2 * N / 3)
-
-    # u_r2 = int(3*N/4)
-    u_warm[0, u_l1] = -0.5 * car_mpc.max_delta_u
-    u_warm[0, u_r1] = car_mpc.max_delta_u
-    u_warm[0, u_l2] = -0.5 * car_mpc.max_delta_u
-
-    u_warm[1, :] = np.zeros(shape=(1, N))
-    u0_warm_profiles["lane_change_right"] = u_warm
-
-    u0_warm_profiles["lane_change_left"] = -u0_warm_profiles["lane_change_right"]
-    u0_warm_profiles["none"] = np.zeros(shape=(2, N))
-
-    u_warm_profiles = {}
-    for u0_k in u0_warm_profiles.keys():
-        for u1_k in u1_warm_profiles.keys():
-            u_k = u0_k + " " + u1_k
-            u_warm_profiles[u_k] = u0_warm_profiles[u0_k] + u1_warm_profiles[u1_k]
-
-    # Generate x, x_des from the u_warm profiles
-    ux_warm_profiles = {}
-    for k_warm in u_warm_profiles.keys():
-        u_warm = u_warm_profiles[k_warm]
-        x_warm, x_des_warm = car_mpc.forward_simulate_all(car_x0.reshape(6, 1), u_warm)
-        ux_warm_profiles[k_warm] = [u_warm, x_warm, x_des_warm]
-
-    # Generate some line following examples
-    u_warm, x_warm, x_des_warm = centerline_following(N, car_mpc, car_x0)
-    k_warm = "line_following"
-    u_warm_profiles[k_warm] = u_warm
-    ux_warm_profiles[k_warm] = [u_warm, x_warm, x_des_warm]
-
-    return u_warm_profiles, ux_warm_profiles
-
-
-def generate_warm_starts(vehicle,
-                         world: TrafficWorld,
-                         x0: np.array,
-                         other_veh_info,
-                         params: dict,
-                         u_mpc_previous=None,
-                         u_ibr_previous=None):
-    """ Generate a dictionary of warm starts for the solver.  
-    
-        Returns:  Dictionary with warm_start_name: (state, control, desired_state)
-    """
-    other_x0 = [veh_info.x0 for veh_info in other_veh_info]
-
-    u_warm_profiles, ux_warm_profiles = generate_warm_u(params["N"], vehicle, x0)
-
-    if len(other_x0) > 0:
-        warm_velocity = np.median([x[4] for x in other_x0])
-    else:
-        warm_velocity = x0[4]
-    _, x_ux_warm_profiles = generate_warm_x(vehicle, world, x0, warm_velocity)
-    ux_warm_profiles.update(x_ux_warm_profiles)
-
-    if (u_mpc_previous is not None):  # TODO: Try out the controls that were previous executed
-        u_warm_profiles["previous_mpc"] = np.concatenate(
-            (
-                u_mpc_previous[:, params["number_ctrl_pts_executed"]:],
-                np.tile(u_mpc_previous[:, -1:], (1, params["number_ctrl_pts_executed"])),
-            ),
-            axis=1,
-        )
-        x_warm, x_des_warm = vehicle.forward_simulate_all(x0.reshape(6, 1), u_warm_profiles["previous_mpc"])
-        ux_warm_profiles["previous_mpc"] = [
-            u_warm_profiles["previous_mpc"],
-            x_warm,
-            x_des_warm,
-        ]
-
-    if (u_ibr_previous is not None):  # Try out the controller from the previous round of IBR
-        u_warm_profiles["previous_ibr"] = u_ibr_previous
-        x_warm, x_des_warm = vehicle.forward_simulate_all(x0.reshape(6, 1), u_warm_profiles["previous_ibr"])
-        ux_warm_profiles["previous_ibr"] = [
-            u_warm_profiles["previous_ibr"],
-            x_warm,
-            x_des_warm,
-        ]
-
-    return ux_warm_profiles

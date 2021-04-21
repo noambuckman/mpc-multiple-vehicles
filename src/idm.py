@@ -1,10 +1,14 @@
 import numpy as np
-# from src.vehicle import Vehicle
-from src.traffic_world import TrafficWorld
 from typing import List
 
+from src.traffic_world import TrafficWorld
 
-def IDM_acceleration(bumper_distance, lead_vehicle_velocity, current_speed, desired_speed, idm_params=None):
+
+def IDM_acceleration(bumper_distance: float,
+                     lead_vehicle_velocity: float,
+                     current_speed: float,
+                     desired_speed: float,
+                     idm_params: dict = None) -> float:
     ''' predict the trajectory of a vehicle based on Intelligent Driver Model 
     based on: Kesting, A., Treiber, M., & Helbing, D. (2010). Enhanced intelligent driver model to access the impact of driving strategies 
     on traffic capacity. Philosophical Transactions of the Royal Society A: Mathematical, Physical and Engineering Sciences
@@ -48,11 +52,8 @@ def IDM_acceleration(bumper_distance, lead_vehicle_velocity, current_speed, desi
 
         return deceleration
 
-    # print("decel", -(a * s_star(v, delta_v) / s)**2)
-    # print("free accel", -a * (v / v_0)**delta)
-    # print("accel", a)
     a_IDM = a * (1 - (v / v_0)**delta - (s_star(v, delta_v) / s)**2)  #[eq 2.1]
-    # print("IDM accel", a_IDM)
+
     return a_IDM
 
 
@@ -63,7 +64,7 @@ def CAH_acceleration():
     return a_CAH
 
 
-def IDM_trajectory_prediction(veh, N, X_0, X_lead=None, desired_speed=None, idm_params=None):
+def IDM_trajectory_prediction(veh, X_0: np.array, X_lead=None, desired_speed=None, idm_params=None):
     ''' Compute an IDM trajectory for a vehicle based on a speed following vehicle
     '''
     if X_lead is None:
@@ -75,7 +76,6 @@ def IDM_trajectory_prediction(veh, N, X_0, X_lead=None, desired_speed=None, idm_
     # idm_params = {}
     idm_params["maximum_acceleration"] = veh.max_acceleration  # correct for previous multiple in dt
 
-    # for t in range(N):
     bumper_distance = X_lead[0] - X_0[0] - veh.L
     current_speed = X_0[4] * np.cos(X_0[2])
     lead_vehicle_velocity = X_lead[4] * np.cos(X_lead[2])
@@ -176,9 +176,7 @@ def MOBIL_lanechange(driver_x0: np.array,
             else:
                 bumper_distance = all_other_x0[lead_idx][0] - follower_x0[0] - follower_veh.L
                 lead_velocity = all_other_x0[lead_idx][4] * np.cos(all_other_x0[lead_idx][2])
-            # if lead_idx == -1:
-            # print(key, follower_idx, lead_idx)
-            # print(bumper_distance)
+
             if bumper_distance < 0:
                 lane_gap = False  #checks if there is even a gap between lead vehicle in next lane
             a_follower = IDM_acceleration(bumper_distance, lead_velocity, current_speed, desired_speed, IDM_params)
@@ -198,7 +196,14 @@ def MOBIL_lanechange(driver_x0: np.array,
     return best_new_lane, accel
 
 
-def get_lead_vehicle(x0, other_x0, world):
+def get_lead_vehicle(x0: np.array, other_x0: List[np.array], world: TrafficWorld):
+    ''' Get lead vehicle wrt a car at position x0
+        Input: 
+            x0 (np.array) : current position of vehicle
+            other_x0 list[np.array]: list of positions of other vehicles on the road 
+
+        Output: (int) index of lead vehicle 
+    '''
     n_other = len(other_x0)
     ego_lane = world.get_lane_from_x0(x0)
 
@@ -214,9 +219,15 @@ def get_lead_vehicle(x0, other_x0, world):
         return None
 
 
-def get_next_vehicle_lane(x0, all_other_x0, lane, world):
-    ''' get next vehicle in a lane '''
+def get_next_vehicle_lane(x0: np.array, all_other_x0: List[np.array], lane: int, world: TrafficWorld) -> int:
+    ''' Get lead vehicle wrt a car at position x0 that is in specific lane
+        Input: 
+            x0 (np.array) : current position of vehicle
+            other_x0 list[np.array]: list of positions of other vehicles on the road 
+            lane (int): desired lane within which vehicle should be returned
 
+        Output: (int) index of lead vehicle 
+    '''
     idx_in_lane = [world.get_lane_from_x0(all_other_x0[idx]) == lane for idx in range(len(all_other_x0))]
     idx_forward = [all_other_x0[idx][0] - x0[0] > 0 for idx in range(len(all_other_x0))]
     idx_dist_sorted = np.argsort([np.abs(all_other_x0[idx][0] - x0[0]) for idx in range(len(all_other_x0))])
@@ -228,8 +239,15 @@ def get_next_vehicle_lane(x0, all_other_x0, lane, world):
         return None
 
 
-def get_prev_vehicle_lane(x0, all_other_x0, lane, world):
-    ''' get previous vehicle in a lane '''
+def get_prev_vehicle_lane(x0: np.array, all_other_x0: List[np.array], lane: int, world: TrafficWorld) -> int:
+    ''' Get previous vehicle wrt a car at position x0 that is in specific lane
+        Input: 
+            x0 (np.array) : current position of vehicle
+            other_x0 list[np.array]: list of positions of other vehicles on the road 
+            lane (int): desired lane within which vehicle should be returned
+
+        Output: (int) index of lead vehicle 
+    '''
 
     idx_in_lane = [world.get_lane_from_x0(all_other_x0[idx]) == lane for idx in range(len(all_other_x0))]
     idx_forward = [all_other_x0[idx][0] - x0[0] <= 0 for idx in range(len(all_other_x0))]
@@ -242,7 +260,8 @@ def get_prev_vehicle_lane(x0, all_other_x0, lane, world):
         return None
 
 
-def get_prev_vehicle_from_desired_lane(x0, all_other_x0, all_other_vehicles, lane):
+def get_prev_vehicle_from_desired_lane(x0: np.array, all_other_x0: List[np.array], all_other_vehicles,
+                                       lane: int) -> int:
     ''' Find the previous vehicle in the lane computed by their advertised desired lane.
         This should account for vehicles that are in the middle of a lane change
     '''
@@ -257,7 +276,8 @@ def get_prev_vehicle_from_desired_lane(x0, all_other_x0, all_other_vehicles, lan
         return None
 
 
-def get_next_vehicle_from_desired_lane(x0, all_other_x0, all_other_vehicles, lane):
+def get_next_vehicle_from_desired_lane(x0: np.array, all_other_x0: List[np.array], all_other_vehicles,
+                                       lane: int) -> int:
     ''' Find the previous vehicle in the lane computed by their advertised desired lane.
         This should account for vehicles that are in the middle of a lane change
     '''
