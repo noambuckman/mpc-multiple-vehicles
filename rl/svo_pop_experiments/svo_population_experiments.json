@@ -1,6 +1,6 @@
 {
-    "n_other": 10,
-    "n_experiments": 40,
+    "n_other": 2,
+    "n_experiments": 2,
     "p_cooperative": [
         0.0,
         0.1,
@@ -14,7 +14,7 @@
         0.9,
         1.0
     ],
-    "n_mpc": 20,
+    "n_mpc": 3,
     "n_lanes": 2,
     "car_density": 3000,
     "random_svo": "False",
