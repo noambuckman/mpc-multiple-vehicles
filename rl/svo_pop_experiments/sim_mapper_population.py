@@ -81,9 +81,9 @@ if __name__ == "__main__":
     # Add the seeds based on number of experiments
     all_params_dict["seeds"] = [experiment_random_seed + ix for ix in range(all_params_dict["n_experiments"])]
 
-    for param in all_params_dict:
-        if param is not list:
-            param = list(param)
+    for param, value in all_params_dict.items():
+        if value is not list:
+            all_params_dict[param] = list(value)
     keys, values = zip(*all_params_dict.items())
     all_params = []
     for experiment_parings in itertools.product(*values):
