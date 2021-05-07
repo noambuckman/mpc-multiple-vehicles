@@ -2,7 +2,7 @@
 
 conda activate mpc
 export PYTHONPATH=$PYTHONPATH:/home/gridsan/nbuckman/mpc-multiple-vehicles
-cd /home/gridsan/nbuckman/mpc-multiple-vehicles
+cd /home/gridsan/nbuckman/mpc-multiple-vehicles/rl/svo_pop_experiments
 
 EXPERIMENT_RANDOM_SEED=$(($SLURM_ARRAY_TASK_ID + $RANDOM))
 echo $1

@@ -464,7 +464,14 @@ def initialize_cars_from_positions(N, dt, world, no_grass=False, list_of_positio
     return amb_MPC, x0_amb, all_other_MPC, all_other_x0
 
 
-def poission_positions(cars_per_hour, total_seconds, n_lanes, average_velocity, car_length, position_random_seed=None):
+def poission_positions(cars_per_hour: float,
+                       total_number_cars: int,
+                       n_lanes: int = 2,
+                       average_velocity: float = 25 * 0.447,
+                       car_length: float = 4.5,
+                       position_random_seed: int = None):
+
+    total_seconds = total_number_cars * 3600.0 / cars_per_hour * 10
     cars_per_second = cars_per_hour / 3600.0
     dt = 0.20
     cars_per_dt = cars_per_second * dt
@@ -493,6 +500,8 @@ def poission_positions(cars_per_hour, total_seconds, n_lanes, average_velocity, 
         if x > prev_car_lane[lane] + 2.0 * car_length:
             initial_vehicle_positions += [(lane, float(x))]
             prev_car_lane[lane] = x
+
+    initial_vehicle_positions = initial_vehicle_positions[:total_number_cars]
 
     return initial_vehicle_positions
 
