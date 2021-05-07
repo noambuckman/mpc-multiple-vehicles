@@ -65,7 +65,8 @@ if __name__ == "__main__":
     parser = IBRParser()
     parser.add_argument("my_task_id", type=int)
     parser.add_argument("num_tasks", type=int)
-    parser.add_argument("--experiment_random_seed", type=int, default=0)
+    parser.add_argument("--experiment-random-seed", type=int, default=0)
+    parser.add_argument("--input-params", type=str, help="Path to jason")
 
     args = parser.parse_args()
     default_params = vars(args)
@@ -73,9 +74,9 @@ if __name__ == "__main__":
     # Grab the arguments that are passed in
     my_task_id = int(sys.argv[1])
     num_tasks = int(sys.argv[2])
-    experiment_random_seed = default_params["experiment_random_seed"]
+    experiment_random_seed = args.experiment_random_seed
 
-    all_params_dict = json.load('params.json')
+    all_params_dict = json.load(args.input_params)
 
     # Add the seeds based on number of experiments
     all_params_dict["seeds"] = [experiment_random_seed + ix for ix in range(all_params_dict["n_experiments"])]
@@ -85,7 +86,7 @@ if __name__ == "__main__":
 
     sim_svos = []
     sim_trajs = []
-
+    ep_ix = 0
     for params in my_params:
 
         for param in params:
@@ -98,6 +99,7 @@ if __name__ == "__main__":
                              "-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
 
         experiment_dir = (os.path.expanduser("~") + "/mpc_results/" + experiment_string)
+        ep_ix += 1
         log_dir = experiment_dir + "/" + experiment_string + '_%05d' % ep_ix + "/"
 
         # Generate the SVOs for the vehicles
@@ -106,7 +108,7 @@ if __name__ == "__main__":
         cooperative_agents = np.random.choice(range(params["n_other"]), size=n_cooperative, replace=False)
         theta_ij = [np.pi / 4.0 if i in cooperative_agents else 0.001 for i in range(params["n_other"])]
 
-        all_trajectories = run_simulation(None, params, theta_ij)
+        all_trajectories = run_simulation(log_dir, params, theta_ij)
         np.save(open(log_dir + "/trajectories.npy", 'wb'), all_trajectories)
 
         sim_trajs += [all_trajectories]
