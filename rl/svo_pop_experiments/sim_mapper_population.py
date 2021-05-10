@@ -77,23 +77,21 @@ if __name__ == "__main__":
     experiment_random_seed = args.experiment_random_seed
 
     all_params_dict = json.load(open(args.input_params, 'rb'))
-
     # Add the seeds based on number of experiments
     all_params_dict["seeds"] = [experiment_random_seed + ix for ix in range(all_params_dict["n_experiments"])]
 
-    for param, value in all_params_dict.items():
-        if value is not list:
-            all_params_dict[param] = list(value)
-    keys, values = zip(*all_params_dict.items())
+    # Genereate a list of all experiment's param dicts
     all_params = []
-    for experiment_parings in itertools.product(*values):
-        exp_params = dict(zip(keys, experiment_parings))
+    for param, value in all_params_dict.items():
+        if type(value) is not list:
+            all_params_dict[param] = [value]
+    keys, values = zip(*all_params_dict.items())
+    for experiment_pairings in itertools.product(*values):
+        exp_params = dict(zip(keys, experiment_pairings))
         all_params += [exp_params]
-    # all_params = itertools.product(all_params_dict)
-    # all_params = list(all_params)
-    print(all_params)
-    my_params = all_params[my_task_id:len(all_params):num_tasks]
 
+    # Select a subset of paramaters to test
+    my_params = all_params[my_task_id:len(all_params):num_tasks]
     sim_svos = []
     sim_trajs = []
     ep_ix = 0
@@ -126,6 +124,6 @@ if __name__ == "__main__":
 
     sim_trajs = np.array(sim_trajs)
     sim_svos = np.array(sim_svos)
-    np.save(open("trajectories_%05d_%02d.npy" % (experiment_random_seed, my_task_id, 'wb')), sim_trajs)
-    np.save(open("svos_%05d_%02d.npy" % (experiment_random_seed, my_task_id, 'wb')), sim_svos)
+    np.save(open("trajectories_%05d_%02d.npy" % (experiment_random_seed, my_task_id), 'wb'), sim_trajs)
+    np.save(open("svos_%05d_%02d.npy" % (experiment_random_seed, my_task_id), 'wb'), sim_svos)
     print(" Done with experiments")
