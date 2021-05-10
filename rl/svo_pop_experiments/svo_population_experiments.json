@@ -1,6 +1,6 @@
 {
-    "n_other": 2,
-    "n_experiments": 2,
+    "n_other": 10,
+    "n_experiments": 20,
     "p_cooperative": [
         0.0,
         0.1,
