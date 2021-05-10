@@ -3,7 +3,7 @@ import numpy as np
 
 import os, pickle, datetime, random
 import numpy as np
-import json
+import json, copy
 
 from src.utils.ibr_argument_parser import IBRParser
 from src.traffic_world import TrafficWorld
@@ -95,10 +95,12 @@ if __name__ == "__main__":
     sim_svos = []
     sim_trajs = []
     ep_ix = 0
+
     for params in my_params:
+        current_sim_params = copy.deepcopy(default_params)
 
         for param in params:
-            default_params[param] = params[param]
+            current_sim_params[param] = params[param]
 
         alpha_num = string.ascii_lowercase[:8] + string.digits
 
@@ -111,12 +113,12 @@ if __name__ == "__main__":
         log_dir = experiment_dir + "/" + experiment_string + '_%05d' % ep_ix + "/"
 
         # Generate the SVOs for the vehicles
-        p_cooperative = params["p_cooperative"]
-        n_cooperative = int(p_cooperative * params["n_other"])
-        cooperative_agents = np.random.choice(range(params["n_other"]), size=n_cooperative, replace=False)
-        theta_ij = [np.pi / 4.0 if i in cooperative_agents else 0.001 for i in range(params["n_other"])]
+        p_cooperative = current_sim_params["p_cooperative"]
+        n_cooperative = int(p_cooperative * current_sim_params["n_other"])
+        cooperative_agents = np.random.choice(range(current_sim_params["n_other"]), size=n_cooperative, replace=False)
+        theta_ij = [np.pi / 4.0 if i in cooperative_agents else 0.001 for i in range(current_sim_params["n_other"])]
 
-        all_trajectories = run_simulation(log_dir, params, theta_ij)
+        all_trajectories = run_simulation(log_dir, current_sim_params, theta_ij)
         np.save(open(log_dir + "/trajectories.npy", 'wb'), all_trajectories)
 
         sim_trajs += [all_trajectories]
