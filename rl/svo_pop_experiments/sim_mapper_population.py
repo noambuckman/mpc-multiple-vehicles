@@ -67,6 +67,7 @@ if __name__ == "__main__":
     parser.add_argument("num_tasks", type=int)
     parser.add_argument("--experiment-random-seed", type=int, default=0)
     parser.add_argument("--input-params", type=str, help="Path to jason")
+    parser.add_argument("--n-processors", type=int, default=8)
 
     args = parser.parse_args()
     default_params = vars(args)
@@ -98,7 +99,7 @@ if __name__ == "__main__":
 
     for params in my_params:
         current_sim_params = copy.deepcopy(default_params)
-
+        current_sim_params["n_processors"] = args.n_processors
         for param in params:
             current_sim_params[param] = params[param]
 
