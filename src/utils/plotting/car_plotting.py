@@ -142,7 +142,7 @@ def plot_multiple_cars(k,
     ax.set_xlim((axlim_minx, axlim_maxx))
 
     add_lanes(ax, world)
-    add_grass(ax, world, k)
+    add_grass(ax, world)
     if car_plot_shape.lower() not in ["ellipse", "both", "ellipses", "image"]:
         raise Exception("Incorrect car_plot_shape")
     if car_plot_shape.lower() == "ellipse" or car_plot_shape.lower() == "both" or car_plot_shape.lower() == "ellipses":
