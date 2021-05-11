@@ -443,7 +443,7 @@ if __name__ == "__main__":
             list_of_svo = [params["svo_theta"] for i in range(params["n_other"])]
 
         (ambulance, amb_x0, all_other_vehicles,
-         all_other_x0) = helper.initialize_cars_from_positions(params["N"], params["dt"], world, True, position_list,
+         all_other_x0) = helper.initialize_cars_from_positions(params["N"], params["dt"], world, False, position_list,
                                                                list_of_svo)
 
         if params["k_lat"]:
