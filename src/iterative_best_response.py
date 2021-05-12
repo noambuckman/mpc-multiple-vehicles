@@ -429,7 +429,7 @@ if __name__ == "__main__":
         time_duration_s = (params["n_other"] * 3600.0 /
                            params["car_density"]) * 10  # amount of time to generate traffic
         initial_vehicle_positions = helper.poission_positions(params["car_density"],
-                                                              int(time_duration_s),
+                                                              params["n_other"],
                                                               params["n_lanes"],
                                                               MAX_VELOCITY,
                                                               VEHICLE_LENGTH,
@@ -443,7 +443,7 @@ if __name__ == "__main__":
             list_of_svo = [params["svo_theta"] for i in range(params["n_other"])]
 
         (ambulance, amb_x0, all_other_vehicles,
-         all_other_x0) = helper.initialize_cars_from_positions(params["N"], params["dt"], world, False, position_list,
+         all_other_x0) = helper.initialize_cars_from_positions(params["N"], params["dt"], world, True, position_list,
                                                                list_of_svo)
 
         if params["k_lat"]:
