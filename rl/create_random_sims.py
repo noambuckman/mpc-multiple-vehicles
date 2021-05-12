@@ -29,10 +29,9 @@ def run_simulation(log_dir, params, theta_ij):
     # Create the vehicle placement based on a Poisson distribution
     MAX_VELOCITY = 25 * 0.447  # m/s
     VEHICLE_LENGTH = 4.5  # m
-    time_duration_s = (params["n_other"] * 3600.0 / params["car_density"]) * 10  # amount of time to generate traffic
     initial_vehicle_positions = helper.poission_positions(
         params["car_density"],
-        int(time_duration_s),
+        params["n_other"],
         params["n_lanes"],
         MAX_VELOCITY,
         VEHICLE_LENGTH,
