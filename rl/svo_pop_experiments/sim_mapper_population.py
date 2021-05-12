@@ -36,6 +36,7 @@ def run_simulation(log_dir, params, theta_ij):
      all_other_x0) = helper.initialize_cars_from_positions(params["N"],
                                                            params["dt"],
                                                            world,
+                                                           no_grass=True,
                                                            list_of_positions=position_list,
                                                            list_of_svo=theta_ij)
 
@@ -67,6 +68,7 @@ if __name__ == "__main__":
     parser.add_argument("num_tasks", type=int)
     parser.add_argument("--experiment-random-seed", type=int, default=0)
     parser.add_argument("--input-params", type=str, help="Path to jason")
+    parser.add_argument("--results-dir", type=str, default=None)
     # parser.add_argument("--n-processors", type=int, default=8)
 
     args = parser.parse_args()
@@ -108,8 +110,10 @@ if __name__ == "__main__":
         experiment_string = ("".join(random.choice(alpha_num)
                                      for j in range(4)) + "-" + "".join(random.choice(alpha_num) for j in range(4)) +
                              "-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
-
-        experiment_dir = (os.path.expanduser("~") + "/mpc_results/" + experiment_string)
+        if args.results_dir is None:
+            experiment_dir = (os.path.expanduser("~") + "/mpc_results/" + experiment_string)
+        else:
+            experiment_dir = (args.results_dir + experiment_string)
         ep_ix += 1
         log_dir = experiment_dir + "/" + experiment_string + '_%05d' % ep_ix + "/"
 
