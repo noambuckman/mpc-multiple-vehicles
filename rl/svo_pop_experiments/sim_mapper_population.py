@@ -81,7 +81,7 @@ if __name__ == "__main__":
 
     all_params_dict = json.load(open(args.input_params, 'rb'))
     # Add the seeds based on number of experiments
-    all_params_dict["seeds"] = [experiment_random_seed + ix for ix in range(all_params_dict["n_experiments"])]
+    all_params_dict["seed"] = [experiment_random_seed + ix for ix in range(all_params_dict["n_experiments"])]
 
     # Genereate a list of all experiment's param dicts
     all_params = []
