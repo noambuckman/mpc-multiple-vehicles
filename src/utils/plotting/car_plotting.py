@@ -115,10 +115,20 @@ def plot_multiple_cars(k,
                        camera_positions=None,
                        car_labels: List[str] = None,
                        car_colors: List[str] = None,
-                       xlim=None):
+                       xlim=None,
+                       vid_track: int = 0,
+                       all_other_vehicles: List[Vehicle] = None):
     ''' This only has info from vehicle but not any individual ones'''
+    assert xamb_plot or all_other_vehicles  # we either need an ambulance or the info about other vehicles
+
     if camera_positions is None:
-        camera_positions = [xamb_plot[0, 0] + t * vehicle.max_v * vehicle.dt for t in range(xamb_plot.shape[1])]
+        if xamb_plot is not None:
+            camera_positions = [xamb_plot[0, 0] + t * vehicle.max_v * vehicle.dt for t in range(xamb_plot.shape[1])]
+        else:
+            camera_positions = [
+                xothers_plot[vid_track][0, 0] + t * vehicle.max_v * all_other_vehicles[vid_track].dt
+                for t in range(xothers_plot[vid_track].shape[1])
+            ]
 
     figwidth_in = 12.0
 
@@ -178,15 +188,18 @@ def plot_multiple_cars(k,
 
     if car_plot_shape.lower() == "image" or car_plot_shape.lower() == "both":
         for i in range(len(xothers_plot)):
-            x1_plot = xothers_plot[i]
-            if 0.9 * axlim_minx <= x1_plot[0, k] <= 1.1 * axlim_maxx:
+            if 0.9 * axlim_minx <= xothers_plot[i][0, k] <= 1.1 * axlim_maxx:
                 if car_colors is None:
                     color = get_car_color(i)
                 else:
                     color = car_colors[i]
-                ax = add_car(x1_plot[:, k], vehicle, ax, color, alpha=1.0)
+                if all_other_vehicles is not None:
+                    ax = add_car(xothers_plot[i][:, k], all_other_vehicles[i], ax, color, alpha=1.0)
+                else:
+                    ax = add_car(xothers_plot[i][:, k], vehicle, ax, color, alpha=1.0)
 
-        ax = add_car(xamb_plot[:, k], vehicle, ax, "Amb")
+        if xamb_plot is not None:
+            ax = add_car(xamb_plot[:, k], vehicle, ax, "Amb")
     fig = plt.gcf()
     ax = plt.gca()
     ax.get_yaxis().set_visible(False)
@@ -338,18 +351,25 @@ def plot_cars(world: TrafficWorld,
               camera_speed=None,
               car_labels=None,
               car_colors=None,
-              n_processors=8):
+              n_processors=8,
+              vid_track: int = 0,
+              all_other_vehicles: List[Vehicle] = None):
     '''
     Note:  The vehicle should not be instantiated in a MPC Optimization or it may mess
             with the parallelization.  You can feed in a dummy vehicle Vehicle(dt) just
             for plotting
     '''
-
-    N = xamb_plot.shape[1]
+    if xamb_plot is not None:
+        N = xamb_plot.shape[1]
+    else:
+        N = xothers_plot[0].shape[1]
     if psutil.virtual_memory().percent >= 90.0:
         raise Exception("Virtual Memory is too high, exiting to save computer")
 
-    camera_positions = generate_camera_positions(xamb_plot, vehicle)
+    if xamb_plot is not None:
+        camera_positions = generate_camera_positions(xamb_plot, vehicle)
+    else:
+        camera_positions = generate_camera_positions(xothers_plot[vid_track],  all_other_vehicles[vid_track])
     if n_processors > 1:
         plot_partial = functools.partial(plot_multiple_cars,
                                          world=world,
@@ -360,13 +380,25 @@ def plot_cars(world: TrafficWorld,
                                          car_plot_shape=car_plot_shape,
                                          camera_positions=camera_positions,
                                          car_labels=car_labels,
-                                         car_colors=car_colors)
+                                         car_colors=car_colors,
+                                         vid_track=vid_track,
+                                         all_other_vehicles=all_other_vehicles)
 
         p_tqdm.p_map(plot_partial, range(N), num_cpus=n_processors)
     else:
         for k in range(N):
-            plot_multiple_cars(k, world, vehicle, xamb_plot, xothers_plot, folder, car_plot_shape, camera_positions,
-                               car_labels, car_colors)
+            plot_multiple_cars(k,
+                               world,
+                               vehicle,
+                               xamb_plot,
+                               xothers_plot,
+                               folder,
+                               car_plot_shape,
+                               camera_positions,
+                               car_labels,
+                               car_colors,
+                               vid_track=vid_track,
+                               all_other_vehicles=all_other_vehicles)
     return None
 
 
