@@ -19,6 +19,7 @@ if __name__ == "__main__":
     parser.add_argument("--n-timesteps", type=int, default=None)
     parser.add_argument("--history_files", type=str, default=None, help="load a history file", nargs='+')
     parser.add_argument("--log_directories", type=str, default=None, help="load log dir", nargs="+")
+    parser.add_argument("--dataset", type=str, default=None, help="load saved dataset")
 
     parser.add_argument("--max-svo", type=float, default=np.pi / 2.0, help="Max SVO we allow for random")
     parser.add_argument("--epochs", type=int, default=10, help="Number of simulation epochs")
@@ -35,7 +36,6 @@ if __name__ == "__main__":
     parser.add_argument("--learning-agent", type=int, default=0, help="agent to select for optimizing")
 
     parser.add_argument('--n-other', type=int, default=4, help="Number non-ambulance vehicles")
-
     args = parser.parse_args()
     params = vars(args)
 
@@ -45,6 +45,7 @@ if __name__ == "__main__":
     else:
         device = torch.device("cpu")
 
+    # Create/load the dataset of experiments
     datasets = []
     if params["history_files"]:
         for history_file in params["history_files"]:
@@ -58,6 +59,7 @@ if __name__ == "__main__":
     else:
         raise Exception("No simulations were provided")
 
+    # Split training and test datset for test
     n_train = int(0.8 * len(dataset))
     n_test = len(dataset) - n_train
     training_set, validation_set = random_split(dataset, [n_train, n_test])
@@ -91,18 +93,18 @@ if __name__ == "__main__":
 
             for idx, batch in enumerate(dataloader):
 
-                theta_all = batch["svos"]
-                V_all = batch["values"]
-                theta_all = theta_all.reshape(theta_all.shape[0] * theta_all.shape[1], 1, 1)
-                V_all = V_all.reshape(V_all.shape[0] * V_all.shape[1], 1, 1)
+                theta_ego = batch["svos"][:, 0:1]
+                V_ego = batch["values"][:, 0:1]
+                # theta_all = theta_all.reshape(theta_all.shape[0] * theta_all.shape[1], 1, 1)
+                # V_all = V_all.reshape(V_all.shape[0] * V_all.shape[1], 1, 1)
                 # cheat and reshape so only 1 agent in QNet
 
-                theta_all = theta_all.to(device)
-                V_all = V_all.to(device)
+                theta_ego = theta_ego.to(device)
+                V_ego = V_ego.to(device)
 
-                V_hatx = q_network.forward(theta_all)
-                V_hatx = torch.squeeze(V_hatx)
-                loss = loss_function(V_hatx, V_all)
+                V_hat_ego = q_network.forward(theta_ego)
+                # V_hat_ego = torch.squeeze(V_hat_ego)
+                loss = loss_function(V_hat_ego, V_ego)
                 total_loss += loss
                 if dataloader_type == 'train':
                     optimizer.zero_grad()
@@ -112,20 +114,21 @@ if __name__ == "__main__":
             total_loss = total_loss / len(dataloader)
             writer.add_scalar("q_loss_" + dataloader_type, total_loss, ep_tix)
 
+        # Find the best SVO for the ego vehicle using V_hat
         if ep_tix % 1000 == 0:
+            # Try multiple SVOs and predict the value
             n_test_svos = 20**params["n_other"] + 1
             q_network.eval()
 
-            theta_ij = torch.rand(n_test_svos, 1, dtype=torch.double) * params["max_svo"]
-            theta_ij = theta_ij.to(device)
-            V_hat = q_network.forward(theta_ij)
+            theta_ego = torch.rand(n_test_svos, 1, dtype=torch.double) * params["max_svo"]
+            theta_ego = theta_ego.to(device)
+            V_hat = q_network.forward(theta_ego)
             # V = V_hat.sum(axis=1)
-            V = V_hat
-            min_idx = torch.argmin(V)
-            theta_min = theta_ij[min_idx, :]
+            min_idx = torch.argmin(V_hat)
+            theta_min = theta_ego[min_idx, :]
             for agent_i in range(theta_min.shape[0]):
                 writer.add_scalar("theta_min_" + str(agent_i), theta_min[agent_i] * 180 / np.pi, ep_tix)
-            writer.add_scalar("V_min", V[min_idx], ep_tix)
+            writer.add_scalar("V_min", V_hat[min_idx], ep_tix)
             min_theta_dist = np.infty
             min_theta_log = ""
             min_theta_v = np.infty
@@ -144,21 +147,18 @@ if __name__ == "__main__":
                 # svo_inputs = torch.clamp(svo_inputs, 0, np.pi / 2.0)
             print("Optimal SVO", svo_inputs)
 
+            # Save a checkpoint
+            PATH = writer.log_dir + "/model.pth"
+            torch.save(
+                {
+                    'epoch': ep_tix,
+                    'model_state_dict': q_network.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'loss': total_loss,
+                }, PATH)
             continue
-            # theta_min = theta_min.to(device)
-            for idx, batch in enumerate(dataloader):
-                theta_dist = torch.sum((batch['svos'].to(device) - theta_min)**2, axis=1)
-                min_idx = torch.argmin(theta_dist)
-                if theta_dist[min_idx] < min_theta_dist:
-                    min_theta_dist = theta_dist[min_idx]
-                    min_theta_log = batch['log'][min_idx]
-                    min_theta_v = batch['values'][min_idx].sum(axis=0)
-            if ep_tix % 10000 == 0:
-                writer.add_text("closet_exp", min_theta_log, ep_tix)
-                writer.add_scalar("closest_log_theta_error", min_theta_dist, ep_tix)
-                writer.add_scalar("closest_v", min_theta_v, ep_tix)
 
-    writer.add_graph(q_network, theta_ij)
+    writer.add_graph(q_network, theta_ego)
 
     # theta_ij = update_optimal_svo(theta_ij,
     #                               q_network,

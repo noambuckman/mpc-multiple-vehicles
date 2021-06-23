@@ -47,29 +47,29 @@ def add_car(x: np.array, vehicle: Vehicle, ax: plt.matplotlib.axis = None, car_n
         fig = ax.get_figure()
 
     # Load image of vehicle and recolor if required
-
+    code_path = "/home/nbuckman/mpc-multiple-vehicles/src/utils/plotting/"
     if car_name == "red":
-        arr_img = plt.imread('images/red_car.png', format='png')
+        arr_img = plt.imread(code_path + 'images/red_car.png', format='png')
         car_width_px = 599
         car_height_px = 310
     elif car_name == "purple":
-        arr_img = plt.imread('images/red_car.png', format='png')
+        arr_img = plt.imread(code_path + 'images/red_car.png', format='png')
         arr_img[:, :, 2] = arr_img[:, :, 0]  #Add equal amount blue
         car_width_px = 599
         car_height_px = 310
     elif car_name == "blue":
-        arr_img = plt.imread('images/red_car.png', format='png')
+        arr_img = plt.imread(code_path + 'images/red_car.png', format='png')
         arr_img[:, :, 2] = arr_img[:, :, 0]  # add blue
         arr_img[:, :, 0] = np.where(np.logical_and(0.2 < arr_img[:, :, 0], arr_img[:, :, 0] < .9), 0.0,
                                     arr_img[:, :, 0])  #remove red
         car_width_px = 599
         car_height_px = 310
     elif car_name == "Amb":
-        arr_img = plt.imread('images/ambulance.png', format='png')
+        arr_img = plt.imread(code_path + 'images/ambulance.png', format='png')
         car_width_px = 1280
         car_height_px = 640
     else:
-        arr_img = plt.imread('images/green_car.png', format='png')
+        arr_img = plt.imread(code_path + 'images/green_car.png', format='png')
         car_width_px = 599
         car_height_px = 310
     arr_img[:, :, 3] = alpha * arr_img[:, :, 3]
@@ -142,7 +142,7 @@ def plot_multiple_cars(k,
     ax.set_xlim((axlim_minx, axlim_maxx))
 
     add_lanes(ax, world)
-    add_grass(ax, world, k)
+    add_grass(ax, world)
     if car_plot_shape.lower() not in ["ellipse", "both", "ellipses", "image"]:
         raise Exception("Incorrect car_plot_shape")
     if car_plot_shape.lower() == "ellipse" or car_plot_shape.lower() == "both" or car_plot_shape.lower() == "ellipses":
@@ -478,7 +478,6 @@ def add_lanes(ax: plt.matplotlib.axis, world: TrafficWorld):
 
 def animate(folder: str, vid_fname: str, fps: int = 16) -> str:
     ''' Execute command to generate animate .mp4 from .png frames '''
-
     cmd = 'ffmpeg -r {} -f image2 -i {}/%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p {}'.format(
         fps, folder, vid_fname)
     os.system(cmd)

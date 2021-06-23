@@ -29,10 +29,9 @@ def run_simulation(log_dir, params, theta_ij):
     # Create the vehicle placement based on a Poisson distribution
     MAX_VELOCITY = 25 * 0.447  # m/s
     VEHICLE_LENGTH = 4.5  # m
-    time_duration_s = (params["n_other"] * 3600.0 / params["car_density"]) * 10  # amount of time to generate traffic
     initial_vehicle_positions = helper.poission_positions(
         params["car_density"],
-        int(time_duration_s),
+        params["n_other"],
         params["n_lanes"],
         MAX_VELOCITY,
         VEHICLE_LENGTH,
@@ -41,12 +40,9 @@ def run_simulation(log_dir, params, theta_ij):
     position_list = initial_vehicle_positions[:params["n_other"]]
 
     list_of_svo = theta_ij
-    (
-        ambulance,
-        amb_x0,
-        all_other_vehicles,
-        all_other_x0,
-    ) = helper.initialize_cars_from_positions(params["N"], params["dt"], world, True, position_list, list_of_svo)
+    (ambulance, amb_x0, all_other_vehicles,
+     all_other_x0) = helper.initialize_cars_from_positions(params["N"], params["dt"], world, True, position_list,
+                                                           list_of_svo)
 
     # Save the vehicles and world for this simulation
     data_dir = log_dir + "data"
@@ -79,7 +75,6 @@ def run_simulation(log_dir, params, theta_ij):
 
     all_trajectories = [xamb_actual] + xothers_actual
     all_trajectories = np.array(all_trajectories)
-    np.save(open(log_dir + "/trajectories.npy", 'wb'), all_trajectories)
     return all_trajectories
 
 
@@ -122,13 +117,5 @@ if __name__ == "__main__":
                 svo_ix = svo_list[ep_ix % len(svo_list)]
                 theta_ij = np.array(svo_ix)
 
-        all_vehicle_trajectories = run_simulation(log_dir, params, theta_ij)
-
-        V_i_list = -(all_vehicle_trajectories[:, 0, -1] - all_vehicle_trajectories[:, 0, 0])
-        ego_theta = 0.0  #current default in sims
-        theta_ij = np.insert(theta_ij, 0, ego_theta)
-        # Train a network to learn a function V(\theta_ij)
-        history.append((theta_ij, V_i_list))
-
-        with open(history_file, "wb") as f:
-            pickle.dump(history, f)
+        all_trajectories = run_simulation(log_dir, params, theta_ij)
+        np.save(open(log_dir + "/trajectories.npy", 'wb'), all_trajectories)

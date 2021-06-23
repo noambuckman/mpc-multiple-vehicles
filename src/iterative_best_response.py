@@ -10,6 +10,7 @@ from src.warm_starts import generate_warm_starts
 from src.utils.ibr_argument_parser import IBRParser
 import src.utils.solver_helper as helper
 from src.utils.solver_helper import warm_profiles_subset
+from typing import List
 
 
 def convert_to_global_units(ambulance_x0_global, x):
@@ -37,8 +38,15 @@ class VehicleMPCInformation:
         self.xd = xd
 
 
-def run_iterative_best_response(params, log_dir, load_log_dir, i_mpc_start, amb_x0, other_x0, ambulance, other_vehicles,
-                                world):
+def run_iterative_best_response(ambulance,
+                                other_vehicles,
+                                world: TrafficWorld,
+                                amb_x0: np.array,
+                                other_x0: List[np.array],
+                                params: dict,
+                                log_dir: str = None,
+                                load_log_dir: bool = False,
+                                i_mpc_start: int = 0):
     """ 
         Runs iterative best response for a system of ambulance and other vehicles.
         TODO:  Add something that checks required params.  Or has default params somewhere.
@@ -421,7 +429,7 @@ if __name__ == "__main__":
         time_duration_s = (params["n_other"] * 3600.0 /
                            params["car_density"]) * 10  # amount of time to generate traffic
         initial_vehicle_positions = helper.poission_positions(params["car_density"],
-                                                              int(time_duration_s),
+                                                              params["n_other"],
                                                               params["n_lanes"],
                                                               MAX_VELOCITY,
                                                               VEHICLE_LENGTH,
