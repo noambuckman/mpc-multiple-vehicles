@@ -478,8 +478,9 @@ if __name__ == "__main__":
     with open(log_dir + "params.json", "w") as fp:
         json.dump(params, fp, indent=2)
 
-    xamb_actual, xothers_actual = run_iterative_best_response(params, log_dir, args.load_log_dir, i_mpc_start, amb_x0,
-                                                              all_other_x0, ambulance, all_other_vehicles, world)
+    xamb_actual, xothers_actual = run_iterative_best_response(ambulance, all_other_vehicles, world, amb_x0,
+                                                              all_other_x0, params, log_dir, args.load_log_dir,
+                                                              i_mpc_start)
     all_trajectories = [xamb_actual] + xothers_actual
     all_trajectories = np.array(all_trajectories)
     np.save(open(log_dir + "/trajectories.npy", 'wb'), all_trajectories)
