@@ -369,7 +369,7 @@ def plot_cars(world: TrafficWorld,
     if xamb_plot is not None:
         camera_positions = generate_camera_positions(xamb_plot, vehicle)
     else:
-        camera_positions = generate_camera_positions(xothers_plot[vid_track],  all_other_vehicles[vid_track])
+        camera_positions = generate_camera_positions(xothers_plot[vid_track], all_other_vehicles[vid_track])
     if n_processors > 1:
         plot_partial = functools.partial(plot_multiple_cars,
                                          world=world,
