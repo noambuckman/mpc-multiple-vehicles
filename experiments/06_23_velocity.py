@@ -1,8 +1,5 @@
 import datetime, os, pickle, json, string, random
 import numpy as np
-import copy as cp
-from typing import List
-
 from src.traffic_world import TrafficWorld
 from src.utils.ibr_argument_parser import IBRParser
 import src.utils.solver_helper as helper
