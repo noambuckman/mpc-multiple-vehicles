@@ -2,7 +2,7 @@ import numpy as np
 import random
 import copy as cp
 import multiprocessing, functools
-from contextlib import redirect_stdout
+from collections import deque
 
 import src.multiagent_mpc as mpc
 import src.vehicle as vehicle
@@ -390,12 +390,12 @@ def initialize_cars_from_positions(N, dt, world, no_grass=False, list_of_positio
     '''x_variance is in terms of number of min_dist'''
     ## Create the Cars in this Problem
     if list_of_svo is None:
-        list_of_svo = [0 for _ in range(len(list_of_positions))]
-    assert len(list_of_positions) == len(list_of_svo)
+        list_of_svo = [0 for _ in range(len(list_of_positions) - 1)]
+    # assert len(list_of_positions) == len(list_of_svo)
 
     all_other_x0 = []
     all_other_MPC = []
-    for i in range(len(list_of_positions)):
+    for i in range(len(list_of_positions) - 1):
         x1_MPC = vehicle.Vehicle(dt)
         x1_MPC.agent_id = i
         x1_MPC.n_circles = 3
@@ -425,7 +425,7 @@ def initialize_cars_from_positions(N, dt, world, no_grass=False, list_of_positio
             x1_MPC.max_y -= world.grass_width
         x1_MPC.strict_wall_constraint = False
 
-        lane_number, next_x0 = list_of_positions[i]
+        lane_number, next_x0 = list_of_positions[i + 1]  #index off by one since ambulance is index 0
 
         initial_speed = 0.99 * x1_MPC.max_v
         x1_MPC.fd = x1_MPC.gen_f_desired_lane(world, lane_number, True)
@@ -460,8 +460,10 @@ def initialize_cars_from_positions(N, dt, world, no_grass=False, list_of_positio
     if no_grass:
         amb_MPC.min_y += world.grass_width
         amb_MPC.max_y -= world.grass_width
-    amb_MPC.fd = amb_MPC.gen_f_desired_lane(world, 0, True)
-    x0_amb = np.array([0, 0, 0, 0, initial_speed, 0]).T
+
+    lane_number, next_x0 = list_of_positions[0]
+    amb_MPC.fd = amb_MPC.gen_f_desired_lane(world, lane_number, True)
+    x0_amb = np.array([next_x0, world.get_lane_centerline_y(lane_number), 0, 0, initial_speed, 0]).T
 
     return amb_MPC, x0_amb, all_other_MPC, all_other_x0
 
@@ -470,42 +472,84 @@ def poission_positions(cars_per_hour: float,
                        total_number_cars: int,
                        n_lanes: int = 2,
                        average_velocity: float = 25 * 0.447,
-                       car_length: float = 4.5,
+                       intervehicle_spacing: float = 9.0,
                        position_random_seed: int = None):
+    '''Description:  Generate the initial spacing of vehicles based on a desired vehicle density
+    Simulate a poisson queuing process where vehicles arrive according to a poisson distribution
+    and are assigned lanes.  Single arrival queue, n-queue departures.
+    Users specifiy a density in terms of cars per hour, number of lanes, and total number of desired cars    
+    Args:
+        cars_per_hour:  Desired car density, specified by # cars per hour
+        total_number_cars: Total desired number of cars in entire experiments
+        n_lanes (int):  Number of lanes used to return lane assignment and x position
+        average_velocity: int
+        intervehicle_spacing: float default = 9.0 (i.e. 1 car space between)
+        position_random_seed:  int
 
-    total_seconds = total_number_cars * 3600.0 / cars_per_hour * 10
+    '''
     cars_per_second = cars_per_hour / 3600.0
-    dt = 0.20
+    #     if cars_per_second > (average_velocity / intervehicle_spacing * n_lanes):
+    #         raise Exception("Car density is too large for given car velocity, number lanes, and inter-vehicle spacing")
+
+    # Spatial resolution should be around 0.5 meters
+    spatial_resolution = 0.50  #m
+    dt = spatial_resolution / average_velocity
     cars_per_dt = cars_per_second * dt
-    rng = np.random.default_rng(position_random_seed)
-    n_cars_per_second = rng.poisson(cars_per_second, int(total_seconds))
+    total_seconds = total_number_cars * 3600.0 / cars_per_hour * 10
     total_dt = int(total_seconds / dt)
-    n_cars_per_dt = rng.poisson(cars_per_dt, int(total_dt))
 
-    all_vehicle_positions = []
+    rng = np.random.default_rng(position_random_seed)
+    n_cars_arrival_per_dt = rng.poisson(cars_per_dt, int(total_dt))  # number cars arriving at each dt
+    # Exclude arrivals after we have achieved our desired number of vehicles
+    n_cars_arrival_per_dt = n_cars_arrival_per_dt[:np.argmax(np.cumsum(n_cars_arrival_per_dt) > total_number_cars)]
 
-    # Random place vehicles in the lanes
-    for s in range(len(n_cars_per_dt)):
-        if n_cars_per_dt[s] == 0:
-            continue
-        else:
-            for j in range(n_cars_per_dt[s]):
-                lane_number = rng.integers(0, n_lanes)
-                x_position = (average_velocity * rng.uniform(0.95, 1.05)) * (s * dt)
-                all_vehicle_positions += [(lane_number, x_position)]
+    lane_ids = list(range(n_lanes))
+    lane_car_positions = {}
+    for lane in lane_ids:
+        lane_car_positions[lane] = []
 
-    # Remove cars that would have collided
-    prev_car_lane = -9999 * np.ones((n_lanes, 1))
-    prev_car_lane[0] = 0.0
+    road_queue = deque()
+    agent_id = 0
+
+    si = 0
+    while np.sum([len(lane_car_positions[lane]) for lane in lane_ids]) < total_number_cars:
+        if si >= 2 * len(n_cars_arrival_per_dt):
+            raise Exception("Too many vehicles in the system ??")
+
+        # Add incoming cars to the system
+        if si < len(n_cars_arrival_per_dt) and n_cars_arrival_per_dt[si] > 0:
+            # Cars are arriving to the system
+            number_cars_arriving = n_cars_arrival_per_dt[si]
+            for idx in range(number_cars_arriving):
+                agent_id += 1
+                road_queue.append(agent_id)
+
+        # Attempt to assign arriving cars into lane
+        if len(road_queue) > 0:
+            rng.shuffle(lane_ids)
+            for lane in lane_ids:
+                if len(lane_car_positions[lane]) > 0:
+                    closest_car = lane_car_positions[lane][0]
+                    if closest_car > intervehicle_spacing:
+                        road_queue.popleft()
+                        lane_car_positions[lane] = [0.0] + lane_car_positions[lane]
+                else:
+                    road_queue.popleft()
+                    lane_car_positions[lane] = [0.0] + lane_car_positions[lane]
+
+                if len(road_queue) == 0:
+                    break
+
+        # All cars move forward assuming constant velocity and update their position
+        for lane in lane_car_positions:
+            lane_car_positions[lane] = [pos + dt * average_velocity for pos in lane_car_positions[lane]]
+        si += 1
+
     initial_vehicle_positions = []
-    for (lane, x) in all_vehicle_positions:
-        if x > prev_car_lane[lane] + 2.0 * car_length:
-            initial_vehicle_positions += [(lane, float(x))]
-            prev_car_lane[lane] = x
+    for lane in lane_car_positions:
+        initial_vehicle_positions += [(lane, float(x)) for x in lane_car_positions[lane]]
 
-    initial_vehicle_positions = initial_vehicle_positions[:total_number_cars]
-
-    assert total_number_cars == len(initial_vehicle_positions)
+    initial_vehicle_positions = sorted(initial_vehicle_positions, key=lambda l: l[1])
 
     return initial_vehicle_positions
 
