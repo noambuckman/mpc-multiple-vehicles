@@ -389,6 +389,8 @@ def initialize_cars(n_other,
 def initialize_cars_from_positions(N, dt, world, no_grass=False, list_of_positions=None, list_of_svo=None):
     '''x_variance is in terms of number of min_dist'''
     ## Create the Cars in this Problem
+    if list_of_svo is None:
+        list_of_svo = [0 for _ in range(len(list_of_positions))]
     assert len(list_of_positions) == len(list_of_svo)
 
     all_other_x0 = []
@@ -502,6 +504,8 @@ def poission_positions(cars_per_hour: float,
             prev_car_lane[lane] = x
 
     initial_vehicle_positions = initial_vehicle_positions[:total_number_cars]
+
+    assert total_number_cars == len(initial_vehicle_positions):
 
     return initial_vehicle_positions
 
