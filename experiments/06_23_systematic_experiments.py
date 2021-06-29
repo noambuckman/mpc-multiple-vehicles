@@ -23,8 +23,11 @@ def run_simulation(log_dir, params):
     world = TrafficWorld(params["n_lanes"], 0, 999999)
 
     # Create the vehicle placement based on a Poisson distribution
+    initial_velocity = 25 * 0.447
+
     position_list = helper.poission_positions(cars_per_hour=params["car_density"],
-                                              total_number_cars=params["n_other"],
+                                              total_number_cars=params["n_other"] + 1,
+                                              average_velocity=initial_velocity,
                                               position_random_seed=params["seed"])
 
     # Create the vehicles and initial positions
@@ -50,6 +53,11 @@ def run_simulation(log_dir, params):
         for vehicle_j in all_other_vehicles:
             vehicle.theta_ij[vehicle_j.agent_id] = svo
 
+    # Set the max velocity and initial velocity
+    for vehicle_it in range(len(all_other_vehicles)):
+        all_other_vehicles[vehicle_it].max_v = np.random.uniform(25, 30) * 0.447  #20 to 25 mph
+        all_other_x0[vehicle_it][-2] = initial_velocity
+
     # Save the vehicles and world for this simulation
     os.makedirs(log_dir, exist_ok=True)
     pickle.dump(all_other_vehicles, open(log_dir + "/other_vehicles.p", "wb"))
@@ -72,7 +80,7 @@ if __name__ == "__main__":
     parser.add_argument("my_task_id", type=int)
     parser.add_argument("num_tasks", type=int)
     parser.add_argument("--experiment-random-seed", type=int, default=0)
-    parser.add_argument("--input-params", type=str, help="Path to jason")
+    parser.add_argument("--input-params", type=str, default=None, help="Path to jason")
     parser.add_argument("--results-dir", type=str, default=None)
 
     args = parser.parse_args()
@@ -83,7 +91,10 @@ if __name__ == "__main__":
     num_tasks = int(sys.argv[2])
     experiment_random_seed = args.experiment_random_seed
 
-    all_params_dict = json.load(open(args.input_params, 'rb'))
+    if args.input_params is None:
+        all_params_dict = {"n_experiments": 1, "p_cooperative": [0.5]}
+    else:
+        all_params_dict = json.load(open(args.input_params, 'rb'))
     # Add the seeds based on number of experiments
     all_params_dict["seed"] = [experiment_random_seed + ix for ix in range(all_params_dict["n_experiments"])]
 
