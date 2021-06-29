@@ -505,7 +505,7 @@ def poission_positions(cars_per_hour: float,
 
     initial_vehicle_positions = initial_vehicle_positions[:total_number_cars]
 
-    assert total_number_cars == len(initial_vehicle_positions):
+    assert total_number_cars == len(initial_vehicle_positions)
 
     return initial_vehicle_positions
 
