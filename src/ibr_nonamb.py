@@ -326,12 +326,12 @@ if __name__ == "__main__":
         time_duration_s = (params["n_other"] * 3600.0 /
                            params["car_density"]) * 10  # amount of time to generate traffic
         initial_vehicle_positions = helper.poission_positions(params["car_density"],
-                                                              params["n_other"],
+                                                              params["n_other"] + 1,
                                                               params["n_lanes"],
                                                               MAX_VELOCITY,
                                                               VEHICLE_LENGTH,
                                                               position_random_seed=params["seed"])
-        position_list = initial_vehicle_positions[:params["n_other"]]
+        position_list = initial_vehicle_positions[:params["n_other"] + 1]
 
         # Create the SVOs for each vehicle
         if params["random_svo"] == 1:
