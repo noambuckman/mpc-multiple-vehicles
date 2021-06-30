@@ -1,9 +1,11 @@
+from src.vehicle import Vehicle
 import time, datetime, os, pickle, psutil, json, string, random
 import numpy as np
 import copy as cp
 from contextlib import redirect_stdout
 from typing import List
-
+from shapely.geometry import box
+from shapely.affinity import rotate
 from src.traffic_world import TrafficWorld
 from src.multiagent_mpc import load_state, save_state
 from src.warm_starts import generate_warm_starts
@@ -211,8 +213,10 @@ def run_iterative_best_response(other_vehicles,
                             solve_number = 0
                             solver_params["solve_amb"] = False
                 if solve_number == params["k_max_solve_number"]:
+
                     #TODO: Maybe this should be just drive forward?
-                    raise Exception(
+                    x_ibr, x_des_ibr, u_ibr = warm_starts['none none']  #take foot off of steering wheel and brakes
+                    print(
                         "Reached maximum number of re-solves @ Veh %02d MPC Rd %d IBR %d.   Max Slack = %.05f > thresh %.05f"
                         % (response_i, i_mpc, i_rounds_ibr, max_slack_ibr, params["k_max_slack"]))
                 if params["save_ibr"]:
@@ -238,11 +242,58 @@ def run_iterative_best_response(other_vehicles,
         actual_t, all_other_u_mpc, all_other_x_executed, all_other_u_executed, xothers_actual, uothers_actual, = update_sim_states(
             othervehs_ibr_info, all_other_x_ibr_g, params, actual_t, log_dir, i_mpc, xothers_actual, uothers_actual)
 
+        collision = check_collisions(all_other_vehicles, all_other_x_executed)
+        if collision:
+            out_file.close()
+            print("Simulation Ended Early due to collision!  Runtime: %s" %
+                  (datetime.timedelta(seconds=(time.time() - t_start_time))))
+            return xothers_actual
+
     out_file.close()
 
     print("Simulation Done!  Runtime: %s" % (datetime.timedelta(seconds=(time.time() - t_start_time))))
 
     return xothers_actual
+
+
+def get_collision_pairs(all_other_vehicles: List[Vehicle], all_other_x_executed: List[np.array]) -> List[tuple]:
+    car_collisions = []
+    for i in range(len(all_other_vehicles)):
+        for j in range(len(all_other_vehicles)):
+            if i >= j:
+                continue
+            else:
+                collision = check_collision(all_other_vehicles[i], all_other_vehicles[j], all_other_x_executed[i],
+                                            all_other_x_executed[j])
+                if collision:
+                    car_collisions += [(i, j)]
+    return car_collisions
+
+
+def check_collisions(all_other_vehicles: List[Vehicle], all_other_x_executed: List[np.array]) -> bool:
+    car_collisions = get_collision_pairs(all_other_vehicles, all_other_x_executed)
+    if len(car_collisions) > 0:
+        return True
+    else:
+        return False
+
+
+def check_collision(vehicle_a: Vehicle, vehicle_b: Vehicle, X_a: np.array, X_b: np.array) -> bool:
+    x_a, y_a, theta_a = X_a[0, :], X_a[1, :], X_a[2, :]
+    x_b, y_b, theta_b = X_b[0, :], X_b[1, :], X_b[2, :]
+
+    box_a = box(x_a - vehicle_a.L / 2.0, y_a - vehicle_a.W / 2.0, x_a + vehicle_a.L / 2.0, y_a + vehicle_a.W / 2.0)
+    rotated_box_a = rotate(box_a, theta_a, origin='center', use_radians=True)
+
+    box_b = box(x_b - vehicle_b.L / 2.0, y_b - vehicle_b.W / 2.0, x_b + vehicle_b.L / 2.0, y_b + vehicle_b.W / 2.0)
+    rotated_box_b = rotate(box_b, theta_b, origin='center', use_radians=True)
+
+    if rotated_box_a.intersects(rotated_box_b):
+        collision = True
+    else:
+        collision = False
+
+    return collision
 
 
 def vehicles_within_range(other_x0, amb_x0, distance_from_ambulance):
