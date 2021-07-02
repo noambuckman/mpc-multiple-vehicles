@@ -242,7 +242,7 @@ def run_iterative_best_response(other_vehicles,
         actual_t, all_other_u_mpc, all_other_x_executed, all_other_u_executed, xothers_actual, uothers_actual, = update_sim_states(
             othervehs_ibr_info, all_other_x_ibr_g, params, actual_t, log_dir, i_mpc, xothers_actual, uothers_actual)
 
-        collision = check_collisions(all_other_vehicles, all_other_x_executed)
+        collision = check_collisions(other_vehicles, all_other_x_executed)
         if collision:
             out_file.close()
             print("Simulation Ended Early due to collision!  Runtime: %s" %
