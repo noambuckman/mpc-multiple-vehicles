@@ -279,21 +279,23 @@ def check_collisions(all_other_vehicles: List[Vehicle], all_other_x_executed: Li
 
 
 def check_collision(vehicle_a: Vehicle, vehicle_b: Vehicle, X_a: np.array, X_b: np.array) -> bool:
-    x_a, y_a, theta_a = X_a[0, :], X_a[1, :], X_a[2, :]
-    x_b, y_b, theta_b = X_b[0, :], X_b[1, :], X_b[2, :]
+    for t in range(X_a.shape[1]):
+        x_a, y_a, theta_a = X_a[0, t], X_a[1, t], X_a[2, t]
+        x_b, y_b, theta_b = X_b[0, t], X_b[1, t], X_b[2, t]
+        try:
+            box_a = box(x_a - vehicle_a.L / 2.0, y_a - vehicle_a.W / 2.0, x_a + vehicle_a.L / 2.0,
+                        y_a + vehicle_a.W / 2.0)
+        except ValueError:
+            raise Exception("ValueError:", (x_a, y_a, theta_a, vehicle_a.L, vehicle_a.W))
+        rotated_box_a = rotate(box_a, theta_a, origin='center', use_radians=True)
 
-    box_a = box(x_a - vehicle_a.L / 2.0, y_a - vehicle_a.W / 2.0, x_a + vehicle_a.L / 2.0, y_a + vehicle_a.W / 2.0)
-    rotated_box_a = rotate(box_a, theta_a, origin='center', use_radians=True)
+        box_b = box(x_b - vehicle_b.L / 2.0, y_b - vehicle_b.W / 2.0, x_b + vehicle_b.L / 2.0, y_b + vehicle_b.W / 2.0)
+        rotated_box_b = rotate(box_b, theta_b, origin='center', use_radians=True)
 
-    box_b = box(x_b - vehicle_b.L / 2.0, y_b - vehicle_b.W / 2.0, x_b + vehicle_b.L / 2.0, y_b + vehicle_b.W / 2.0)
-    rotated_box_b = rotate(box_b, theta_b, origin='center', use_radians=True)
+        if rotated_box_a.intersects(rotated_box_b):
+            return True
 
-    if rotated_box_a.intersects(rotated_box_b):
-        collision = True
-    else:
-        collision = False
-
-    return collision
+    return False
 
 
 def vehicles_within_range(other_x0, amb_x0, distance_from_ambulance):
