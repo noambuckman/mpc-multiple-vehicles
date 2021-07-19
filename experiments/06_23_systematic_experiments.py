@@ -31,11 +31,18 @@ def run_simulation(log_dir, params):
                                                   average_velocity=initial_velocity,
                                                   position_random_seed=params["seed"])
     except Exception:
-        print("Too many vehicles?")
+        print("Exception: Too many vehicles?")
         with open(log_dir + "params.json", "w") as fp:
             json.dump(params, fp, indent=2)
         return None
     # Create the vehicles and initial positions
+
+    if len(position_list) != params["n_other"] + 1:
+        print("Returned not enough vehicles")
+        with open(log_dir + "params.json", "w") as fp:
+            json.dump(params, fp, indent=2)
+        return None
+
     (_, _, all_other_vehicles, all_other_x0) = helper.initialize_cars_from_positions(params["N"],
                                                                                      params["dt"],
                                                                                      world,
