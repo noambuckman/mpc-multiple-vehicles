@@ -501,8 +501,7 @@ def poission_positions(cars_per_hour: float,
     rng = np.random.default_rng(position_random_seed)
     n_cars_arrival_per_dt = rng.poisson(cars_per_dt, int(total_dt))  # number cars arriving at each dt
     # Exclude arrivals after we have achieved our desired number of vehicles
-    n_cars_arrival_per_dt = n_cars_arrival_per_dt[:np.argmax(np.cumsum(n_cars_arrival_per_dt) > total_number_cars)]
-
+    n_cars_arrival_per_dt = n_cars_arrival_per_dt[:np.argmax(np.cumsum(n_cars_arrival_per_dt) > total_number_cars) + 1]
     lane_ids = list(range(n_lanes))
     lane_car_positions = {}
     for lane in lane_ids:
