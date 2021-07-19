@@ -118,7 +118,19 @@ def plot_multiple_cars(k,
                        xlim=None,
                        vid_track: int = 0,
                        all_other_vehicles: List[Vehicle] = None):
-    ''' This only has info from vehicle but not any individual ones'''
+    ''' This only has info from vehicle but not any individual ones
+    vehicle: [Deprecated] 
+    xamb_plot:  [Deprecated]
+    xothers_plot:  This should be the trajectories of ALL vehicles
+    folder: output folder for videos/imgs
+    car_plot_shape:  Ellipse, Image
+    camera_positions: List of camera positions
+    car_labels:  Labels for annotating vehicles
+    car_colors: List of car colors
+    xlim:  Overriding the xlimits of the plot
+    vid_track:  ID of vehicle to track with camera (used if camera_positions = None)
+    all_other_vehicles: List of all vehicles
+    '''
     assert xamb_plot or all_other_vehicles  # we either need an ambulance or the info about other vehicles
 
     if camera_positions is None:
@@ -126,7 +138,8 @@ def plot_multiple_cars(k,
             camera_positions = [xamb_plot[0, 0] + t * vehicle.max_v * vehicle.dt for t in range(xamb_plot.shape[1])]
         else:
             camera_positions = [
-                xothers_plot[vid_track][0, 0] + t * vehicle.max_v * all_other_vehicles[vid_track].dt
+                xothers_plot[vid_track][0, 0] +
+                t * all_other_vehicles[vid_track].max_v * all_other_vehicles[vid_track].dt
                 for t in range(xothers_plot[vid_track].shape[1])
             ]
 
@@ -153,24 +166,29 @@ def plot_multiple_cars(k,
 
     add_lanes(ax, world)
     add_grass(ax, world)
+
     if car_plot_shape.lower() not in ["ellipse", "both", "ellipses", "image"]:
         raise Exception("Incorrect car_plot_shape")
+
     if car_plot_shape.lower() == "ellipse" or car_plot_shape.lower() == "both" or car_plot_shape.lower() == "ellipses":
         # Plot the ambulance as circles
-
-        x, y, phi = xamb_plot[0, k], xamb_plot[1, k], xamb_plot[2, k]
-        a, b = vehicle.ax, vehicle.by
-        ellipse_patch = patches.Ellipse((x, y), 2 * a, 2 * b, angle=np.rad2deg(phi), fill=False, color='black')
-        ax.add_patch(ellipse_patch)
+        if xamb_plot is not None:
+            x, y, phi = xamb_plot[0, k], xamb_plot[1, k], xamb_plot[2, k]
+            a, b = vehicle.ax, vehicle.by
+            ellipse_patch = patches.Ellipse((x, y), 2 * a, 2 * b, angle=np.rad2deg(phi), fill=False, color='black')
+            ax.add_patch(ellipse_patch)
 
         if car_labels is not None:
             ax.annotate('R', xy=(xamb_plot[0, k:k + 1], xamb_plot[1, k:k + 1]))
 
         for i in range(len(xothers_plot)):
+
             x1_plot = xothers_plot[i]
+            vehicle = all_other_vehicles[i]
             if 0.9 * axlim_minx <= x1_plot[0, k] <= 1.1 * axlim_maxx:
                 x, y, phi = x1_plot[0, k], x1_plot[1, k], x1_plot[2, k]
                 a, b = vehicle.ax, vehicle.by
+
                 if car_colors is None:
                     color = get_car_color(i)
                 else:

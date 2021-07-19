@@ -513,7 +513,7 @@ def poission_positions(cars_per_hour: float,
 
     si = 0
     while np.sum([len(lane_car_positions[lane]) for lane in lane_ids]) < total_number_cars:
-        if si >= 2 * len(n_cars_arrival_per_dt):
+        if si >= 10 * len(n_cars_arrival_per_dt):
             raise Exception("Too many vehicles in the system ??")
 
         # Add incoming cars to the system

@@ -25,11 +25,16 @@ def run_simulation(log_dir, params):
     # Create the vehicle placement based on a Poisson distribution
     initial_velocity = 25 * 0.447
 
-    position_list = helper.poission_positions(cars_per_hour=params["car_density"],
-                                              total_number_cars=params["n_other"] + 1,
-                                              average_velocity=initial_velocity,
-                                              position_random_seed=params["seed"])
-
+    try:
+        position_list = helper.poission_positions(cars_per_hour=params["car_density"],
+                                                  total_number_cars=params["n_other"] + 1,
+                                                  average_velocity=initial_velocity,
+                                                  position_random_seed=params["seed"])
+    except Exception:
+        print("Too many vehicles?")
+        with open(log_dir + "params.json", "w") as fp:
+            json.dump(params, fp, indent=2)
+        return None
     # Create the vehicles and initial positions
     (_, _, all_other_vehicles, all_other_x0) = helper.initialize_cars_from_positions(params["N"],
                                                                                      params["dt"],
@@ -126,7 +131,8 @@ if __name__ == "__main__":
 
         # Run the simulation with current sim params
         all_trajectories = run_simulation(log_dir, current_sim_params)
-
+        if all_trajectories is None:  #We got an exception
+            continue
         # Save the results within the log_dir
         np.save(open(log_dir + "/trajectories.npy", 'wb'), all_trajectories)
 
