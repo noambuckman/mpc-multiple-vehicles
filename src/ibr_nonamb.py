@@ -382,7 +382,7 @@ if __name__ == "__main__":
                                                               params["n_other"] + 1,
                                                               params["n_lanes"],
                                                               MAX_VELOCITY,
-                                                              VEHICLE_LENGTH,
+                                                              2 * VEHICLE_LENGTH,
                                                               position_random_seed=params["seed"])
         position_list = initial_vehicle_positions[:params["n_other"] + 1]
 

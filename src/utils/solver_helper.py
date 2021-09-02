@@ -3,7 +3,7 @@ import random
 import copy as cp
 import multiprocessing, functools
 from collections import deque
-
+from typing import List, Tuple
 import src.multiagent_mpc as mpc
 import src.vehicle as vehicle
 
@@ -473,7 +473,7 @@ def poission_positions(cars_per_hour: float,
                        n_lanes: int = 2,
                        average_velocity: float = 25 * 0.447,
                        intervehicle_spacing: float = 9.0,
-                       position_random_seed: int = None):
+                       position_random_seed: int = None) -> List[Tuple[int, float]]:
     '''Description:  Generate the initial spacing of vehicles based on a desired vehicle density
     Simulate a poisson queuing process where vehicles arrive according to a poisson distribution
     and are assigned lanes.  Single arrival queue, n-queue departures.
