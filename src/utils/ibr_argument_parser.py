@@ -70,7 +70,7 @@ class IBRParser(ArgumentParser):
         # MPC Solver & Cost Settings
         self.add_argument('--default-n-warm-starts',
                           type=int,
-                          default=15,
+                          default=16,
                           help="Number of warm starts it will try when solving the MPC")
         self.add_argument('--k-max-slack',
                           type=float,
@@ -93,6 +93,8 @@ class IBRParser(ArgumentParser):
         self.add_argument('--k-lat', type=float, default=None, help="lateral cost for vehicles")
 
         self.add_argument('--k-politeness', type=float, default=None, help="parameter for IDM")
+
+        self.add_argument('--safety-constraint', type=str2bool, default=False, help="Stopping constraint")
 
 
 def str2bool(v):

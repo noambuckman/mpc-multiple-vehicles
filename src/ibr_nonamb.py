@@ -1,4 +1,3 @@
-from src.vehicle import Vehicle
 import time, datetime, os, pickle, psutil, json, string, random
 import numpy as np
 import copy as cp
@@ -6,7 +5,9 @@ from contextlib import redirect_stdout
 from typing import List
 from shapely.geometry import box
 from shapely.affinity import rotate
+
 from src.traffic_world import TrafficWorld
+from src.vehicle import Vehicle
 from src.multiagent_mpc import load_state, save_state
 from src.warm_starts import generate_warm_starts
 from src.utils.ibr_argument_parser import IBRParser
@@ -112,7 +113,8 @@ def run_iterative_best_response(other_vehicles,
         for i_rounds_ibr in range(params["n_ibr"]):
             print("MPC %d, IBR %d / %d" % (i_mpc, i_rounds_ibr, params["n_ibr"] - 1))
             # Solve the Best Response for the other vehicles
-            ## TODO:  Vehicle selections for best response calculation. default = All vehicles
+
+            # TODO:  Vehicle selections for best response calculation. default = All vehicles
             vehicles_index_best_responders = range(len(other_vehicles))
 
             for response_i in vehicles_index_best_responders:
@@ -150,8 +152,6 @@ def run_iterative_best_response(other_vehicles,
                         cntrld_vehicle_info = [
                             othervehs_ibr_info[i] for i in range(len(othervehs_ibr_info)) if i in cntrld_i
                         ]
-                    # For now ambulance is always included
-                    # cntrld_vehicle_info += [amb_ibr_info]
 
                     veh_idxs_in_mpc = [idx for idx in veh_idxs_in_mpc if idx not in cntrld_i]
 
@@ -191,13 +191,15 @@ def run_iterative_best_response(other_vehicles,
                     ipopt_params = {"print_level": params["print_level"]}
 
                     with redirect_stdout(out_file):
+                        print("MPC %d, IBR %d / %d" % (i_mpc, i_rounds_ibr, params["n_ibr"] - 1))
                         print("....# Cntrld Vehicles: %d # Non-Response: %d " %
                               (len(cntrld_vehicle_info), len(nonresponse_veh_info)))
                         solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, key_ibr, debug_list = helper.solve_warm_starts(
                             warmstarts_subset, response_veh_info, world, solver_params, params, ipopt_params,
                             nonresponse_veh_info, cntrld_vehicle_info, debug_flag)
                     end_ipopt_time = time.time()
-                    if max_slack_ibr <= params["k_max_slack"]:
+
+                    if max_slack_ibr <= params["k_max_slack"] and max_slack_ibr <= np.infty:
                         othervehs_ibr_info[response_i].update_state(u_ibr, x_ibr, x_des_ibr)
                         print("......Solved.  veh: %02d | mpc: %d | ibr: %d | solver time: %0.1f s" %
                               (response_i, i_mpc, i_rounds_ibr, end_ipopt_time - start_ipopt_time))
@@ -212,32 +214,43 @@ def run_iterative_best_response(other_vehicles,
                             print("Re-solving without ambulance")
                             solve_number = 0
                             solver_params["solve_amb"] = False
+
                 if solve_number == params["k_max_solve_number"]:
+                    if i_rounds_ibr > 0:
+                        u_ibr, x_ibr, x_des_ibr = warm_starts['previous_ibr']
+                    else:
+                        u_ibr, x_ibr, x_des_ibr = warm_starts['previous_mpc_hold']
 
-                    #TODO: Maybe this should be just drive forward?
-                    x_ibr, x_des_ibr, u_ibr = warm_starts['none none']  #take foot off of steering wheel and brakes
+                    othervehs_ibr_info[response_i].update_state(u_ibr, x_ibr, x_des_ibr)
                     print(
-                        "Reached maximum number of re-solves @ Veh %02d MPC Rd %d IBR %d.   Max Slack = %.05f > thresh %.05f"
-                        % (response_i, i_mpc, i_rounds_ibr, max_slack_ibr, params["k_max_slack"]))
-                if params["save_ibr"]:
-                    other_x_ibr_temp = [veh.x for veh in othervehs_ibr_info]
-                    other_u_ibr_temp = [veh.u for veh in othervehs_ibr_info]
-                    other_xd_ibr_temp = [veh.xd for veh in othervehs_ibr_info]
+                        "......Reached max # resolves. veh: %02d | mpc: %d | ibr: %d | Slack %.05f > thresh %.05f  | solver time: %0.1f"
+                        % (response_i, i_mpc, i_rounds_ibr, max_slack_ibr, params["k_max_slack"],
+                           end_ipopt_time - start_ipopt_time))
 
-                    save_state(log_dir + "data/" + "ibr_m%03di%03da%03d" % (i_mpc, i_rounds_ibr, response_i), None,
-                               None, None, other_x_ibr_temp, other_u_ibr_temp, other_xd_ibr_temp)
+                if params["save_ibr"]:
+                    other_x_ibr_temp = np.array([veh.x for veh in othervehs_ibr_info])
+                    other_u_ibr_temp = np.array([veh.u for veh in othervehs_ibr_info])
+                    other_xd_ibr_temp = np.array([veh.xd for veh in othervehs_ibr_info])
+                    file_prefix = log_dir + "data/" + "ibr_m%03di%03da%03d" % (i_mpc, i_rounds_ibr, response_i)
+                    np.save(open(file_prefix + "x.npy", 'wb'), other_x_ibr_temp)
+                    np.save(open(file_prefix + "u.npy", 'wb'), other_u_ibr_temp)
+                    np.save(open(file_prefix + "xd.npy", 'wb'), other_xd_ibr_temp)
 
             # TODO: Scale the units to a region of interest so that xj is always in reference to xi
-            other_x_ibr_temp = [veh.x for veh in othervehs_ibr_info]
-            other_u_ibr_temp = [veh.u for veh in othervehs_ibr_info]
-            other_xd_ibr_temp = [veh.xd for veh in othervehs_ibr_info]
+            other_x_ibr_temp = np.array([veh.x for veh in othervehs_ibr_info])
+            other_u_ibr_temp = np.array([veh.u for veh in othervehs_ibr_info])
+            other_xd_ibr_temp = np.array([veh.xd for veh in othervehs_ibr_info])
 
             #TODO: Convert back to global units
             all_other_x_ibr_g = [x for x in other_x_ibr_temp]
 
             if params["save_ibr"]:
-                save_state(log_dir + "data/" + "ibr_m%03di%03d" % (i_mpc, i_rounds_ibr), None, None, None,
-                           all_other_x_ibr_g, other_u_ibr_temp, other_xd_ibr_temp)
+                file_prefix = log_dir + "data/" + "ibr_m%03di%03d" % (i_mpc, i_rounds_ibr)
+                np.save(open(file_prefix + "x.npy", 'wb'), other_x_ibr_temp)
+                np.save(open(file_prefix + "u.npy", 'wb'), other_u_ibr_temp)
+                np.save(open(file_prefix + "xd.npy", 'wb'), other_xd_ibr_temp)
+                # save_state(log_dir + "data/" + "ibr_m%03di%03d" % (i_mpc, i_rounds_ibr), None, None, None,
+                #            all_other_x_ibr_g, other_u_ibr_temp, other_xd_ibr_temp)
 
         actual_t, all_other_u_mpc, all_other_x_executed, all_other_u_executed, xothers_actual, uothers_actual, = update_sim_states(
             othervehs_ibr_info, all_other_x_ibr_g, params, actual_t, log_dir, i_mpc, xothers_actual, uothers_actual)
@@ -247,13 +260,13 @@ def run_iterative_best_response(other_vehicles,
             out_file.close()
             print("Simulation Ended Early due to collision!  Runtime: %s" %
                   (datetime.timedelta(seconds=(time.time() - t_start_time))))
-            return xothers_actual
+            return xothers_actual, uothers_actual
 
     out_file.close()
 
     print("Simulation Done!  Runtime: %s" % (datetime.timedelta(seconds=(time.time() - t_start_time))))
 
-    return xothers_actual
+    return xothers_actual, uothers_actual
 
 
 def get_collision_pairs(all_other_vehicles: List[Vehicle], all_other_x_executed: List[np.array]) -> List[tuple]:
@@ -282,11 +295,7 @@ def check_collision(vehicle_a: Vehicle, vehicle_b: Vehicle, X_a: np.array, X_b: 
     for t in range(X_a.shape[1]):
         x_a, y_a, theta_a = X_a[0, t], X_a[1, t], X_a[2, t]
         x_b, y_b, theta_b = X_b[0, t], X_b[1, t], X_b[2, t]
-        try:
-            box_a = box(x_a - vehicle_a.L / 2.0, y_a - vehicle_a.W / 2.0, x_a + vehicle_a.L / 2.0,
-                        y_a + vehicle_a.W / 2.0)
-        except ValueError:
-            raise Exception("ValueError:", (x_a, y_a, theta_a, vehicle_a.L, vehicle_a.W))
+        box_a = box(x_a - vehicle_a.L / 2.0, y_a - vehicle_a.W / 2.0, x_a + vehicle_a.L / 2.0, y_a + vehicle_a.W / 2.0)
         rotated_box_a = rotate(box_a, theta_a, origin='center', use_radians=True)
 
         box_b = box(x_b - vehicle_b.L / 2.0, y_b - vehicle_b.W / 2.0, x_b + vehicle_b.L / 2.0, y_b + vehicle_b.W / 2.0)
@@ -351,9 +360,10 @@ if __name__ == "__main__":
     parser = IBRParser()
     args = parser.parse_args()
     params = vars(args)
-
+    # args.load_log_dir = "/home/nbuckman/mpc_results/investigation/h777-4664-20211031-204805/"
     if args.load_log_dir is None:
         # Generate directory structure and log name
+        print("New stuff")
         params["start_time_string"] = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         alpha_num = string.ascii_lowercase[:8] + string.digits
         if params["log_subdir"] is None:
@@ -418,12 +428,12 @@ if __name__ == "__main__":
         with open(args.load_log_dir + "params.json", "rb") as fp:
             params = json.load(fp)
         i_mpc_start = args.mpc_start_iteration
-        all_other_vehicles = [
-            pickle.load(open(log_dir + "data/mpcother%03d.p" % i, "rb")) for i in range(params["n_other"])
-        ]
-        world = pickle.load(open(log_dir + "data/world.p", "rb"))
+        all_other_vehicles = pickle.load(open(log_dir + "other_vehicles.p", "rb"))
+        world = pickle.load(open(log_dir + "world.p", "rb"))
         params["pid"] = os.getpid()
-
+        all_trajectories = np.load(open(log_dir + "trajectories.npy", 'rb'), allow_pickle=True)
+        all_other_x0 = [all_trajectories[i, :, 0] for i in range(all_trajectories.shape[0])]
+        args.load_log_dir = False
         # We need to get initial conditions for the iterative best response
 
     # Initialize the state and control arrays
@@ -433,8 +443,11 @@ if __name__ == "__main__":
     with open(log_dir + "params.json", "w") as fp:
         json.dump(params, fp, indent=2)
 
-    xothers_actual = run_iterative_best_response(all_other_vehicles, world, all_other_x0, params, log_dir,
-                                                 args.load_log_dir, i_mpc_start)
-    all_trajectories = xothers_actual
-    all_trajectories = np.array(all_trajectories)
+    xothers_actual, uothers_actual = run_iterative_best_response(all_other_vehicles, world, all_other_x0, params,
+                                                                 log_dir, args.load_log_dir, i_mpc_start)
+
+    all_trajectories = np.array(xothers_actual)
+    all_control = np.array(uothers_actual)
+
     np.save(open(log_dir + "/trajectories.npy", 'wb'), all_trajectories)
+    np.save(open(log_dir + "/controls.npy", 'wb'), all_control)

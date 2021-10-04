@@ -191,22 +191,22 @@ def generate_warm_starts(vehicle,
     _, x_ux_warm_profiles = generate_warm_x(vehicle, world, x0, warm_velocity)
     ux_warm_profiles.update(x_ux_warm_profiles)
 
-    if (u_mpc_previous is not None):  # TODO: Try out the controls that were previous executed
-        u_warm_profiles["previous_mpc"] = np.concatenate(
+    if u_mpc_previous is not None:  # Try out the controls that were previous executed
+        u_warm_profiles["previous_mpc_hold"] = np.concatenate(
             (
                 u_mpc_previous[:, params["number_ctrl_pts_executed"]:],
                 np.tile(u_mpc_previous[:, -1:], (1, params["number_ctrl_pts_executed"])),
             ),
             axis=1,
         )
-        x_warm, x_des_warm = vehicle.forward_simulate_all(x0.reshape(6, 1), u_warm_profiles["previous_mpc"])
-        ux_warm_profiles["previous_mpc"] = [
-            u_warm_profiles["previous_mpc"],
+        x_warm, x_des_warm = vehicle.forward_simulate_all(x0.reshape(6, 1), u_warm_profiles["previous_mpc_hold"])
+        ux_warm_profiles["previous_mpc_hold"] = [
+            u_warm_profiles["previous_mpc_hold"],
             x_warm,
             x_des_warm,
         ]
 
-    if (u_ibr_previous is not None):  # Try out the controller from the previous round of IBR
+    if u_ibr_previous is not None:  # Try out the controller from the previous round of IBR
         u_warm_profiles["previous_ibr"] = u_ibr_previous
         x_warm, x_des_warm = vehicle.forward_simulate_all(x0.reshape(6, 1), u_warm_profiles["previous_ibr"])
         ux_warm_profiles["previous_ibr"] = [

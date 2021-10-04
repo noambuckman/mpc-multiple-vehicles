@@ -82,6 +82,9 @@ class MultiMPC(object):
         self.ego_veh.generate_costs(self.x_ego, self.u_ego, self.xd_ego)
         self.response_costs, self.response_costs_list, self.response_cost_titles = self.ego_veh.total_cost()
 
+        if params is None:
+            params = {}
+
         if "collision_avoidance_checking_distance" not in params:
             print("No collision avoidance checking distance")
             params["collision_avoidance_checking_distance"] = 400
@@ -269,6 +272,22 @@ class MultiMPC(object):
 
                     self.slack_cost += (self.top_wall_slack_c[ic][0, k]**2 + self.bottom_wall_slack_c[ic][0, k]**2)
 
+        # Add velocity based constraints
+        if "safety_constraint" in params and params["safety_constraint"] == True:
+            max_deceleration = abs(self.ego_veh.max_deceleration)
+            if len(self.x_ctrld) > 0:
+                self.generate_circles_stopping_constraint(self.x_ego, self.x_ctrld, self.ego_veh.L, self.ego_veh.W,
+                                                          max_deceleration)
+
+                for jc in range(len(self.x_ctrld)):
+                    self.generate_circles_stopping_constraint(self.ctrld[jc],
+                                                              self.x_ctrld[:jc] + self.x_ctrld[jc + 1:] + self.x_other,
+                                                              self.ego_veh.L, self.ego_veh.W, max_deceleration)
+
+            if len(self.x_other) > 0:
+                self.generate_circles_stopping_constraint(self.x_ego, self.x_other, self.ego_veh.L, self.ego_veh.W,
+                                                          max_deceleration)
+
         # Total optimization costs
         self.total_svo_cost = (self.response_svo_cost + self.other_svo_cost + self.k_slack * self.slack_cost +
                                self.k_CA * self.collision_cost)
@@ -382,6 +401,79 @@ class MultiMPC(object):
             dX = np.stack((dx, dy), axis=2)
             prod = cas.mtimes([dX.T, R_o.T, M, R_o, dX])
 
+    def generate_corners_stopping_constraint(self,
+                                             x_ego,
+                                             x_others,
+                                             L,
+                                             W,
+                                             max_deceleration=0.01,
+                                             min_buffer_distance=0.001):
+        ''' We assume all vehicles have same length and width.'''
+        N = x_ego.shape[1]
+
+        alpha_i = max_deceleration  #we may need this to be > 0
+        alpha_j = max_deceleration
+
+        for k in range(N):
+            xi = x_ego[:, k]
+            ego_corners = get_vehicle_corners(xi, L, W)
+
+            v_i = cas.vertcat(xi[4] * cas.cos(xi[2]), xi[4] * cas.sin(xi[2]))
+
+            for j in range(len(x_others)):
+                xj = x_others[j][:, k]
+                ado_corners = get_vehicle_corners(xj, L, W)
+                v_j = cas.vertcat(xj[4] * cas.cos(xj[2]), xj[4] * cas.sin(xj[2]))
+
+                for xy_i in ego_corners:
+                    for xy_j in ado_corners:
+                        delta_p_ij = xy_i - xy_j
+                        delta_v_ij = v_i - v_j
+
+                        rel_dist_mag = cas.sqrt(delta_p_ij.T @ delta_p_ij)
+
+                        self.opti.subject_to(delta_p_ij.T @ delta_v_ij / rel_dist_mag +
+                                             cas.sqrt(2 * (alpha_i + alpha_j) *
+                                                      (rel_dist_mag - min_buffer_distance)) >= 0)
+
+    def generate_circles_stopping_constraint(self,
+                                             x_ego,
+                                             x_others,
+                                             L,
+                                             W,
+                                             max_deceleration=0.01,
+                                             min_buffer_distance=0.001):
+        ''' We assume all vehicles have same length and width.'''
+        N = x_ego.shape[1]
+
+        alpha_i = max_deceleration  #we may need this to be > 0
+        alpha_j = max_deceleration
+
+        for k in range(N):
+            xi = x_ego[:, k]
+            ego_centers, ego_radius = get_vehicle_circles(xi)
+
+            v_i = cas.vertcat(xi[4] * cas.cos(xi[2]), xi[4] * cas.sin(xi[2]))
+
+            for j in range(len(x_others)):
+                xj = x_others[j][:, k]
+                #TODO Make function to generate inscribing circles
+                ado_centers, ado_radius = get_vehicle_circles(xj)
+                v_j = cas.vertcat(xj[4] * cas.cos(xj[2]), xj[4] * cas.sin(xj[2]))
+
+                min_distance = min_buffer_distance + ego_radius + ado_radius
+                for xy_i in ego_centers:
+                    for xy_j in ado_centers:
+                        delta_p_ij = xy_i - xy_j
+                        delta_v_ij = v_i - v_j
+
+                        rel_dist_mag = cas.sqrt(delta_p_ij.T @ delta_p_ij)
+                        self.opti.subject_to(delta_p_ij.T @ delta_p_ij >= min_distance**
+                                             2)  # added to help prevent large gradients in next constraint
+                        self.opti.subject_to(
+                            delta_p_ij.T @ delta_v_ij / rel_dist_mag + cas.sqrt(2 * (alpha_i + alpha_j) *
+                                                                                (rel_dist_mag - min_distance)) >= 0)
+
     def generate_stopping_constraint_ttc(self, x_opt, xcntrld_opt, xothers_opt, min_time_to_collision=3.0, k_ttc=0.0):
         """ Add a velocity constraint on the ego vehicle so it doesn't go too fast behind a lead vehicle.
             Constrains the vehicle so that the time to collision is always less than time_to_collision seconds
@@ -466,6 +558,94 @@ class MultiMPC(object):
 
                         self.opti.subject_to(dot_product <= (dxctrl**2 + dyctrl**2) /
                                              (0.00000001 + min_time_to_collision))
+
+        # def generate_stopping_constraint_distance(self, x_opt, xcntrld_opt, xothers_opt, min_buffer_distance=0.01, k_ttc=0.0):
+        #         """ Add a velocity constraint on the ego vehicle so it doesn't go too fast behind a lead vehicle.
+        #             Constrains the vehicle so that the time to collision is always less than time_to_collision seconds
+        #             assuming that both ego and ado vehicle mantain constant velocity
+        #         """
+
+        # N = x_opt.shape[1]
+        # car_length = self.ego_veh.L
+        # car_width = self.ego_veh.W
+        # for k in range(N):
+        #     x_ego = x_opt[0, k]
+        #     y_ego = x_opt[1, k]
+        #     phi_ego = x_opt[2, k]
+        #     v_ego = x_opt[4, k]
+
+        #     for j in range(len(xcntrld_opt)):
+        #         ## Safety constraint between ego + cntrld vehicles
+        #         x_amb = xcntrld_opt[j][0, k]
+        #         y_amb = xcntrld_opt[j][1, k]
+        #         phi_amb = xcntrld_opt[j][2, k]
+        #         v_amb = xcntrld_opt[j][4, k] - 2 * self.ego_veh.max_v_u
+
+        #         delta_p_ij = cas.vertcat(x_amb, y_amb) - cas.vertcat(x_ego, y_ego)
+        #         delta_v_ij = cas.vertcat(v_amb * cas.cos(phi_amb), v_amb * cas.sin(phi_amb)) - cas.vertcat(v_ego * cas.cos(phi_ego), v_ego * cas.sin(phi_ego))
+        #         alpha_i = self.ego_veh.max_v_u
+        #         alpha_j = self.ego_veh.max_v_u # assume everyone has the same acceleration/deceleration
+
+        #         self.opti.subject_to(- delta_p_ij.T @ delta_v_ij / (delta_p_ij.T @ delta_p_ij) <= cas.sqrt(2 * (alpha_i + alpha_j) * ((delta_p_ij.T @ delta_p_ij) - min_buffer_distance))
+
+        #         dxegoamb = (x_amb - x_ego) - car_length
+        #         dyegoamb = (y_amb - y_ego) - car_width
+        #         dot_product = (v_ego_components[0] - v_amb_components[0]) * dxegoamb + (v_ego_components[1] -
+        #                                                                                 v_amb_components[1]) * dyegoamb
+        #         positive_dot_product = cas.max(
+        #             dot_product,
+        #             0)  # if negative, negative_dot_product will be 0 so time_to_collision is very very large
+
+        #         time_to_collision = (dxegoamb**2 + dyegoamb**2) / (dot_product + 0.000001)
+        #         time_to_collision_cost += k_ttc * 1 / time_to_collision**2
+        #         self.opti.subject_to(dot_product <= (dxegoamb**2 + dyegoamb**2) / (0.000001 + min_time_to_collision))
+
+        #     for j in range(len(xothers_opt)):
+        #         x_j = xothers_opt[j][0, k]
+        #         y_j = xothers_opt[j][1, k]
+        #         phi_j = xothers_opt[j][2, k]
+        #         v_j = xothers_opt[j][4, k] - 2 * self.ego_veh.max_v_u
+
+        #         #### Add constraint between ego and j
+        #         dxego = (x_j - x_ego) - car_length
+        #         dyego = (y_j - y_ego) - car_width
+
+        #         v_j_components = (v_j * cas.cos(phi_j), v_j * cas.sin(phi_j))
+        #         dot_product = (v_ego_components[0] - v_j_components[0]) * dxego + (v_ego_components[1] -
+        #                                                                            v_j_components[1]) * dyego
+        #         positive_dot_product = cas.max(
+        #             dot_product,
+        #             0)  # if negative, negative_dot_product will be 0 so time_to_collision is very very large
+        #         time_to_collision = (dxego**2 + dyego**2) / (positive_dot_product + 0.000001)
+        #         time_to_collision_cost += k_ttc * 1 / time_to_collision**2
+        #         self.opti.subject_to(dot_product <= (dxego**2 + dyego**2) / (0.000001 + min_time_to_collision))
+
+        #         #### Add constraint betweem cntrld vehicles and j
+        #         add_constraint_for_cntrld = False
+        #         if add_constraint_for_cntrld:
+        #             for jc in range(len(xcntrld_opt)):
+        #                 x_ctrl = xcntrld_opt[jc][0, k]
+        #                 y_ctrl = xcntrld_opt[jc][1, k]
+        #                 phi_ctrl = xcntrld_opt[jc][2, k]
+        #                 v_ctrl = xcntrld_opt[jc][4, k]
+        #                 v_ctrl_components = (
+        #                     v_ctrl * cas.cos(phi_ctrl),
+        #                     v_ctrl * cas.sin(phi_ctrl),
+        #                 )
+
+        #                 dxctrl = (x_j - x_ctrl) - car_length
+        #                 dyctrl = (y_j - y_ctrl) - car_width
+
+        #                 dot_product = (v_ctrl_components[0] - v_j_components[0]) * dxctrl + (v_ctrl_components[1] -
+        #                                                                                      v_j_components[1]) * dyctrl
+        #                 positive_dot_product = cas.max(
+        #                     dot_product,
+        #                     0)  # if negative, negative_dot_product will be 0 so time_to_collision is very very large
+        #                 time_to_collision = (dxctrl**2 + dyctrl**2) / (positive_dot_product + 0.000001)
+        #                 time_to_collision_cost += k_ttc * 1 / time_to_collision**2
+
+        #                 self.opti.subject_to(dot_product <= (dxctrl**2 + dyctrl**2) /
+        #                                      (0.00000001 + min_time_to_collision))
 
     def generate_stopping_constraint(self, x_opt, xamb_opt, xothers_opt, solve_amb, safety_buffer=0.50):
         """ Add a velocity constraint on the ego vehicle so it doesn't go too fast behind a lead vehicle.
@@ -646,3 +826,77 @@ def load_costs_int(i):
     total_svo_cost = np.load("%03dtotal_svo_cost.npy" % i, allow_pickle=False)
 
     return car1_costs_list, amb_costs_list, svo_cost, other_svo_cost, total_svo_cost
+
+
+def get_vehicle_corners(x_state, length, width):
+    ''' List of x,y points corresponding to corner pts of car'''
+
+    translation = x_state[0:2]
+
+    phi_c = x_state[2]
+    rotation_matrix_ego = cas.vertcat(
+        cas.horzcat(cas.cos(phi_c), -cas.sin(phi_c)),
+        cas.horzcat(cas.sin(phi_c), cas.cos(phi_c)),
+    )
+
+    corners = [(length / 2.0, width / 2.0), (-length / 2.0, width / 2.0), (-length / 2.0, -width / 2.0),
+               (length / 2.0, -width / 2.0)]
+    corners_array = [cas.vertcat(t[0], t[1]) for t in corners]
+    list_of_xy_corners = []
+    for xy in corners_array:
+        xy_rotated = cas.mtimes(rotation_matrix_ego, xy)
+        xy_translated = xy_rotated + translation
+        list_of_xy_corners += [xy_translated]
+
+    return list_of_xy_corners
+
+
+# def get_vehicle_circles(x_state, length, width):
+#     ''' List of x,y points corresponding to corner pts of car'''
+
+#     translation = x_state[0:2]
+
+#     phi_c = x_state[2]
+#     rotation_matrix_ego = cas.vertcat(
+#         cas.horzcat(cas.cos(phi_c), -cas.sin(phi_c)),
+#         cas.horzcat(cas.sin(phi_c), cas.cos(phi_c)),
+#     )
+
+#     circle_centers = [(length / 4.0, 0), (-length / 4.0, 0)]
+#     centers_array = [cas.vertcat(t[0], t[1]) for t in circle_centers]
+#     list_of_xy_centers = []
+#     for xy in centers_array:
+#         xy_rotated = cas.mtimes(rotation_matrix_ego, xy)
+#         xy_translated = xy_rotated + translation
+#         list_of_xy_centers += [xy_translated]
+
+#     radius = np.sqrt((length / 4)**2 + (width / 2)**2)  # analytic solution to minim. circumscribed circle
+
+#     return list_of_xy_centers, radius
+
+
+def get_vehicle_circles(x_state):
+    ''' Circles that circumscribe the collision ellipse generated earlier'''
+    ## Hardcoded for length L, W, ideally should be solved for at run time
+    dx = 1.028
+    r = 1.878
+
+    translation = x_state[0:2]
+
+    phi_c = x_state[2]
+    rotation_matrix_ego = cas.vertcat(
+        cas.horzcat(cas.cos(phi_c), -cas.sin(phi_c)),
+        cas.horzcat(cas.sin(phi_c), cas.cos(phi_c)),
+    )
+
+    circle_centers = [(dx, 0), (-dx, 0)]
+    centers_array = [cas.vertcat(t[0], t[1]) for t in circle_centers]
+    list_of_xy_centers = []
+    for xy in centers_array:
+        xy_rotated = cas.mtimes(rotation_matrix_ego, xy)
+        xy_translated = xy_rotated + translation
+        list_of_xy_centers += [xy_translated]
+
+    radius = r  # analytic solution to minim. circumscribed circle
+
+    return list_of_xy_centers, radius

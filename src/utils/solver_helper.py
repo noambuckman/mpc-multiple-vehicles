@@ -37,12 +37,18 @@ def nonresponse_slice(i, all_other_x0, all_other_MPC, all_other_u, all_other_x, 
     return nonresponse_x0_list, nonresponse_MPC_list, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list
 
 
-def warm_profiles_subset(n_warm_keys, ux_warm_profiles):
+def warm_profiles_subset(n_warm_keys: int, ux_warm_profiles):
+    priority_warm_keys = []
     '''choose randomly n_warm_keys keys from ux_warm_profiles and return the subset'''
+    if n_warm_keys >= 1 and "previous_mpc_hold" in ux_warm_profiles:
+        priority_warm_keys += ["previous_mpc_hold"]
+    if n_warm_keys >= 2 and "previous_ibr" in ux_warm_profiles:
+        priority_warm_keys += ["previous_ibr"]
+    remaining_n_keys = n_warm_keys - len(priority_warm_keys)
+    remaining_keys = [k for k in ux_warm_profiles.keys() if k not in priority_warm_keys]
+    random.shuffle(remaining_keys)
 
-    warm_keys = list(ux_warm_profiles.keys())
-    random.shuffle(warm_keys)
-    warm_subset_keys = warm_keys[:n_warm_keys]
+    warm_subset_keys = priority_warm_keys + remaining_keys[:remaining_n_keys]
     ux_warm_profiles_subset = dict((k, ux_warm_profiles[k]) for k in warm_subset_keys)
 
     return ux_warm_profiles_subset
