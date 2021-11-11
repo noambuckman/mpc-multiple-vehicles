@@ -178,8 +178,8 @@ def plot_multiple_cars(k,
             ellipse_patch = patches.Ellipse((x, y), 2 * a, 2 * b, angle=np.rad2deg(phi), fill=False, color='black')
             ax.add_patch(ellipse_patch)
 
-        if car_labels is not None:
-            ax.annotate('R', xy=(xamb_plot[0, k:k + 1], xamb_plot[1, k:k + 1]))
+            if car_labels is not None:
+                ax.annotate('R', xy=(xamb_plot[0, k:k + 1], xamb_plot[1, k:k + 1]))
 
         for i in range(len(xothers_plot)):
 

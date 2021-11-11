@@ -50,9 +50,14 @@ def run_simulation(log_dir, params):
                                                                                      list_of_positions=position_list)
 
     # Generate the SVOs for the vehicles
-    p_cooperative = current_sim_params["p_cooperative"]
-    n_cooperative = int(p_cooperative * current_sim_params["n_other"])
-    cooperative_agents = np.random.choice(range(current_sim_params["n_other"]), size=n_cooperative, replace=False)
+    setting_rng = np.random.default_rng(params["seed"])
+
+    p_cooperative = params["p_cooperative"]
+    n_cooperative = int(p_cooperative * params["n_other"])
+
+    all_agent_ids = list(range(params["n_other"]))
+    setting_rng.shuffle(all_agent_ids)
+    cooperative_agents = all_agent_ids[:n_cooperative]
 
     for vehicle_it in range(len(all_other_vehicles)):
         vehicle = all_other_vehicles[vehicle_it]
@@ -67,7 +72,7 @@ def run_simulation(log_dir, params):
 
     # Set the max velocity and initial velocity
     for vehicle_it in range(len(all_other_vehicles)):
-        all_other_vehicles[vehicle_it].max_v = np.random.uniform(25, 30) * 0.447  #20 to 25 mph
+        all_other_vehicles[vehicle_it].max_v = setting_rng.uniform(25, 30) * 0.447  #20 to 25 mph
         all_other_x0[vehicle_it][-2] = initial_velocity
 
     # Save the vehicles and world for this simulation
@@ -81,10 +86,13 @@ def run_simulation(log_dir, params):
     with open(log_dir + "params.json", "w") as fp:
         json.dump(params, fp, indent=2)
 
-    xothers_actual = run_iterative_best_response(all_other_vehicles, world, all_other_x0, params, log_dir)
+    xothers_actual, uothers_actual = run_iterative_best_response(all_other_vehicles, world, all_other_x0, params,
+                                                                 log_dir)
 
     all_trajectories = np.array(xothers_actual)
-    return all_trajectories
+    all_control = np.array(uothers_actual)
+
+    return all_trajectories, all_control
 
 
 if __name__ == "__main__":
@@ -137,10 +145,11 @@ if __name__ == "__main__":
         log_dir = all_results_dir + experiment_string + "/"
 
         # Run the simulation with current sim params
-        all_trajectories = run_simulation(log_dir, current_sim_params)
+        all_trajectories, all_control = run_simulation(log_dir, current_sim_params)
         if all_trajectories is None:  #We got an exception
             continue
         # Save the results within the log_dir
         np.save(open(log_dir + "/trajectories.npy", 'wb'), all_trajectories)
+        np.save(open(log_dir + "/controls.npy", 'wb'), all_control)
 
     print(" Done with experiments")
