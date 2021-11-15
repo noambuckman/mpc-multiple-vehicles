@@ -79,6 +79,7 @@ def run_simulation(log_dir, params):
     os.makedirs(log_dir, exist_ok=True)
     pickle.dump(all_other_vehicles, open(log_dir + "/other_vehicles.p", "wb"))
     pickle.dump(world, open(log_dir + "/world.p", "wb"))
+    pickle.dump(all_other_x0, open(log_dir + "/x0.p", "wb"))
     print("Results saved in log %s:" % log_dir)
 
     # Initialize the state and control arrays

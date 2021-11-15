@@ -1,6 +1,8 @@
 import numpy as np
 from src.traffic_world import TrafficWorld
 
+# from simple_optimizations import spatial_only_optimization
+
 
 def generate_warm_x(car_mpc, world: TrafficWorld, x0: np.array, average_v=None):
     """ Warm starts that return a trajectory in x (control) -space
@@ -206,6 +208,20 @@ def generate_warm_starts(vehicle,
             x_des_warm,
         ]
 
+        u_warm_profiles["previous_mpc_none"] = np.concatenate(
+            (
+                u_mpc_previous[:, params["number_ctrl_pts_executed"]:],
+                np.tile(np.zeros((2, 1)), (1, params["number_ctrl_pts_executed"])),
+            ),
+            axis=1,
+        )
+        x_warm, x_des_warm = vehicle.forward_simulate_all(x0.reshape(6, 1), u_warm_profiles["previous_mpc_none"])
+        ux_warm_profiles["previous_mpc_none"] = [
+            u_warm_profiles["previous_mpc_none"],
+            x_warm,
+            x_des_warm,
+        ]
+
     if u_ibr_previous is not None:  # Try out the controller from the previous round of IBR
         u_warm_profiles["previous_ibr"] = u_ibr_previous
         x_warm, x_des_warm = vehicle.forward_simulate_all(x0.reshape(6, 1), u_warm_profiles["previous_ibr"])
@@ -216,3 +232,19 @@ def generate_warm_starts(vehicle,
         ]
 
     return ux_warm_profiles
+
+
+# def generate_warm_starts_advanced(x_initial, u_initial, xd_initial, x_cntrld_initial, x_non_response, response_veh,
+#                                   cntrld_veh, non_response_veh, distance_threshold):
+#     ''' Generate warm_starts that first solve an initial relaxed optimization
+#     '''
+
+#     ux_warm_profiles = {}
+
+#     x_response_warm, x_cntrld_warm = spatial_only_optimization(x_initial, x_cntrld_initial, x_non_response,
+#                                                                response_veh, cntrld_veh, non_response_veh,
+#                                                                distance_threshold)
+
+#     ux_warm_profiles["previous_mpc_spatial"] = [u_initial, x_response_warm, xd_initial]
+
+#     return ux_warm_profiles

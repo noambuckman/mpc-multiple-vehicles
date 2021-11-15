@@ -1,6 +1,7 @@
 import numpy as np
 import casadi as cas
 import scipy.optimize as optimize
+from typing import Tuple
 
 
 class Vehicle(object):
@@ -221,7 +222,7 @@ class Vehicle(object):
 
         return x_next
 
-    def forward_simulate_all(self, x_0: np.array, u_all: np.array):
+    def forward_simulate_all(self, x_0: np.array, u_all: np.array) -> Tuple[np.array, np.array]:
         ''' Take an an initial state (x_0) and control inputs
         u_all (of shape 2, N) and compute the state trajectory
         
