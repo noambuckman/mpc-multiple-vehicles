@@ -5,7 +5,7 @@ from typing import List
 
 from src.traffic_world import TrafficWorld
 from src.utils.plotting.car_plotting import plot_cars
-# from src.warm_starts import generate_warm_x, centerline_following, generate_warm_u, generate_warm_starts
+from src.geometry_helper import minkowski_ellipse_collision_distance
 
 
 class MultiMPC(object):
@@ -191,20 +191,20 @@ class MultiMPC(object):
                 if (initial_xy_distance <=
                         params["collision_avoidance_checking_distance"]):  # collision avoidance distance for other cars
 
-                    dist = self.minkowski_ellipse_collision_distance(self.ego_veh, self.other_vehicle_list[i],
-                                                                     self.x_ego[0, k], self.x_ego[1, k],
-                                                                     self.x_ego[2, k], self.x_other[i][0, k],
-                                                                     self.x_other[i][1, k], self.x_other[i][2, k])
+                    dist = minkowski_ellipse_collision_distance(self.ego_veh, self.other_vehicle_list[i], self.x_ego[0,
+                                                                                                                     k],
+                                                                self.x_ego[1, k], self.x_ego[2, k], self.x_other[i][0,
+                                                                                                                    k],
+                                                                self.x_other[i][1, k], self.x_other[i][2, k])
 
                     self.pairwise_distances += [dist]
                     self.opti.subject_to(dist >= (1 - self.slack_i_jnc[i, k]))
                     distance_clipped = cas.fmax(dist, 0.00001)  # This can be a smaller distance if we'd like
                     self.collision_cost += (1 / (distance_clipped - self.k_ca2)**self.k_CA_power)
             for j in range(len(self.vehs_ctrld)):
-                dist = self.minkowski_ellipse_collision_distance(self.ego_veh, self.vehs_ctrld[j], self.x_ego[0, k],
-                                                                 self.x_ego[1, k], self.x_ego[2, k], self.x_ctrld[j][0,
-                                                                                                                     k],
-                                                                 self.x_ctrld[j][1, k], self.x_ctrld[j][2, k])
+                dist = minkowski_ellipse_collision_distance(self.ego_veh, self.vehs_ctrld[j], self.x_ego[0, k],
+                                                            self.x_ego[1, k], self.x_ego[2, k], self.x_ctrld[j][0, k],
+                                                            self.x_ctrld[j][1, k], self.x_ctrld[j][2, k])
 
                 self.opti.subject_to(dist >= 1 - self.slack_i_jc[j, k])
                 self.pairwise_distances += [dist]
@@ -228,11 +228,10 @@ class MultiMPC(object):
                     if (initial_xy_distance <= params["collision_avoidance_checking_distance"]
                         ):  # collision avoidance distance for other cars
 
-                        dist = self.minkowski_ellipse_collision_distance(self.vehs_ctrld[ic],
-                                                                         self.other_vehicle_list[j],
-                                                                         self.x_ctrld[ic][0, k], self.x_ctrld[ic][1, k],
-                                                                         self.x_ctrld[ic][2, k], self.x_other[j][0, k],
-                                                                         self.x_other[j][1, k], self.x_other[j][2, k])
+                        dist = minkowski_ellipse_collision_distance(self.vehs_ctrld[ic], self.other_vehicle_list[j],
+                                                                    self.x_ctrld[ic][0, k], self.x_ctrld[ic][1, k],
+                                                                    self.x_ctrld[ic][2, k], self.x_other[j][0, k],
+                                                                    self.x_other[j][1, k], self.x_other[j][2, k])
 
                         self.opti.subject_to(dist >= (1 - self.slack_ic_jnc[ic][j, k]))
                         distance_clipped = cas.fmax(dist, 0.0001)  # could be buffered if we'd like
@@ -246,7 +245,7 @@ class MultiMPC(object):
                         # collision avoidance distance for other cars
                         if (initial_xy_distance <= params["collision_avoidance_checking_distance"]):
 
-                            dist = self.minkowski_ellipse_collision_distance(
+                            dist = minkowski_ellipse_collision_distance(
                                 self.vehs_ctrld[ic],
                                 self.vehs_ctrld[j],
                                 self.x_ctrld[ic][0, k],
@@ -305,7 +304,7 @@ class MultiMPC(object):
             ipopt_params = {}
         self.opti.solver("ipopt", {}, ipopt_params)
 
-    def solve(self, uctrld_warm, uother, solve_amb=False):
+    def solve(self, uctrld_warm, uother):
         for ic in range(len(self.vehs_ctrld)):
             self.opti.set_initial(self.u_ctrld[ic], uctrld_warm[ic])
         for i in range(len(self.other_vehicle_list)):
@@ -711,40 +710,6 @@ class MultiMPC(object):
                         999 * amb_behind,
                     )
                     self.opti.subject_to(v_amb**2 <= v_max_constraint)
-
-    def minkowski_ellipse_collision_distance(self, ego_veh, ado_veh, x_ego, y_ego, phi_ego, x_ado, y_ado, phi_ado):
-        """ Return the squared distance between the ego vehicle and ado vehicle
-        for collision avoidance 
-        Halder, A. (2019). On the Parameterized Computation of Minimum Volume Outer Ellipsoid of Minkowski Sum of Ellipsoids."
-        """
-        # if not numpy:
-        shape_matrix_ego = np.array([[float(ego_veh.ax), 0.0], [0.0, float(ego_veh.by)]])
-        shape_matrix_ado = np.array([[float(ado_veh.ax), 0.0], [0.0, float(ado_veh.by)]])
-
-        rotation_matrix_ego = cas.vertcat(
-            cas.horzcat(cas.cos(phi_ego), -cas.sin(phi_ego)),
-            cas.horzcat(cas.sin(phi_ego), cas.cos(phi_ego)),
-        )
-        rotation_matrix_ado = cas.vertcat(
-            cas.horzcat(cas.cos(phi_ado), -cas.sin(phi_ado)),
-            cas.horzcat(cas.sin(phi_ado), cas.cos(phi_ado)),
-        )
-
-        # Compute the Minkowski Sum
-        M_e_curr = cas.mtimes([rotation_matrix_ego, shape_matrix_ego])
-        Q1 = cas.mtimes([M_e_curr, cas.transpose(M_e_curr)])
-
-        M_a_curr = cas.mtimes([rotation_matrix_ado, shape_matrix_ado])
-        Q2 = cas.mtimes([M_a_curr, cas.transpose(M_a_curr)])
-
-        beta = cas.sqrt(cas.trace(Q1) / cas.trace(Q2))
-        Q_minkowski = (1 + 1.0 / beta) * Q1 + (1.0 + beta) * Q2
-
-        X_ego = cas.vertcat(x_ego, y_ego)
-        X_ado = cas.vertcat(x_ado, y_ado)
-        dist_squared = cas.mtimes([cas.transpose(X_ado - X_ego), cas.inv(Q_minkowski), (X_ado - X_ego)])
-
-        return dist_squared
 
 
 def load_state(file_name, n_others, ignore_des=False):

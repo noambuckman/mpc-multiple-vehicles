@@ -11,8 +11,9 @@ from src.vehicle import Vehicle
 from src.multiagent_mpc import load_state, save_state
 from src.warm_starts import generate_warm_starts
 from src.utils.ibr_argument_parser import IBRParser
-import src.utils.solver_helper as helper
-from src.utils.solver_helper import warm_profiles_subset
+from src.best_response import solve_warm_starts
+from src.utils.solver_helper import warm_profiles_subset, poission_positions, extend_last_mpc_and_follow, initialize_cars_from_positions
+from src.vehicle_mpc_information import VehicleMPCInformation
 
 
 def convert_to_global_units(x_reference_global: np.array, x: np.array):
@@ -24,22 +25,6 @@ def convert_to_global_units(x_reference_global: np.array, x: np.array):
     x_global[0, :] += x_reference_global[0]
 
     return x_global
-
-
-class VehicleMPCInformation:
-    ''' Helper class that holds the state of each vehicle and vehicle information'''
-    def __init__(self, vehicle, x0: np.array, u: np.array = None, x: np.array = None, xd: np.array = None):
-        self.vehicle = vehicle
-        self.x0 = x0
-
-        self.u = u
-        self.x = x
-        self.xd = xd
-
-    def update_state(self, u, x, xd):
-        self.u = u
-        self.x = x
-        self.xd = xd
 
 
 def run_iterative_best_response(other_vehicles,
@@ -54,7 +39,8 @@ def run_iterative_best_response(other_vehicles,
         TODO:  Add something that checks required params.  Or has default params somewhere.
     """
     out_file = open(log_dir + "out.txt", "w")
-
+    if params["save_ibr"]:
+        os.makedirs(log_dir + "data/", exist_ok=True)
     # Initialize all state and control arrays for entire simulation
     t_start_time = time.time()
     actual_t = 0
@@ -95,20 +81,27 @@ def run_iterative_best_response(other_vehicles,
 
         # 3) Generate (if needed) the control inputs of other vehicles
         with redirect_stdout(out_file):
-            if i_mpc == 0:
-                previous_all_other_u_mpc = [np.zeros((2, params["N"])) for i in range(len(other_vehicles))]
-                other_u_ibr_initial, other_x_ibr_initial, other_x_des_ibr_initial = helper.extend_last_mpc_and_follow(
-                    previous_all_other_u_mpc, params["N"] - 1, params["N"], other_vehicles, other_x0, params, world)
-            else:
-                other_u_ibr_initial, other_x_ibr_initial, other_x_des_ibr_initial = helper.extend_last_mpc_and_follow(
-                    all_other_u_mpc, params["number_ctrl_pts_executed"], params["N"], other_vehicles, other_x0, params,
-                    world)
+            try:
+                if i_mpc == 0:
+                    previous_all_other_u_mpc = [np.zeros((2, params["N"])) for i in range(len(other_vehicles))]
+                    other_u_ibr_initial, other_x_ibr_initial, other_x_des_ibr_initial = extend_last_mpc_and_follow(
+                        previous_all_other_u_mpc, params["N"] - 1, other_vehicles, other_x0, params, world)
+                else:
+                    other_u_ibr_initial, other_x_ibr_initial, other_x_des_ibr_initial = extend_last_mpc_and_follow(
+                        all_other_u_mpc, params["number_ctrl_pts_executed"], other_vehicles, other_x0, params, world)
+            except RuntimeError as e:
+                print(e)
+                print("Simulation Ended Early due to infeasible solution!  Runtime: %s" %
+                      (datetime.timedelta(seconds=(time.time() - t_start_time))))
+                return xothers_actual, uothers_actual
 
         othervehs_ibr_info = []
         for i in range(len(other_vehicles)):
             othervehs_ibr_info.append(
                 VehicleMPCInformation(other_vehicles[i], other_x0[i], other_u_ibr_initial[i], other_x_ibr_initial[i],
                                       other_x_des_ibr_initial[i]))
+
+        vehs_ibr_info_predicted = cp.deepcopy(othervehs_ibr_info)
 
         for i_rounds_ibr in range(params["n_ibr"]):
             print("MPC %d, IBR %d / %d" % (i_mpc, i_rounds_ibr, params["n_ibr"] - 1))
@@ -130,6 +123,8 @@ def run_iterative_best_response(other_vehicles,
 
                 # Choose which vehicles should be in the shared control
                 cntrld_vehicle_info = []
+                cntrld_i = []
+
                 cntrld_scheduler = params["shrd_cntrl_scheduler"]
                 if cntrld_scheduler == "constant":
                     if i_rounds_ibr >= params["rnds_shrd_cntrl"]:
@@ -150,18 +145,20 @@ def run_iterative_best_response(other_vehicles,
                     cntrld_i = sorted_i[:params["n_cntrld"] - 1]
                     if len(cntrld_i) > 0:
                         cntrld_vehicle_info = [
-                            othervehs_ibr_info[i] for i in range(len(othervehs_ibr_info)) if i in cntrld_i
+                            vehs_ibr_info_predicted[i] for i in range(len(vehs_ibr_info_predicted)) if i in cntrld_i
                         ]
 
                     veh_idxs_in_mpc = [idx for idx in veh_idxs_in_mpc if idx not in cntrld_i]
 
-                nonresponse_veh_info = [othervehs_ibr_info[i] for i in veh_idxs_in_mpc]
+                nonresponse_veh_info = [vehs_ibr_info_predicted[i] for i in veh_idxs_in_mpc]
 
                 warm_starts = generate_warm_starts(response_veh_info.vehicle, world, response_veh_info.x0,
-                                                   othervehs_ibr_info, params, all_other_u_mpc[response_i],
+                                                   vehs_ibr_info_predicted, params, all_other_u_mpc[response_i],
                                                    othervehs_ibr_info[response_i].u)
 
                 solve_again, solve_number, max_slack_ibr, debug_flag, = (True, 0, np.infty, False)
+
+                #TODO 11/23/21:  We should also warm start the trajectories for controlled vehicle by cp.copy cntrld_veh_info and updating trajectory
 
                 # 6/9/21:  Wha are these ambulance parameters? Will they matter anymore?
                 params["k_solve_amb_min_distance"] = 50
@@ -194,13 +191,19 @@ def run_iterative_best_response(other_vehicles,
                         print("MPC %d, IBR %d / %d" % (i_mpc, i_rounds_ibr, params["n_ibr"] - 1))
                         print("....# Cntrld Vehicles: %d # Non-Response: %d " %
                               (len(cntrld_vehicle_info), len(nonresponse_veh_info)))
-                        solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, key_ibr, debug_list = helper.solve_warm_starts(
+                        solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, key_ibr, debug_list, cntrld_vehicle_trajectories = solve_warm_starts(
                             warmstarts_subset, response_veh_info, world, solver_params, params, ipopt_params,
                             nonresponse_veh_info, cntrld_vehicle_info, debug_flag)
                     end_ipopt_time = time.time()
 
-                    if max_slack_ibr <= params["k_max_slack"] and max_slack_ibr <= np.infty:
+                    if max_slack_ibr <= params["k_max_slack"] and max_slack_ibr < np.infty:
                         othervehs_ibr_info[response_i].update_state(u_ibr, x_ibr, x_des_ibr)
+                        vehs_ibr_info_predicted[response_i].update_state(u_ibr, x_ibr, x_des_ibr)
+                        # New 11/18: Also update the controlled veh info within the predicted positions
+                        for cntrld_i_idx, vehicle_id in enumerate(cntrld_i):
+                            x_jc, x_des_jc, u_jc = cntrld_vehicle_trajectories[cntrld_i_idx]
+                            vehs_ibr_info_predicted[vehicle_id].update_state(u_jc, x_jc, x_des_jc)
+
                         print("......Solved.  veh: %02d | mpc: %d | ibr: %d | solver time: %0.1f s" %
                               (response_i, i_mpc, i_rounds_ibr, end_ipopt_time - start_ipopt_time))
                         break
@@ -222,15 +225,17 @@ def run_iterative_best_response(other_vehicles,
                         u_ibr, x_ibr, x_des_ibr = warm_starts['previous_mpc_hold']
 
                     othervehs_ibr_info[response_i].update_state(u_ibr, x_ibr, x_des_ibr)
+                    vehs_ibr_info_predicted[response_i].update_state(u_ibr, x_ibr, x_des_ibr)
+
                     print(
                         "......Reached max # resolves. veh: %02d | mpc: %d | ibr: %d | Slack %.05f > thresh %.05f  | solver time: %0.1f"
                         % (response_i, i_mpc, i_rounds_ibr, max_slack_ibr, params["k_max_slack"],
                            end_ipopt_time - start_ipopt_time))
 
                 if params["save_ibr"]:
-                    other_x_ibr_temp = np.array([veh.x for veh in othervehs_ibr_info])
-                    other_u_ibr_temp = np.array([veh.u for veh in othervehs_ibr_info])
-                    other_xd_ibr_temp = np.array([veh.xd for veh in othervehs_ibr_info])
+                    other_x_ibr_temp = np.array([veh.x for veh in vehs_ibr_info_predicted])
+                    other_u_ibr_temp = np.array([veh.u for veh in vehs_ibr_info_predicted])
+                    other_xd_ibr_temp = np.array([veh.xd for veh in vehs_ibr_info_predicted])
                     file_prefix = log_dir + "data/" + "ibr_m%03di%03da%03d" % (i_mpc, i_rounds_ibr, response_i)
                     np.save(open(file_prefix + "x.npy", 'wb'), other_x_ibr_temp)
                     np.save(open(file_prefix + "u.npy", 'wb'), other_u_ibr_temp)
@@ -388,12 +393,12 @@ if __name__ == "__main__":
         VEHICLE_LENGTH = 4.5  # m
         time_duration_s = (params["n_other"] * 3600.0 /
                            params["car_density"]) * 10  # amount of time to generate traffic
-        initial_vehicle_positions = helper.poission_positions(params["car_density"],
-                                                              params["n_other"] + 1,
-                                                              params["n_lanes"],
-                                                              MAX_VELOCITY,
-                                                              2 * VEHICLE_LENGTH,
-                                                              position_random_seed=params["seed"])
+        initial_vehicle_positions = poission_positions(params["car_density"],
+                                                       params["n_other"] + 1,
+                                                       params["n_lanes"],
+                                                       MAX_VELOCITY,
+                                                       2 * VEHICLE_LENGTH,
+                                                       position_random_seed=params["seed"])
         position_list = initial_vehicle_positions[:params["n_other"] + 1]
 
         # Create the SVOs for each vehicle
@@ -402,9 +407,8 @@ if __name__ == "__main__":
         else:
             list_of_svo = [params["svo_theta"] for i in range(params["n_other"])]
 
-        (_, _, all_other_vehicles,
-         all_other_x0) = helper.initialize_cars_from_positions(params["N"], params["dt"], world, True, position_list,
-                                                               list_of_svo)
+        (_, _, all_other_vehicles, all_other_x0) = initialize_cars_from_positions(params["N"], params["dt"], world,
+                                                                                  True, position_list, list_of_svo)
 
         # ambulance = cp.deepcopy(all_other_vehicles[0])
         # ambulance.fd = ambulance.gen_f_desired_lane(world, 0, True)  # reset the desired lane since x0,y0 is different
@@ -431,8 +435,9 @@ if __name__ == "__main__":
         all_other_vehicles = pickle.load(open(log_dir + "other_vehicles.p", "rb"))
         world = pickle.load(open(log_dir + "world.p", "rb"))
         params["pid"] = os.getpid()
-        all_trajectories = np.load(open(log_dir + "trajectories.npy", 'rb'), allow_pickle=True)
-        all_other_x0 = [all_trajectories[i, :, 0] for i in range(all_trajectories.shape[0])]
+        # all_trajectories = np.load(open(log_dir + "trajectories.npy", 'rb'), allow_pickle=True)
+        all_other_x0 = pickle.load(open(log_dir + "x0.p", "rb"))
+        # all_other_x0 = [all_trajectories[i, :, 0] for i in range(all_trajectories.shape[0])]
         args.load_log_dir = False
         # We need to get initial conditions for the iterative best response
 
