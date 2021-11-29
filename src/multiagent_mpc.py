@@ -50,7 +50,6 @@ class NonconvexOptimization(object):
         tall_ubg_list = []
         tall_lbg_list = []
         for ix in range(len(self._g_list)):
-            print(self._g_list[ix].shape)
             if self._g_list[ix].shape[1] != 1:         
                 tall_dim = self._g_list[ix].shape[0] * self._g_list[ix].shape[1]       
 
@@ -66,15 +65,15 @@ class NonconvexOptimization(object):
         self._lbg_list = cas.vertcat(*tall_lbg_list)
         self._ubg_list = cas.vertcat(*tall_ubg_list)
 
-        ### Ego: Slack variables
-        tall_x_list = []
-        for ix in range(len(self._x_list)):
-            if self._x_list[ix].shape[1] != 1:
-                tall_x_list += [cas.reshape(self._x_list[ix], self._x_list[ix].shape[0] * self._x_list[ix].shape[1], 1)]
-            else:
-                tall_x_list += [self._x_list[ix]]
-            print(tall_x_list[ix])
-        self._x_list = cas.vertcat(*tall_x_list)
+        # ### Ego: Slack variables
+        # tall_x_list = []
+        # for ix in range(len(self._x_list)):
+        #     if self._x_list[ix].shape[1] != 1:
+        #         tall_x_list += [cas.reshape(self._x_list[ix], self._x_list[ix].shape[0] * self._x_list[ix].shape[1], 1)]
+        #     else:
+        #         tall_x_list += [self._x_list[ix]]
+        # self._x_list = cas.vertcat(*tall_x_list)
+        # print(self._x_list)
 
         tall_p_list = []
         for ix in range(len(self._p_list)):
@@ -84,13 +83,14 @@ class NonconvexOptimization(object):
                 tall_p_list += [self._p_list[ix]]
         self._p_list = cas.vertcat(*tall_p_list)
 
+        self.nx = self._x_list.shape[0]
+        self.np = self._p_list.shape[0]
+        self.ng = self._g_list.shape[0]
+
     def get_nlpsol(self):
         self.reshape_lists()
         prob = {'f': self._f, 'g': self._g_list, 'x': self._x_list, 'p': self._p_list}
-        print(prob['f'])
-        print(prob['g'])
-        print(prob['x'])
-        print(prob['p'])
+        
         solver = cas.nlpsol('solver', 'ipopt', prob)
 
         return solver
@@ -137,16 +137,18 @@ class MultiMPC(NonconvexOptimization):
         self.world = world
         self.dt = params["dt"]
 
+        self.N = N
         self.n_vehs_cntrld = n_vehs_cntrld
         self.n_other_vehicle = n_other_vehicles
 
         n_state, n_ctrl, n_desired = 6, 2, 3
 
         # Response (planning) Vehicle Variables
+
         self.x_ego = cas.MX.sym('x_ego', n_state, N + 1)
         self.u_ego = cas.MX.sym('u_ego', n_ctrl, N)
         self.xd_ego = cas.MX.sym('xd_ego', n_desired, N + 1)
-        self.add_X(self.x_ego, self.u_ego, self.xd_ego)
+        # self.add_X(self.x_ego, self.u_ego, self.xd_ego)
 
         # Parameters
         self.x0_ego = cas.MX.sym('x0_ego', n_state, 1)
@@ -158,8 +160,8 @@ class MultiMPC(NonconvexOptimization):
         self.u_ctrld = [cas.MX.sym('u_ctrl%02d' % i, n_ctrl, N) for i in range(self.n_vehs_cntrld)]
         self.xd_ctrld = [cas.MX.sym('xd_ctrl%02d' % i, n_desired, N + 1) for i in range(self.n_vehs_cntrld)]
 
-        for i in range(self.n_vehs_cntrld):
-            self.add_X(self.x_ctrld[i], self.u_ctrld[i], self.xd_ctrld[i])
+        # for i in range(self.n_vehs_cntrld):
+        #     self.add_X(self.x_ctrld[i], self.u_ctrld[i], self.xd_ctrld[i])
 
         # Cntrld Vehicle Parameters
         self.x0_cntrld = [cas.MX.sym('x0_ctrl%02d' % i, n_state, 1) for i in range(self.n_vehs_cntrld)]
@@ -174,8 +176,8 @@ class MultiMPC(NonconvexOptimization):
         self.x_other = [cas.MX.sym('x_nc%02d' % i, n_state, N + 1) for i in range(self.n_other_vehicle)]
         self.u_other = [cas.MX.sym('u_nc%02d' % i, n_ctrl, N) for i in range(self.n_other_vehicle)]
         self.xd_other = [cas.MX.sym('xd_nc%02d' % i, 3, N + 1) for i in range(self.n_other_vehicle)]
-        for i in range(self.n_other_vehicle):
-            self.add_X(self.x_other[i][:], self.u_other[i][:], self.xd_other[i][:])
+        # for i in range(self.n_other_vehicle):
+        #     self.add_X(self.x_other[i], self.u_other[i], self.xd_other[i])
 
         # Non-Response Vehicle Parameters
         self.x0_allother = [cas.MX.sym('x0_nc%02d' % i, n_state, 1) for i in range(self.n_other_vehicle)]
@@ -225,12 +227,12 @@ class MultiMPC(NonconvexOptimization):
         self.slack_cost = 0
         if self.n_other_vehicle > 0:
             self.slack_i_jnc = cas.MX.sym('s_i_jnc', self.n_other_vehicle, N + 1)
-            self.add_X(self.slack_i_jnc[:])
+            # self.add_X(self.slack_i_jnc)
             self.slack_ic_jnc = [
                 cas.MX.sym('s_i%02d_jnc' % i, self.n_other_vehicle, N + 1) for i in range(self.n_vehs_cntrld)
             ]
-            for i in range(len(self.slack_ic_jnc)):
-                self.add_X(self.slack_ic_jnc[i][:])
+            # for i in range(len(self.slack_ic_jnc)):
+            #     self.add_X(self.slack_ic_jnc[i])
 
             self.add_bounded_constraint(np.zeros(shape=self.slack_i_jnc.shape), self.slack_i_jnc, None)
             for slack_var in self.slack_ic_jnc:
@@ -250,7 +252,7 @@ class MultiMPC(NonconvexOptimization):
         # Slack variables related to cntrld vehicles
         if self.n_vehs_cntrld > 0:
             self.slack_i_jc = cas.MX.sym("s_i_jc", self.n_vehs_cntrld, N + 1)
-            self.add_X(self.slack_i_jc[:])
+            # self.add_X(self.slack_i_jc)
             self.add_bounded_constraint(np.zeros(shape=self.slack_i_jc.shape), self.slack_i_jc, None)
             for jc in range(self.slack_i_jc.shape[0]):
                 for t in range(self.slack_i_jc.shape[1]):
@@ -259,8 +261,8 @@ class MultiMPC(NonconvexOptimization):
             self.slack_ic_jc = [
                 cas.MX.sym("s_ic%02d_jc" % ic, self.n_vehs_cntrld, N + 1) for ic in range(self.n_vehs_cntrld)
             ]
-            for i in range(len(self.slack_ic_jc)):
-                self.add_X(self.slack_ic_jc[i][:])
+            # for i in range(len(self.slack_ic_jc)):
+            #     self.add_X(self.slack_ic_jc[i])
 
             for ic in range(self.n_vehs_cntrld):
                 self.add_bounded_constraint(np.zeros(shape=self.slack_ic_jc[ic].shape), self.slack_ic_jc[ic], None)
@@ -301,15 +303,15 @@ class MultiMPC(NonconvexOptimization):
 
         self.top_wall_slack = cas.MX.sym('s_top', 1, N + 1)
         self.bottom_wall_slack = cas.MX.sym('s_bot', 1, N + 1)
-        self.add_X(self.top_wall_slack[:], self.bottom_wall_slack[:])
+        # self.add_X(self.top_wall_slack, self.bottom_wall_slack)
         for k in range(self.top_wall_slack.shape[1]):
             self.add_bounded_constraint(0, self.top_wall_slack[0, k], None)
             self.add_bounded_constraint(0, self.bottom_wall_slack[0, k], None)
 
         self.top_wall_slack_c = [cas.MX.sym('sc_top_%02d' % i, 1, N + 1) for i in range(self.n_vehs_cntrld)]
         self.bottom_wall_slack_c = [cas.MX.sym('sc_bot_%02d' % i, 1, N + 1) for i in range(self.n_vehs_cntrld)]
-        for i in range(len(self.top_wall_slack_c)):
-            self.add_X(self.top_wall_slack_c[i][:], self.bottom_wall_slack_c[i][:])
+        # for i in range(len(self.top_wall_slack_c)):
+        #     self.add_X(self.top_wall_slack_c[i][:], self.bottom_wall_slack_c[i][:])
 
         if "collision_avoidance_checking_distance" not in params:
             print("No collision avoidance checking distance")
@@ -431,10 +433,152 @@ class MultiMPC(NonconvexOptimization):
 
         if ipopt_params is None:
             ipopt_params = {}
-        solver = self.get_nlpsol()
-        return solver
+
+        self._x_list = self.mpcx_to_nlpx(self.x_ego, self.u_ego, self.xd_ego, 
+                                        self.x_ctrld, self.u_ctrld, self.xd_ctrld, 
+                                        self.x_other, self.u_other, self.xd_other,
+                                        self.slack_i_jnc, self.slack_ic_jnc, 
+                                        self.slack_i_jc, self.slack_ic_jc, 
+                                        self.top_wall_slack, self.bottom_wall_slack, 
+                                        self.top_wall_slack_c, self.bottom_wall_slack_c)
+
+
+        test = self.nlpx_to_mpcx(self._x_list)
+        self.solver = self.get_nlpsol()
+        # return solver
 
         # Set the solver conditions
+
+
+
+
+
+    def mpcx_to_nlpx(self, x_ego, u_ego, xd_ego, x_ctrl: List, u_ctrl: List, xd_ctrl: List, x_nc: List, u_nc: List, xd_nc: List,
+                    s_i_jnc, s_ic_jnc, s_i_jc, s_ic_jc, s_top, s_bottom, s_c_top, s_c_bottom):
+
+        ''' Converts the individual trajectories into a single descision variable (nx x 1)'''
+        long_list = []
+        
+        N = u_ego.shape[1]
+        n_ctrl = u_ego.shape[0]
+        n_state = x_ego.shape[0]
+        n_desired = xd_ego.shape[0]
+        n_ctrld = len(x_ctrl)
+        n_other = len(x_nc)
+
+
+        long_list.append(x_ego.reshape((n_state * (N+1), 1)))
+        long_list.append(u_ego.reshape((n_ctrl * N, 1)))
+        long_list.append(xd_ego.reshape((n_desired * (N+1), 1)))
+
+        for i in range(n_ctrld):
+            long_list.append(x_ctrl[i].reshape((n_state * (N+1), 1)))
+            long_list.append(u_ctrl[i].reshape((n_ctrl * N, 1)))
+            long_list.append(xd_ctrl[i].reshape((n_desired * (N+1), 1))) 
+
+        for i in range(n_other):
+            long_list.append(x_nc[i].reshape((n_state * (N+1), 1)))
+            long_list.append(u_nc[i].reshape((n_ctrl * N, 1)))
+            long_list.append(xd_nc[i].reshape((n_desired * (N+1), 1)))
+
+        # Collision Slack Variables with Non-Planning Cars 
+        if n_other > 0:
+            long_list.append(s_i_jnc.reshape((n_other * (N+1), 1)))
+            for i in range(n_ctrld):
+                long_list.append(s_ic_jnc[i].reshape((n_other * (N+1), 1)))
+
+        # Collision Slack Variables with Cntrld Planning Cars 
+        if n_ctrld > 0:
+            long_list.append(s_i_jc.reshape((n_ctrld * (N+1), 1)))
+            for i in range(n_ctrld):
+                long_list.append(s_ic_jc[i].reshape((n_ctrld * (N+1) , 1)))
+        
+        long_list.append(s_top.reshape((N+1, 1)))
+        long_list.append(s_bottom.reshape((N+1, 1)))
+        for i in range(n_ctrld):
+            long_list.append(s_c_top[i].reshape((N+1, 1)))
+            long_list.append(s_c_bottom[i].reshape((N+1, 1)))
+
+        nlp_x = cas.vcat(long_list)
+        return nlp_x
+
+    def nlpx_to_mpcx(self, nlp_x, N=None, n_ctrld=None, n_other=None, n_state=6, n_ctrl=2, n_desired=3):
+        ''' Splits the output of an nlp solver (nx X 1) into subsequent trajectories for ego and ado vehicles and slack variables '''
+
+        if N is None:
+            N = self.N
+        if n_ctrld is None:
+            n_ctrld = self.n_vehs_cntrld
+        if n_other is None:
+            n_other = self.n_other_vehicle
+
+
+        idx = 0
+        x_ego = nlp_x[idx: idx + n_state*(N+1)].reshape((n_state, N+1))
+        idx += n_state*(N+1)
+        u_ego = nlp_x[idx: idx + n_ctrl*N].reshape((n_ctrl, N))
+        idx += n_ctrl*N
+        xd_ego = nlp_x[idx: idx + n_desired*(N+1)].reshape((n_desired, N+1))
+        idx += n_desired*(N+1)
+
+        x_ctrl = []
+        u_ctrl = []
+        xd_ctrl = []
+        for i in range(n_ctrld):
+            x_ctrl.append(nlp_x[idx: idx + n_state * (N+1)].reshape((n_state, N+1)))
+            idx += n_state * (N+1)
+            u_ctrl.append(nlp_x[idx : idx + n_ctrl * N].reshape((n_ctrl, N)))
+            idx += n_ctrl * N
+            xd_ctrl.append(nlp_x[idx : idx + n_desired * (N+1)].reshape((n_desired, N+1)))
+            idx += n_desired * N+1
+        
+        x_nc = []
+        u_nc = []
+        xd_nc = []
+        for i in range(n_other):
+            x_nc.append(nlp_x[idx: idx + n_state * (N+1)].reshape((n_state, N+1)))
+            idx += n_state * (N+1)
+            u_nc.append(nlp_x[idx : idx + n_ctrl * N].reshape((n_ctrl, N)))
+            idx += n_ctrl * N
+            xd_nc.append(nlp_x[idx : idx + n_desired * (N+1)].reshape((n_desired, N+1)))
+            idx += n_desired * N+1
+
+        s_i_jnc = None
+        s_ic_jnc = []
+        if n_other > 0:
+            s_i_jnc = nlp_x[idx: idx + n_other * (N+1)].reshape((n_other,  N+1))
+            idx += n_other * (N+1)
+            
+            for i in range(n_ctrld):
+                s_ic_jnc.append(nlp_x[idx: idx + n_other * (N+1)].reshape((n_other , (N+1))))
+                idx += n_other * (N+1)
+        
+        s_i_jc = None
+        s_ic_jc = []
+        if n_ctrld > 0:
+            s_i_jc = nlp_x[idx: idx + n_ctrld * (N+1) ].reshape((n_ctrld,  N+1))
+            idx += n_ctrld * (N+1)
+            
+            for i in range(n_ctrld):
+                s_ic_jc.append(nlp_x[idx: idx + n_ctrld * (N+1)].reshape((n_ctrld , (N+1))))
+                idx += n_ctrld * (N+1)
+
+        s_top = nlp_x[idx: idx+ N+1].reshape((N+1, 1))
+        idx += N+1
+        s_bottom = nlp_x[idx: idx + N+1].reshape((N+1, 1))
+        idx += N+1
+
+        s_c_top = []
+        s_c_bottom = []        
+        for i in range(n_ctrld):
+            s_c_top.append(nlp_x[idx: idx+N+1].reshape((N+1, 1)))
+            idx += N+1
+            s_c_bottom.append(nlp_x[idx: idx+N+1].reshape((N+1, 1)))
+            idx += N+1
+
+        return x_ego, u_ego, xd_ego, x_ctrl, u_ctrl, xd_ctrl, x_nc, u_nc, xd_nc, s_i_jnc, s_ic_jnc, s_i_jc, s_ic_jc, s_top, s_bottom, s_c_top, s_c_bottom
+
+
 
     def add_state_constraints_g(self, X, U, ego_veh):
         ''' Construct vehicle specific constraints that only rely on
