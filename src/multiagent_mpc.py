@@ -148,7 +148,6 @@ class MultiMPC(NonconvexOptimization):
         self.x_ego = cas.MX.sym('x_ego', n_state, N + 1)
         self.u_ego = cas.MX.sym('u_ego', n_ctrl, N)
         self.xd_ego = cas.MX.sym('xd_ego', n_desired, N + 1)
-        # self.add_X(self.x_ego, self.u_ego, self.xd_ego)
 
         # Parameters
         self.x0_ego = cas.MX.sym('x0_ego', n_state, 1)
@@ -159,9 +158,6 @@ class MultiMPC(NonconvexOptimization):
         self.x_ctrld = [cas.MX.sym('x_ctrl%02d' % i, n_state, N + 1) for i in range(self.n_vehs_cntrld)]
         self.u_ctrld = [cas.MX.sym('u_ctrl%02d' % i, n_ctrl, N) for i in range(self.n_vehs_cntrld)]
         self.xd_ctrld = [cas.MX.sym('xd_ctrl%02d' % i, n_desired, N + 1) for i in range(self.n_vehs_cntrld)]
-
-        # for i in range(self.n_vehs_cntrld):
-        #     self.add_X(self.x_ctrld[i], self.u_ctrld[i], self.xd_ctrld[i])
 
         # Cntrld Vehicle Parameters
         self.x0_cntrld = [cas.MX.sym('x0_ctrl%02d' % i, n_state, 1) for i in range(self.n_vehs_cntrld)]
@@ -176,8 +172,6 @@ class MultiMPC(NonconvexOptimization):
         self.x_other = [cas.MX.sym('x_nc%02d' % i, n_state, N + 1) for i in range(self.n_other_vehicle)]
         self.u_other = [cas.MX.sym('u_nc%02d' % i, n_ctrl, N) for i in range(self.n_other_vehicle)]
         self.xd_other = [cas.MX.sym('xd_nc%02d' % i, 3, N + 1) for i in range(self.n_other_vehicle)]
-        # for i in range(self.n_other_vehicle):
-        #     self.add_X(self.x_other[i], self.u_other[i], self.xd_other[i])
 
         # Non-Response Vehicle Parameters
         self.x0_allother = [cas.MX.sym('x0_nc%02d' % i, n_state, 1) for i in range(self.n_other_vehicle)]
@@ -227,13 +221,9 @@ class MultiMPC(NonconvexOptimization):
         self.slack_cost = 0
         if self.n_other_vehicle > 0:
             self.slack_i_jnc = cas.MX.sym('s_i_jnc', self.n_other_vehicle, N + 1)
-            # self.add_X(self.slack_i_jnc)
             self.slack_ic_jnc = [
                 cas.MX.sym('s_i%02d_jnc' % i, self.n_other_vehicle, N + 1) for i in range(self.n_vehs_cntrld)
             ]
-            # for i in range(len(self.slack_ic_jnc)):
-            #     self.add_X(self.slack_ic_jnc[i])
-
             self.add_bounded_constraint(np.zeros(shape=self.slack_i_jnc.shape), self.slack_i_jnc, None)
             for slack_var in self.slack_ic_jnc:
                 self.add_bounded_constraint(np.zeros(shape=slack_var.shape), slack_var, None)
@@ -252,7 +242,6 @@ class MultiMPC(NonconvexOptimization):
         # Slack variables related to cntrld vehicles
         if self.n_vehs_cntrld > 0:
             self.slack_i_jc = cas.MX.sym("s_i_jc", self.n_vehs_cntrld, N + 1)
-            # self.add_X(self.slack_i_jc)
             self.add_bounded_constraint(np.zeros(shape=self.slack_i_jc.shape), self.slack_i_jc, None)
             for jc in range(self.slack_i_jc.shape[0]):
                 for t in range(self.slack_i_jc.shape[1]):
@@ -261,9 +250,6 @@ class MultiMPC(NonconvexOptimization):
             self.slack_ic_jc = [
                 cas.MX.sym("s_ic%02d_jc" % ic, self.n_vehs_cntrld, N + 1) for ic in range(self.n_vehs_cntrld)
             ]
-            # for i in range(len(self.slack_ic_jc)):
-            #     self.add_X(self.slack_ic_jc[i])
-
             for ic in range(self.n_vehs_cntrld):
                 self.add_bounded_constraint(np.zeros(shape=self.slack_ic_jc[ic].shape), self.slack_ic_jc[ic], None)
                 for jc in range(self.slack_ic_jc[ic].shape[0]):
@@ -448,8 +434,6 @@ class MultiMPC(NonconvexOptimization):
         # return solver
 
         # Set the solver conditions
-
-
 
 
 
