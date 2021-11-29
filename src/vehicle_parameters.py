@@ -1,9 +1,5 @@
 import numpy as np
 import casadi as cas
-import scipy.optimize as optimize
-from casadi import Opti
-from src.vehicle import Vehicle
-
 
 class VehicleParameters(object):
     def __init__(self, n_cntrld: int = 0, n_other_vehicles: int = 0, agent_str: str = ""):
@@ -79,11 +75,11 @@ class VehicleParameters(object):
 
         self.ax = cas.MX.sym('p_' + self.get_param_name(), 1, 1)
         self.by = cas.MX.sym('p_' + self.get_param_name(), 1, 1)
-
-        self.theta_i_ego = cas.MX.sym('p_' + self.get_param_name(), 1)
-        self.theta_i_jc = cas.MX.sym('p_' + self.get_param_name(), n_cntrld, 1)
-        self.theta_i_jnc = cas.MX.sym('p_' + self.get_param_name(), n_other_vehicles,
-                                      1)  # These need to be set dependent on which IDs are in jc and nc
+        
+        # self.theta_i_ego = cas.MX.sym('p_' + self.get_param_name(), 1)
+        # self.theta_i_jc = cas.MX.sym('p_' + self.get_param_name(), n_cntrld, 1)
+        # self.theta_i_jnc = cas.MX.sym('p_' + self.get_param_name(), n_other_vehicles,
+        #                               1)  # These need to be set dependent on which IDs are in jc and nc
 
     def get_param_name(self):
         self.param_counter += 1
@@ -133,9 +129,9 @@ class VehicleParameters(object):
             # self.radius ,
             self.ax,
             self.by,
-            self.theta_i_ego[:],
-            self.theta_i_jc[:],
-            self.theta_i_jnc[:],
+            # self.theta_i_ego[:],
+            # self.theta_i_jc[:],
+            # self.theta_i_jnc[:],
         )
 
         return all_params
@@ -185,9 +181,9 @@ class VehicleParameters(object):
             # vehicle.radius,
             vehicle.ax,
             vehicle.by,
-            vehicle.theta_i_ego,
-            vehicle.theta_i_jc,
-            vehicle.theta_i_jnc
+            # vehicle.theta_i_ego,
+            # vehicle.theta_i_jc,
+            # vehicle.theta_i_jnc
         ]
 
         tall_params = []
@@ -199,6 +195,8 @@ class VehicleParameters(object):
                     tall_params += [-999999999999999]
                 else:
                     tall_params += [p]
+            elif type(p) == int:
+                tall_params += [p]
             else:
                 tall_params += [p.flatten()]
 
