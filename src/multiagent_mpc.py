@@ -65,33 +65,15 @@ class NonconvexOptimization(object):
         self._lbg_list = cas.vertcat(*tall_lbg_list)
         self._ubg_list = cas.vertcat(*tall_ubg_list)
 
-        # ### Ego: Slack variables
-        # tall_x_list = []
-        # for ix in range(len(self._x_list)):
-        #     if self._x_list[ix].shape[1] != 1:
-        #         tall_x_list += [cas.reshape(self._x_list[ix], self._x_list[ix].shape[0] * self._x_list[ix].shape[1], 1)]
-        #     else:
-        #         tall_x_list += [self._x_list[ix]]
-        # self._x_list = cas.vertcat(*tall_x_list)
-        # print(self._x_list)
-
-        tall_p_list = []
-        for ix in range(len(self._p_list)):
-            if self._p_list[ix].shape[1] != 1:
-                tall_p_list += [cas.reshape(self._p_list[ix], self._p_list[ix].shape[0] * self._p_list[ix].shape[1], 1)]
-            else:
-                tall_p_list += [self._p_list[ix]]
-        self._p_list = cas.vertcat(*tall_p_list)
-
         self.nx = self._x_list.shape[0]
         self.np = self._p_list.shape[0]
         self.ng = self._g_list.shape[0]
 
-    def get_nlpsol(self):
+    def get_nlpsol(self, ipopt_params):
         self.reshape_lists()
         prob = {'f': self._f, 'g': self._g_list, 'x': self._x_list, 'p': self._p_list}
-        
-        solver = cas.nlpsol('solver', 'ipopt', prob)
+        print(ipopt_params)
+        solver = cas.nlpsol('solver', 'ipopt', prob, ipopt_params)
 
         return solver
 
@@ -152,7 +134,10 @@ class MultiMPC(NonconvexOptimization):
         # Parameters
         self.x0_ego = cas.MX.sym('x0_ego', n_state, 1)
         self.p_ego = VehicleParameters(self.n_vehs_cntrld, self.n_other_vehicle, "ego")
-        self.add_P(self.x0_ego[:], self.p_ego.get_opti_params())
+        self.p_size = self.p_ego.get_opti_params().size()[0]
+        self.p_theta_ic = cas.MX.sym('svo_ego', self.n_vehs_cntrld, 1)
+        self.p_theta_inc = cas.MX.sym('svo_ego_nc', self.n_other_vehicle, 1)
+        self.p_theta_i_ego =  cas.MX.sym('svo_ego_self', 1, 1)
 
         # Cntrld Vehicles become variables in the optimization
         self.x_ctrld = [cas.MX.sym('x_ctrl%02d' % i, n_state, N + 1) for i in range(self.n_vehs_cntrld)]
@@ -165,8 +150,7 @@ class MultiMPC(NonconvexOptimization):
             VehicleParameters(self.n_vehs_cntrld, self.n_other_vehicle, "ctrl%02d" % i)
             for i in range(self.n_vehs_cntrld)
         ]
-        for i in range(len(self.x0_cntrld)):
-            self.add_P(self.x0_cntrld[i][:], self.p_cntrld_list[i].get_opti_params())
+
 
         # Variables of surrounding vehicles assumed fixed as parameters for computation
         self.x_other = [cas.MX.sym('x_nc%02d' % i, n_state, N + 1) for i in range(self.n_other_vehicle)]
@@ -180,8 +164,6 @@ class MultiMPC(NonconvexOptimization):
             for i in range(self.n_other_vehicle)
         ]
 
-        for i in range(len(self.x0_allother)):
-            self.add_P(self.x0_allother[i][:], self.p_other_vehicle_list[i].get_opti_params())
 
         if params is None:
             params = {}
@@ -200,7 +182,7 @@ class MultiMPC(NonconvexOptimization):
         # Generate SVO cost for other (non-cntrld) vehicles
         for idx in range(self.n_other_vehicle):
             # svo_ij = self.ego_veh.get_theta_ij(self.p_other_vehicle_list[idx].agent_id)
-            svo_ij = self.p_ego.theta_i_jnc[idx]
+            svo_ij = self.p_theta_inc[idx]
             #TODO: Convert svo_ij into paramters that is set
             #TODO: Get rid of the if statement
             nonresponse_cost, _ = self.generate_veh_costs(self.x_other[idx], self.u_other[idx], self.xd_other[idx],
@@ -211,7 +193,7 @@ class MultiMPC(NonconvexOptimization):
         # SVO cost for Other (ctrld) Vehicles
         for idx in range(self.n_vehs_cntrld):
             # svo_ij = self.ego_veh.get_theta_ij(self.p_cntrld_list[idx].agent_id)
-            svo_ij = self.p_ego.theta_i_jc[idx]
+            svo_ij = self.p_theta_ic[idx]
             nonresponse_cost, _ = self.generate_veh_costs(self.x_ctrld[idx], self.u_ctrld[idx], self.xd_ctrld[idx],
                                                           self.p_cntrld_list[idx])
             nonresponse_cost = nonresponse_cost * (svo_ij) > 0
@@ -259,7 +241,7 @@ class MultiMPC(NonconvexOptimization):
             self.slack_i_jc = 0
             self.slack_ic_jc = []
 
-        self.response_svo_cost = np.cos(self.p_ego.theta_i_ego) * self.response_costs
+        self.response_svo_cost = np.cos(self.p_theta_i_ego) * self.response_costs
 
         if self.n_other_vehicle + self.n_vehs_cntrld > 0:
             self.other_svo_cost = np.sum(self.all_other_costs) / len(self.all_other_costs)
@@ -415,11 +397,13 @@ class MultiMPC(NonconvexOptimization):
         # Total optimization costs
         self.total_svo_cost = (self.response_svo_cost + self.other_svo_cost + self.k_slack * self.slack_cost +
                                self.k_CA * self.collision_cost)
+        
         self.set_f(self.total_svo_cost)
 
         if ipopt_params is None:
             ipopt_params = {}
 
+        # This step is necessary to make a very long vector used in the NLP Solver
         self._x_list = self.mpcx_to_nlpx(self.x_ego, self.u_ego, self.xd_ego, 
                                         self.x_ctrld, self.u_ctrld, self.xd_ctrld, 
                                         self.x_other, self.u_other, self.xd_other,
@@ -429,12 +413,77 @@ class MultiMPC(NonconvexOptimization):
                                         self.top_wall_slack_c, self.bottom_wall_slack_c)
 
 
-        test = self.nlpx_to_mpcx(self._x_list)
-        self.solver = self.get_nlpsol()
+        self._p_list = self.mpcp_to_nlpp(self.x0_ego, self.p_ego, self.p_theta_i_ego, self.p_theta_ic, self.p_theta_inc, self.x0_cntrld, self.p_cntrld_list, self.x0_allother, self.p_other_vehicle_list)
+
+        self.solver = self.get_nlpsol(ipopt_params)
         # return solver
 
         # Set the solver conditions
 
+    def mpcp_to_nlpp(self, x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld, p_cntrld_list, x0_allother, p_other_vehicle_list):
+        ''' Converts 3 seperate parameter lists to a single long vector np X 1'''
+        long_list = []
+        long_list.append(x0_ego)
+        long_list.append(p_ego.get_opti_params())
+        long_list.append(p_theta_i_ego)
+        long_list.append(p_theta_i_c)
+        long_list.append(p_theta_i_nc)
+
+
+        for i in range(len(x0_cntrld)):
+            long_list.append(x0_cntrld[i])
+            long_list.append(p_cntrld_list[i].get_opti_params())
+
+        for i in range(len(x0_allother)):
+            long_list.append(x0_allother[i])
+            long_list.append(p_other_vehicle_list[i].get_opti_params())
+
+        nlp_p = cas.vcat(long_list)
+        return nlp_p
+    
+    def nlpp_to_mpcp(self, nlp_p, n_cntrld=None, n_other=None, x0_size=None, p_size=None):
+        ''' Convert from tall np X 1 vector of all parameters to split up by individual agents '''
+        if x0_size is None:
+            x0_size = 6 # this could be grabbed from self
+        
+        if p_size is None:
+            p_size = self.p_size
+        if n_other is None:
+            n_other = self.n_other_vehicle
+        if n_cntrld is None:
+            n_cntrld = self.n_vehs_cntrld
+
+        idx = 0
+        x0_ego = nlp_p[idx: idx+x0_size].reshape((x0_size,1))
+        idx += 6
+        p_ego = nlp_p[idx: idx + p_size]
+        idx += p_size
+        p_theta_i_ego = nlp_p[idx: idx+1]
+        idx+=1
+        p_theta_i_c = nlp_p[idx:idx+n_cntrld]
+        idx += n_cntrld
+        p_theta_i_nc = nlp_p[idx: idx+n_other]
+        idx += n_other
+
+        x0_other_vehicle = []
+        p_other_vehicle_list = []
+        for _ in range(n_other):
+            x0_other_vehicle.append(nlp_p[idx: idx + x0_size])
+            idx += x0_size
+            p_other_vehicle_list.append(nlp_p[idx: idx+ p_size])
+            idx += p_size
+
+        x0_cntrld_list = []
+        p_cntrld_list = []
+        
+        for _ in range(n_cntrld):
+            x0_cntrld_list.append(nlp_p[idx: idx + x0_size])
+            idx += x0_size
+            p_other_vehicle_list.append(nlp_p[idx: idx+p_size])
+            idx += p_size
+
+    
+        return x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld_list, p_cntrld_list, x0_other_vehicle, p_other_vehicle_list
 
 
     def mpcx_to_nlpx(self, x_ego, u_ego, xd_ego, x_ctrl: List, u_ctrl: List, xd_ctrl: List, x_nc: List, u_nc: List, xd_nc: List,
