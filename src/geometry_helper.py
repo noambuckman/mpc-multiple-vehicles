@@ -8,8 +8,11 @@ def minkowski_ellipse_collision_distance(ego_veh, ado_veh, x_ego, y_ego, phi_ego
     Halder, A. (2019). On the Parameterized Computation of Minimum Volume Outer Ellipsoid of Minkowski Sum of Ellipsoids."
     """
     # if not numpy:
-    shape_matrix_ego = np.array([[float(ego_veh.ax), 0.0], [0.0, float(ego_veh.by)]])
-    shape_matrix_ado = np.array([[float(ado_veh.ax), 0.0], [0.0, float(ado_veh.by)]])
+    # shape_matrix_ego = np.array([[float(ego_veh.ax), 0.0], [0.0, float(ego_veh.by)]])
+    # shape_matrix_ado = np.array([[float(ado_veh.ax), 0.0], [0.0, float(ado_veh.by)]])
+
+    shape_matrix_ego = cas.vertcat(cas.horzcat(ego_veh.ax, 0.0), cas.horzcat(0.0, ego_veh.by))
+    shape_matrix_ado = cas.vertcat(cas.horzcat(ado_veh.ax, 0.0), cas.horzcat(0.0, ado_veh.by))
 
     rotation_matrix_ego = cas.vertcat(
         cas.horzcat(cas.cos(phi_ego), -cas.sin(phi_ego)),

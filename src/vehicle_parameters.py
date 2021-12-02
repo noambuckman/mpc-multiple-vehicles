@@ -201,3 +201,9 @@ class VehicleParameters(object):
                 tall_params += [p.flatten()]
 
         return tall_params
+
+    
+    def set_param_values(self, vehicle):
+        ''' Copy all values from vehicle'''
+        
+        self.__dict__.update(vehicle.__dict__)

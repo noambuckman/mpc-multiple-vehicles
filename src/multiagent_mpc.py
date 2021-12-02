@@ -134,7 +134,7 @@ class MultiMPC(NonconvexOptimization):
         # Parameters
         self.x0_ego = cas.MX.sym('x0_ego', n_state, 1)
         self.p_ego = VehicleParameters(self.n_vehs_cntrld, self.n_other_vehicle, "ego")
-        self.p_size = self.p_ego.get_opti_params().size()[0]
+        self.p_size = self.p_ego.get_opti_params().shape[0]
         self.p_theta_ic = cas.MX.sym('svo_ego', self.n_vehs_cntrld, 1)
         self.p_theta_inc = cas.MX.sym('svo_ego_nc', self.n_other_vehicle, 1)
         self.p_theta_i_ego =  cas.MX.sym('svo_ego_self', 1, 1)
@@ -380,7 +380,7 @@ class MultiMPC(NonconvexOptimization):
 
         # TODO: Conver the Add velocity based constraints
         if "safety_constraint" in params and params["safety_constraint"] == True:
-            max_deceleration = abs(self.p_ego.max_deceleration)
+            max_deceleration = cas.fabs(self.p_ego.max_deceleration)
             if len(self.x_ctrld) > 0:
                 self.generate_circles_stopping_constraint(self.x_ego, self.x_ctrld, self.p_ego.L, self.p_ego.W,
                                                           max_deceleration)
@@ -883,7 +883,7 @@ class MultiMPC(NonconvexOptimization):
                         self.add_bounded_constraint(min_distance**2, delta_p_ij.T @ delta_p_ij, None)
                         self.add_bounded_constraint(
                             0, delta_p_ij.T @ delta_v_ij / rel_dist_mag + cas.sqrt(2 * (alpha_i + alpha_j) *
-                                                                                   (rel_dist_mag - min_distance)))
+                                                                                   (rel_dist_mag - min_distance)), None)
 
                         # self.opti.subject_to(
                         #     delta_p_ij.T @ delta_v_ij / rel_dist_mag + cas.sqrt(2 * (alpha_i + alpha_j) *

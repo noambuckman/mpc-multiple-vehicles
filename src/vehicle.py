@@ -92,6 +92,10 @@ class Vehicle(object):
         self.radius = None
 
         self.ax, self.by = self.get_ellipse(self.L, self.W)  # if you change L, W after construction
+        
+        self.theta_i_ego = 0
+        self.theta_i_jc = [0 for j in range(10)] #TODO:  Change this
+        self.theta_i_jnc = [0 for j in range(10)]
         # then it will need to be recalculated
 
     def generate_lateral_cost(self, X, X_desired):
