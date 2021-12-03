@@ -50,12 +50,12 @@ class NonconvexOptimization(object):
         tall_ubg_list = []
         tall_lbg_list = []
         for ix in range(len(self._g_list)):
-            if self._g_list[ix].shape[1] != 1:         
-                tall_dim = self._g_list[ix].shape[0] * self._g_list[ix].shape[1]       
+            if self._g_list[ix].shape[1] != 1:
+                tall_dim = self._g_list[ix].shape[0] * self._g_list[ix].shape[1]
 
-                tall_g_list += [self._g_list[ix].reshape((tall_dim,1))]
+                tall_g_list += [self._g_list[ix].reshape((tall_dim, 1))]
                 tall_lbg_list += [self._lbg_list[ix].reshape((tall_dim, 1))]
-                tall_ubg_list += [self._ubg_list[ix].reshape((tall_dim, 1))]                                
+                tall_ubg_list += [self._ubg_list[ix].reshape((tall_dim, 1))]
             else:
                 tall_g_list += [self._g_list[ix]]
                 tall_lbg_list += [self._lbg_list[ix]]
@@ -137,7 +137,7 @@ class MultiMPC(NonconvexOptimization):
         self.p_size = self.p_ego.get_opti_params().shape[0]
         self.p_theta_ic = cas.MX.sym('svo_ego', self.n_vehs_cntrld, 1)
         self.p_theta_inc = cas.MX.sym('svo_ego_nc', self.n_other_vehicle, 1)
-        self.p_theta_i_ego =  cas.MX.sym('svo_ego_self', 1, 1)
+        self.p_theta_i_ego = cas.MX.sym('svo_ego_self', 1, 1)
 
         # Cntrld Vehicles become variables in the optimization
         self.x_ctrld = [cas.MX.sym('x_ctrl%02d' % i, n_state, N + 1) for i in range(self.n_vehs_cntrld)]
@@ -151,7 +151,6 @@ class MultiMPC(NonconvexOptimization):
             for i in range(self.n_vehs_cntrld)
         ]
 
-
         # Variables of surrounding vehicles assumed fixed as parameters for computation
         self.x_other = [cas.MX.sym('x_nc%02d' % i, n_state, N + 1) for i in range(self.n_other_vehicle)]
         self.u_other = [cas.MX.sym('u_nc%02d' % i, n_ctrl, N) for i in range(self.n_other_vehicle)]
@@ -163,7 +162,6 @@ class MultiMPC(NonconvexOptimization):
             VehicleParameters(self.n_vehs_cntrld, self.n_other_vehicle, "nc%02d" % i)
             for i in range(self.n_other_vehicle)
         ]
-
 
         if params is None:
             params = {}
@@ -397,221 +395,25 @@ class MultiMPC(NonconvexOptimization):
         # Total optimization costs
         self.total_svo_cost = (self.response_svo_cost + self.other_svo_cost + self.k_slack * self.slack_cost +
                                self.k_CA * self.collision_cost)
-        
+
         self.set_f(self.total_svo_cost)
 
         if ipopt_params is None:
             ipopt_params = {}
 
         # This step is necessary to make a very long vector used in the NLP Solver
-        self._x_list = self.mpcx_to_nlpx(self.x_ego, self.u_ego, self.xd_ego, 
-                                        self.x_ctrld, self.u_ctrld, self.xd_ctrld, 
-                                        self.x_other, self.u_other, self.xd_other,
-                                        self.slack_i_jnc, self.slack_ic_jnc, 
-                                        self.slack_i_jc, self.slack_ic_jc, 
-                                        self.top_wall_slack, self.bottom_wall_slack, 
-                                        self.top_wall_slack_c, self.bottom_wall_slack_c)
+        self._x_list = mpcx_to_nlpx(self.x_ego, self.u_ego, self.xd_ego, self.x_ctrld, self.u_ctrld, self.xd_ctrld,
+                                    self.x_other, self.u_other, self.xd_other, self.slack_i_jnc, self.slack_ic_jnc,
+                                    self.slack_i_jc, self.slack_ic_jc, self.top_wall_slack, self.bottom_wall_slack,
+                                    self.top_wall_slack_c, self.bottom_wall_slack_c)
 
-
-        self._p_list = self.mpcp_to_nlpp(self.x0_ego, self.p_ego, self.p_theta_i_ego, self.p_theta_ic, self.p_theta_inc, self.x0_cntrld, self.p_cntrld_list, self.x0_allother, self.p_other_vehicle_list)
+        self._p_list = mpcp_to_nlpp(self.x0_ego, self.p_ego, self.p_theta_i_ego, self.p_theta_ic, self.p_theta_inc,
+                                    self.x0_cntrld, self.p_cntrld_list, self.x0_allother, self.p_other_vehicle_list)
 
         self.solver = self.get_nlpsol(ipopt_params)
         # return solver
 
         # Set the solver conditions
-
-    def mpcp_to_nlpp(self, x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld, p_cntrld_list, x0_allother, p_other_vehicle_list):
-        ''' Converts 3 seperate parameter lists to a single long vector np X 1'''
-        long_list = []
-        long_list.append(x0_ego)
-        long_list.append(p_ego.get_opti_params())
-        long_list.append(p_theta_i_ego)
-        long_list.append(p_theta_i_c)
-        long_list.append(p_theta_i_nc)
-
-
-        for i in range(len(x0_cntrld)):
-            long_list.append(x0_cntrld[i])
-            long_list.append(p_cntrld_list[i].get_opti_params())
-
-        for i in range(len(x0_allother)):
-            long_list.append(x0_allother[i])
-            long_list.append(p_other_vehicle_list[i].get_opti_params())
-
-        nlp_p = cas.vcat(long_list)
-        return nlp_p
-    
-    def nlpp_to_mpcp(self, nlp_p, n_cntrld=None, n_other=None, x0_size=None, p_size=None):
-        ''' Convert from tall np X 1 vector of all parameters to split up by individual agents '''
-        if x0_size is None:
-            x0_size = 6 # this could be grabbed from self
-        
-        if p_size is None:
-            p_size = self.p_size
-        if n_other is None:
-            n_other = self.n_other_vehicle
-        if n_cntrld is None:
-            n_cntrld = self.n_vehs_cntrld
-
-        idx = 0
-        x0_ego = nlp_p[idx: idx+x0_size].reshape((x0_size,1))
-        idx += 6
-        p_ego = nlp_p[idx: idx + p_size]
-        idx += p_size
-        p_theta_i_ego = nlp_p[idx: idx+1]
-        idx+=1
-        p_theta_i_c = nlp_p[idx:idx+n_cntrld]
-        idx += n_cntrld
-        p_theta_i_nc = nlp_p[idx: idx+n_other]
-        idx += n_other
-
-        x0_other_vehicle = []
-        p_other_vehicle_list = []
-        for _ in range(n_other):
-            x0_other_vehicle.append(nlp_p[idx: idx + x0_size])
-            idx += x0_size
-            p_other_vehicle_list.append(nlp_p[idx: idx+ p_size])
-            idx += p_size
-
-        x0_cntrld_list = []
-        p_cntrld_list = []
-        
-        for _ in range(n_cntrld):
-            x0_cntrld_list.append(nlp_p[idx: idx + x0_size])
-            idx += x0_size
-            p_other_vehicle_list.append(nlp_p[idx: idx+p_size])
-            idx += p_size
-
-    
-        return x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld_list, p_cntrld_list, x0_other_vehicle, p_other_vehicle_list
-
-
-    def mpcx_to_nlpx(self, x_ego, u_ego, xd_ego, x_ctrl: List, u_ctrl: List, xd_ctrl: List, x_nc: List, u_nc: List, xd_nc: List,
-                    s_i_jnc, s_ic_jnc, s_i_jc, s_ic_jc, s_top, s_bottom, s_c_top, s_c_bottom):
-
-        ''' Converts the individual trajectories into a single descision variable (nx x 1)'''
-        long_list = []
-        
-        N = u_ego.shape[1]
-        n_ctrl = u_ego.shape[0]
-        n_state = x_ego.shape[0]
-        n_desired = xd_ego.shape[0]
-        n_ctrld = len(x_ctrl)
-        n_other = len(x_nc)
-
-
-        long_list.append(x_ego.reshape((n_state * (N+1), 1)))
-        long_list.append(u_ego.reshape((n_ctrl * N, 1)))
-        long_list.append(xd_ego.reshape((n_desired * (N+1), 1)))
-
-        for i in range(n_ctrld):
-            long_list.append(x_ctrl[i].reshape((n_state * (N+1), 1)))
-            long_list.append(u_ctrl[i].reshape((n_ctrl * N, 1)))
-            long_list.append(xd_ctrl[i].reshape((n_desired * (N+1), 1))) 
-
-        for i in range(n_other):
-            long_list.append(x_nc[i].reshape((n_state * (N+1), 1)))
-            long_list.append(u_nc[i].reshape((n_ctrl * N, 1)))
-            long_list.append(xd_nc[i].reshape((n_desired * (N+1), 1)))
-
-        # Collision Slack Variables with Non-Planning Cars 
-        if n_other > 0:
-            long_list.append(s_i_jnc.reshape((n_other * (N+1), 1)))
-            for i in range(n_ctrld):
-                long_list.append(s_ic_jnc[i].reshape((n_other * (N+1), 1)))
-
-        # Collision Slack Variables with Cntrld Planning Cars 
-        if n_ctrld > 0:
-            long_list.append(s_i_jc.reshape((n_ctrld * (N+1), 1)))
-            for i in range(n_ctrld):
-                long_list.append(s_ic_jc[i].reshape((n_ctrld * (N+1) , 1)))
-        
-        long_list.append(s_top.reshape((N+1, 1)))
-        long_list.append(s_bottom.reshape((N+1, 1)))
-        for i in range(n_ctrld):
-            long_list.append(s_c_top[i].reshape((N+1, 1)))
-            long_list.append(s_c_bottom[i].reshape((N+1, 1)))
-
-        nlp_x = cas.vcat(long_list)
-        return nlp_x
-
-    def nlpx_to_mpcx(self, nlp_x, N=None, n_ctrld=None, n_other=None, n_state=6, n_ctrl=2, n_desired=3):
-        ''' Splits the output of an nlp solver (nx X 1) into subsequent trajectories for ego and ado vehicles and slack variables '''
-
-        if N is None:
-            N = self.N
-        if n_ctrld is None:
-            n_ctrld = self.n_vehs_cntrld
-        if n_other is None:
-            n_other = self.n_other_vehicle
-
-
-        idx = 0
-        x_ego = nlp_x[idx: idx + n_state*(N+1)].reshape((n_state, N+1))
-        idx += n_state*(N+1)
-        u_ego = nlp_x[idx: idx + n_ctrl*N].reshape((n_ctrl, N))
-        idx += n_ctrl*N
-        xd_ego = nlp_x[idx: idx + n_desired*(N+1)].reshape((n_desired, N+1))
-        idx += n_desired*(N+1)
-
-        x_ctrl = []
-        u_ctrl = []
-        xd_ctrl = []
-        for i in range(n_ctrld):
-            x_ctrl.append(nlp_x[idx: idx + n_state * (N+1)].reshape((n_state, N+1)))
-            idx += n_state * (N+1)
-            u_ctrl.append(nlp_x[idx : idx + n_ctrl * N].reshape((n_ctrl, N)))
-            idx += n_ctrl * N
-            xd_ctrl.append(nlp_x[idx : idx + n_desired * (N+1)].reshape((n_desired, N+1)))
-            idx += n_desired * N+1
-        
-        x_nc = []
-        u_nc = []
-        xd_nc = []
-        for i in range(n_other):
-            x_nc.append(nlp_x[idx: idx + n_state * (N+1)].reshape((n_state, N+1)))
-            idx += n_state * (N+1)
-            u_nc.append(nlp_x[idx : idx + n_ctrl * N].reshape((n_ctrl, N)))
-            idx += n_ctrl * N
-            xd_nc.append(nlp_x[idx : idx + n_desired * (N+1)].reshape((n_desired, N+1)))
-            idx += n_desired * N+1
-
-        s_i_jnc = None
-        s_ic_jnc = []
-        if n_other > 0:
-            s_i_jnc = nlp_x[idx: idx + n_other * (N+1)].reshape((n_other,  N+1))
-            idx += n_other * (N+1)
-            
-            for i in range(n_ctrld):
-                s_ic_jnc.append(nlp_x[idx: idx + n_other * (N+1)].reshape((n_other , (N+1))))
-                idx += n_other * (N+1)
-        
-        s_i_jc = None
-        s_ic_jc = []
-        if n_ctrld > 0:
-            s_i_jc = nlp_x[idx: idx + n_ctrld * (N+1) ].reshape((n_ctrld,  N+1))
-            idx += n_ctrld * (N+1)
-            
-            for i in range(n_ctrld):
-                s_ic_jc.append(nlp_x[idx: idx + n_ctrld * (N+1)].reshape((n_ctrld , (N+1))))
-                idx += n_ctrld * (N+1)
-
-        s_top = nlp_x[idx: idx+ N+1].reshape((N+1, 1))
-        idx += N+1
-        s_bottom = nlp_x[idx: idx + N+1].reshape((N+1, 1))
-        idx += N+1
-
-        s_c_top = []
-        s_c_bottom = []        
-        for i in range(n_ctrld):
-            s_c_top.append(nlp_x[idx: idx+N+1].reshape((N+1, 1)))
-            idx += N+1
-            s_c_bottom.append(nlp_x[idx: idx+N+1].reshape((N+1, 1)))
-            idx += N+1
-
-        return x_ego, u_ego, xd_ego, x_ctrl, u_ctrl, xd_ctrl, x_nc, u_nc, xd_nc, s_i_jnc, s_ic_jnc, s_i_jc, s_ic_jc, s_top, s_bottom, s_c_top, s_c_bottom
-
-
 
     def add_state_constraints_g(self, X, U, ego_veh):
         ''' Construct vehicle specific constraints that only rely on
@@ -1198,3 +1000,177 @@ def get_vehicle_circles(x_state):
 #     radius = np.sqrt((length / 4)**2 + (width / 2)**2)  # analytic solution to minim. circumscribed circle
 
 #     return list_of_xy_centers, radius
+
+
+def mpcp_to_nlpp(x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld, p_cntrld_list, x0_allother,
+                 p_other_vehicle_list):
+    ''' Converts 3 seperate parameter lists to a single long vector np X 1'''
+    long_list = []
+    long_list.append(x0_ego)
+    long_list.append(p_ego.get_opti_params())
+    long_list.append(p_theta_i_ego)
+    long_list.append(p_theta_i_c)
+    long_list.append(p_theta_i_nc)
+
+    for i in range(len(x0_cntrld)):
+        long_list.append(x0_cntrld[i])
+        long_list.append(p_cntrld_list[i].get_opti_params())
+
+    for i in range(len(x0_allother)):
+        long_list.append(x0_allother[i])
+        long_list.append(p_other_vehicle_list[i].get_opti_params())
+
+    nlp_p = cas.vcat(long_list)
+    return nlp_p
+
+
+def nlpp_to_mpcp(self, nlp_p, n_cntrld: int = None, n_other: int = None, x0_size: int = None, p_size: int = None):
+    ''' Convert from tall np X 1 vector of all parameters to split up by individual agents '''
+
+    idx = 0
+    x0_ego = nlp_p[idx:idx + x0_size].reshape((x0_size, 1))
+    idx += 6
+    p_ego = nlp_p[idx:idx + p_size]
+    idx += p_size
+    p_theta_i_ego = nlp_p[idx:idx + 1]
+    idx += 1
+    p_theta_i_c = nlp_p[idx:idx + n_cntrld]
+    idx += n_cntrld
+    p_theta_i_nc = nlp_p[idx:idx + n_other]
+    idx += n_other
+
+    x0_other_vehicle = []
+    p_other_vehicle_list = []
+    for _ in range(n_other):
+        x0_other_vehicle.append(nlp_p[idx:idx + x0_size])
+        idx += x0_size
+        p_other_vehicle_list.append(nlp_p[idx:idx + p_size])
+        idx += p_size
+
+    x0_cntrld_list = []
+    p_cntrld_list = []
+
+    for _ in range(n_cntrld):
+        x0_cntrld_list.append(nlp_p[idx:idx + x0_size])
+        idx += x0_size
+        p_other_vehicle_list.append(nlp_p[idx:idx + p_size])
+        idx += p_size
+
+    return x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld_list, p_cntrld_list, x0_other_vehicle, p_other_vehicle_list
+
+
+def mpcx_to_nlpx(x_ego, u_ego, xd_ego, x_ctrl: List, u_ctrl: List, xd_ctrl: List, x_nc: List, u_nc: List, xd_nc: List,
+                 s_i_jnc, s_ic_jnc, s_i_jc, s_ic_jc, s_top, s_bottom, s_c_top, s_c_bottom):
+    ''' Converts the individual trajectories into a single descision variable (nx x 1)'''
+    long_list = []
+
+    N = u_ego.shape[1]
+    n_ctrl = u_ego.shape[0]
+    n_state = x_ego.shape[0]
+    n_desired = xd_ego.shape[0]
+    n_ctrld = len(x_ctrl)
+    n_other = len(x_nc)
+
+    long_list.append(x_ego.reshape((n_state * (N + 1), 1)))
+    long_list.append(u_ego.reshape((n_ctrl * N, 1)))
+    long_list.append(xd_ego.reshape((n_desired * (N + 1), 1)))
+
+    for i in range(n_ctrld):
+        long_list.append(x_ctrl[i].reshape((n_state * (N + 1), 1)))
+        long_list.append(u_ctrl[i].reshape((n_ctrl * N, 1)))
+        long_list.append(xd_ctrl[i].reshape((n_desired * (N + 1), 1)))
+
+    for i in range(n_other):
+        long_list.append(x_nc[i].reshape((n_state * (N + 1), 1)))
+        long_list.append(u_nc[i].reshape((n_ctrl * N, 1)))
+        long_list.append(xd_nc[i].reshape((n_desired * (N + 1), 1)))
+
+    # Collision Slack Variables with Non-Planning Cars
+    if n_other > 0:
+        long_list.append(s_i_jnc.reshape((n_other * (N + 1), 1)))
+        for i in range(n_ctrld):
+            long_list.append(s_ic_jnc[i].reshape((n_other * (N + 1), 1)))
+
+    # Collision Slack Variables with Cntrld Planning Cars
+    if n_ctrld > 0:
+        long_list.append(s_i_jc.reshape((n_ctrld * (N + 1), 1)))
+        for i in range(n_ctrld):
+            long_list.append(s_ic_jc[i].reshape((n_ctrld * (N + 1), 1)))
+
+    long_list.append(s_top.reshape((N + 1, 1)))
+    long_list.append(s_bottom.reshape((N + 1, 1)))
+    for i in range(n_ctrld):
+        long_list.append(s_c_top[i].reshape((N + 1, 1)))
+        long_list.append(s_c_bottom[i].reshape((N + 1, 1)))
+
+    nlp_x = cas.vcat(long_list)
+    return nlp_x
+
+
+def nlpx_to_mpcx(nlp_x, N=None, n_ctrld=None, n_other=None, n_state=6, n_ctrl=2, n_desired=3):
+    ''' Splits the output of an nlp solver (nx X 1) into subsequent trajectories for ego and ado vehicles and slack variables '''
+
+    idx = 0
+    x_ego = nlp_x[idx:idx + n_state * (N + 1)].reshape((n_state, N + 1))
+    idx += n_state * (N + 1)
+    u_ego = nlp_x[idx:idx + n_ctrl * N].reshape((n_ctrl, N))
+    idx += n_ctrl * N
+    xd_ego = nlp_x[idx:idx + n_desired * (N + 1)].reshape((n_desired, N + 1))
+    idx += n_desired * (N + 1)
+
+    x_ctrl = []
+    u_ctrl = []
+    xd_ctrl = []
+    for i in range(n_ctrld):
+        x_ctrl.append(nlp_x[idx:idx + n_state * (N + 1)].reshape((n_state, N + 1)))
+        idx += n_state * (N + 1)
+        u_ctrl.append(nlp_x[idx:idx + n_ctrl * N].reshape((n_ctrl, N)))
+        idx += n_ctrl * N
+        xd_ctrl.append(nlp_x[idx:idx + n_desired * (N + 1)].reshape((n_desired, N + 1)))
+        idx += n_desired * N + 1
+
+    x_nc = []
+    u_nc = []
+    xd_nc = []
+    for i in range(n_other):
+        x_nc.append(nlp_x[idx:idx + n_state * (N + 1)].reshape((n_state, N + 1)))
+        idx += n_state * (N + 1)
+        u_nc.append(nlp_x[idx:idx + n_ctrl * N].reshape((n_ctrl, N)))
+        idx += n_ctrl * N
+        xd_nc.append(nlp_x[idx:idx + n_desired * (N + 1)].reshape((n_desired, N + 1)))
+        idx += n_desired * N + 1
+
+    s_i_jnc = None
+    s_ic_jnc = []
+    if n_other > 0:
+        s_i_jnc = nlp_x[idx:idx + n_other * (N + 1)].reshape((n_other, N + 1))
+        idx += n_other * (N + 1)
+
+        for i in range(n_ctrld):
+            s_ic_jnc.append(nlp_x[idx:idx + n_other * (N + 1)].reshape((n_other, (N + 1))))
+            idx += n_other * (N + 1)
+
+    s_i_jc = None
+    s_ic_jc = []
+    if n_ctrld > 0:
+        s_i_jc = nlp_x[idx:idx + n_ctrld * (N + 1)].reshape((n_ctrld, N + 1))
+        idx += n_ctrld * (N + 1)
+
+        for i in range(n_ctrld):
+            s_ic_jc.append(nlp_x[idx:idx + n_ctrld * (N + 1)].reshape((n_ctrld, (N + 1))))
+            idx += n_ctrld * (N + 1)
+
+    s_top = nlp_x[idx:idx + N + 1].reshape((N + 1, 1))
+    idx += N + 1
+    s_bottom = nlp_x[idx:idx + N + 1].reshape((N + 1, 1))
+    idx += N + 1
+
+    s_c_top = []
+    s_c_bottom = []
+    for i in range(n_ctrld):
+        s_c_top.append(nlp_x[idx:idx + N + 1].reshape((N + 1, 1)))
+        idx += N + 1
+        s_c_bottom.append(nlp_x[idx:idx + N + 1].reshape((N + 1, 1)))
+        idx += N + 1
+
+    return x_ego, u_ego, xd_ego, x_ctrl, u_ctrl, xd_ctrl, x_nc, u_nc, xd_nc, s_i_jnc, s_ic_jnc, s_i_jc, s_ic_jc, s_top, s_bottom, s_c_top, s_c_bottom
