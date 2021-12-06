@@ -75,7 +75,8 @@ class NonconvexOptimization(object):
         print(ipopt_params)
         solver = cas.nlpsol('solver', 'ipopt', prob, ipopt_params)
 
-        return solver
+        solver_name_prefix = "mpc_%02d_%02d"%(self.n_vehs_cntrld, self.n_other_vehicles)
+        return solver, solver_name_prefix
 
 
 class MultiMPC(NonconvexOptimization):
@@ -402,15 +403,18 @@ class MultiMPC(NonconvexOptimization):
             ipopt_params = {}
 
         # This step is necessary to make a very long vector used in the NLP Solver
-        self._x_list = mpcx_to_nlpx(self.x_ego, self.u_ego, self.xd_ego, self.x_ctrld, self.u_ctrld, self.xd_ctrld,
-                                    self.x_other, self.u_other, self.xd_other, self.slack_i_jnc, self.slack_ic_jnc,
+        self._x_list = mpcx_to_nlpx(self.n_other_vehicle, 
+                                    self.x_ego, self.u_ego, self.xd_ego, 
+                                    self.x_ctrld, self.u_ctrld, self.xd_ctrld,
+                                    self.slack_i_jnc, self.slack_ic_jnc,
                                     self.slack_i_jc, self.slack_ic_jc, self.top_wall_slack, self.bottom_wall_slack,
                                     self.top_wall_slack_c, self.bottom_wall_slack_c)
 
         self._p_list = mpcp_to_nlpp(self.x0_ego, self.p_ego, self.p_theta_i_ego, self.p_theta_ic, self.p_theta_inc,
-                                    self.x0_cntrld, self.p_cntrld_list, self.x0_allother, self.p_other_vehicle_list)
+                                    self.x0_cntrld, self.p_cntrld_list, self.x0_allother, self.p_other_vehicle_list,
+                                    self.x_other, self.u_other, self.xd_other)
 
-        self.solver = self.get_nlpsol(ipopt_params)
+        self.solver, self.solver_prefix = self.get_nlpsol(ipopt_params)
         # return solver
 
         # Set the solver conditions
@@ -669,7 +673,6 @@ class MultiMPC(NonconvexOptimization):
 
             for j in range(len(x_others)):
                 xj = x_others[j][:, k]
-                #TODO Make function to generate inscribing circles
                 ado_centers, ado_radius = get_vehicle_circles(xj)
                 v_j = cas.vertcat(xj[4] * cas.cos(xj[2]), xj[4] * cas.sin(xj[2]))
 
@@ -682,10 +685,11 @@ class MultiMPC(NonconvexOptimization):
                         rel_dist_mag = cas.sqrt(delta_p_ij.T @ delta_p_ij)
                         # added to help prevent large gradients in next constraint
                         # self.opti.subject_to(delta_p_ij.T @ delta_p_ij >= min_distance**2)
+                        stopping_distance = cas.fmax(rel_dist_mag - min_distance, 0.00001) # make sure we are always positive
                         self.add_bounded_constraint(min_distance**2, delta_p_ij.T @ delta_p_ij, None)
                         self.add_bounded_constraint(
                             0, delta_p_ij.T @ delta_v_ij / rel_dist_mag + cas.sqrt(2 * (alpha_i + alpha_j) *
-                                                                                   (rel_dist_mag - min_distance)), None)
+                                                                                   (stopping_distance)), None)
 
                         # self.opti.subject_to(
                         #     delta_p_ij.T @ delta_v_ij / rel_dist_mag + cas.sqrt(2 * (alpha_i + alpha_j) *
@@ -1003,8 +1007,9 @@ def get_vehicle_circles(x_state):
 
 
 def mpcp_to_nlpp(x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld, p_cntrld_list, x0_allother,
-                 p_other_vehicle_list):
+                 p_other_vehicle_list, x_other_nc, u_other_nc, xd_other_nc):
     ''' Converts 3 seperate parameter lists to a single long vector np X 1'''
+    # Add ego parameters
     long_list = []
     long_list.append(x0_ego)
     long_list.append(p_ego.get_opti_params())
@@ -1012,21 +1017,37 @@ def mpcp_to_nlpp(x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cnt
     long_list.append(p_theta_i_c)
     long_list.append(p_theta_i_nc)
 
+    # Add cntrld vehicle parameters
     for i in range(len(x0_cntrld)):
         long_list.append(x0_cntrld[i])
         long_list.append(p_cntrld_list[i].get_opti_params())
 
+    # Add non response parameters
     for i in range(len(x0_allother)):
         long_list.append(x0_allother[i])
         long_list.append(p_other_vehicle_list[i].get_opti_params())
+    
+    # Add non response trajectories used for collision avoidance
+    for i in range(len(x_other_nc)):
+        N = u_other_nc[i].shape[1]
+        n_ctrl = u_other_nc[i].shape[0]
+        n_state = x_other_nc[i].shape[0]
+        n_desired = xd_other_nc[i].shape[0]
+             
+        long_list.append(x_other_nc[i].reshape((n_state * (N + 1), 1)))
+        long_list.append(u_other_nc[i].reshape((n_ctrl * N, 1)))
+        long_list.append(xd_other_nc[i].reshape((n_desired * (N + 1), 1))) 
 
     nlp_p = cas.vcat(long_list)
     return nlp_p
 
 
-def nlpp_to_mpcp(self, nlp_p, n_cntrld: int = None, n_other: int = None, x0_size: int = None, p_size: int = None):
+def nlpp_to_mpcp(nlp_p, N=None,  n_cntrld: int = 0, n_other: int = 0, x0_size: int = 6, p_size: int = None, n_state=6, n_ctrl=2, n_desired=3):
     ''' Convert from tall np X 1 vector of all parameters to split up by individual agents '''
-
+    if p_size is None:
+        raise Exception("Parameter list size not inputed as argument. Make sure to provide p_size")
+    
+    # Get ego vehicle parameters
     idx = 0
     x0_ego = nlp_p[idx:idx + x0_size].reshape((x0_size, 1))
     idx += 6
@@ -1039,27 +1060,45 @@ def nlpp_to_mpcp(self, nlp_p, n_cntrld: int = None, n_other: int = None, x0_size
     p_theta_i_nc = nlp_p[idx:idx + n_other]
     idx += n_other
 
+    # Get Cntrld Vehicle Parameters
+    x0_cntrld_list = []
+    p_cntrld_list = []
+    for _ in range(n_cntrld):
+        x0_cntrld_list.append(nlp_p[idx:idx + x0_size])
+        idx += x0_size
+        p_cntrld_list.append(nlp_p[idx:idx + p_size])
+        idx += p_size        
+
+    # Get Non Response Vehicle Parameters
     x0_other_vehicle = []
     p_other_vehicle_list = []
+    x_other_nc = []
+    u_other_nc = []
+    xd_other_nc = []
+
+    # Get other vehicle x0 and parameters
     for _ in range(n_other):
         x0_other_vehicle.append(nlp_p[idx:idx + x0_size])
         idx += x0_size
         p_other_vehicle_list.append(nlp_p[idx:idx + p_size])
         idx += p_size
+    
+    # Get other vehicle trajectories
+    x_other_nc = []
+    u_other_nc = []
+    xd_other_nc = []
+    for _ in range(n_other):
+        x_other_nc.append(nlp_p[idx:idx + n_state * (N + 1)].reshape((n_state, N + 1)))
+        idx += n_state * (N + 1)
+        u_other_nc.append(nlp_p[idx:idx + n_ctrl * N].reshape((n_ctrl, N)))
+        idx += n_ctrl * N
+        xd_other_nc.append(nlp_p[idx:idx + n_desired * (N + 1)].reshape((n_desired, N + 1)))
+        idx += n_desired * N + 1
+    
+    return x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld_list, p_cntrld_list, x0_other_vehicle, p_other_vehicle_list, x_other_nc, u_other_nc, xd_other_nc
 
-    x0_cntrld_list = []
-    p_cntrld_list = []
 
-    for _ in range(n_cntrld):
-        x0_cntrld_list.append(nlp_p[idx:idx + x0_size])
-        idx += x0_size
-        p_other_vehicle_list.append(nlp_p[idx:idx + p_size])
-        idx += p_size
-
-    return x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld_list, p_cntrld_list, x0_other_vehicle, p_other_vehicle_list
-
-
-def mpcx_to_nlpx(x_ego, u_ego, xd_ego, x_ctrl: List, u_ctrl: List, xd_ctrl: List, x_nc: List, u_nc: List, xd_nc: List,
+def mpcx_to_nlpx(n_other: int, x_ego, u_ego, xd_ego, x_ctrl: List, u_ctrl: List, xd_ctrl: List, 
                  s_i_jnc, s_ic_jnc, s_i_jc, s_ic_jc, s_top, s_bottom, s_c_top, s_c_bottom):
     ''' Converts the individual trajectories into a single descision variable (nx x 1)'''
     long_list = []
@@ -1069,7 +1108,6 @@ def mpcx_to_nlpx(x_ego, u_ego, xd_ego, x_ctrl: List, u_ctrl: List, xd_ctrl: List
     n_state = x_ego.shape[0]
     n_desired = xd_ego.shape[0]
     n_ctrld = len(x_ctrl)
-    n_other = len(x_nc)
 
     long_list.append(x_ego.reshape((n_state * (N + 1), 1)))
     long_list.append(u_ego.reshape((n_ctrl * N, 1)))
@@ -1079,11 +1117,6 @@ def mpcx_to_nlpx(x_ego, u_ego, xd_ego, x_ctrl: List, u_ctrl: List, xd_ctrl: List
         long_list.append(x_ctrl[i].reshape((n_state * (N + 1), 1)))
         long_list.append(u_ctrl[i].reshape((n_ctrl * N, 1)))
         long_list.append(xd_ctrl[i].reshape((n_desired * (N + 1), 1)))
-
-    for i in range(n_other):
-        long_list.append(x_nc[i].reshape((n_state * (N + 1), 1)))
-        long_list.append(u_nc[i].reshape((n_ctrl * N, 1)))
-        long_list.append(xd_nc[i].reshape((n_desired * (N + 1), 1)))
 
     # Collision Slack Variables with Non-Planning Cars
     if n_other > 0:
@@ -1107,7 +1140,7 @@ def mpcx_to_nlpx(x_ego, u_ego, xd_ego, x_ctrl: List, u_ctrl: List, xd_ctrl: List
     return nlp_x
 
 
-def nlpx_to_mpcx(nlp_x, N=None, n_ctrld=None, n_other=None, n_state=6, n_ctrl=2, n_desired=3):
+def nlpx_to_mpcx(nlp_x, N: int=0, n_ctrld: int=0, n_other: int=0, n_state=6, n_ctrl=2, n_desired=3):
     ''' Splits the output of an nlp solver (nx X 1) into subsequent trajectories for ego and ado vehicles and slack variables '''
 
     idx = 0
@@ -1127,17 +1160,6 @@ def nlpx_to_mpcx(nlp_x, N=None, n_ctrld=None, n_other=None, n_state=6, n_ctrl=2,
         u_ctrl.append(nlp_x[idx:idx + n_ctrl * N].reshape((n_ctrl, N)))
         idx += n_ctrl * N
         xd_ctrl.append(nlp_x[idx:idx + n_desired * (N + 1)].reshape((n_desired, N + 1)))
-        idx += n_desired * N + 1
-
-    x_nc = []
-    u_nc = []
-    xd_nc = []
-    for i in range(n_other):
-        x_nc.append(nlp_x[idx:idx + n_state * (N + 1)].reshape((n_state, N + 1)))
-        idx += n_state * (N + 1)
-        u_nc.append(nlp_x[idx:idx + n_ctrl * N].reshape((n_ctrl, N)))
-        idx += n_ctrl * N
-        xd_nc.append(nlp_x[idx:idx + n_desired * (N + 1)].reshape((n_desired, N + 1)))
         idx += n_desired * N + 1
 
     s_i_jnc = None
@@ -1173,4 +1195,4 @@ def nlpx_to_mpcx(nlp_x, N=None, n_ctrld=None, n_other=None, n_state=6, n_ctrl=2,
         s_c_bottom.append(nlp_x[idx:idx + N + 1].reshape((N + 1, 1)))
         idx += N + 1
 
-    return x_ego, u_ego, xd_ego, x_ctrl, u_ctrl, xd_ctrl, x_nc, u_nc, xd_nc, s_i_jnc, s_ic_jnc, s_i_jc, s_ic_jc, s_top, s_bottom, s_c_top, s_c_bottom
+    return x_ego, u_ego, xd_ego, x_ctrl, u_ctrl, xd_ctrl, s_i_jnc, s_ic_jnc, s_i_jc, s_ic_jc, s_top, s_bottom, s_c_top, s_c_bottom
