@@ -15,3 +15,10 @@ class VehicleMPCInformation:
         self.u = u
         self.x = x
         self.xd = xd
+
+
+class Trajectory:
+    def __init__(self, u, x, xd):
+        self.x = x
+        self.u = u
+        self.xd = xd
