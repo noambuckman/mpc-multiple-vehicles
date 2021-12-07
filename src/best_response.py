@@ -1,15 +1,16 @@
 import numpy as np
 import multiprocessing, functools
-from typing import List, Tuple
-from src.multiagent_mpc import MultiMPC, mpcx_to_nlpx
+from typing import List, Tuple, Dict
+from src.multiagent_mpc import MultiMPC, mpcx_to_nlpx, nlpp_to_mpcp
 from casadi import nlpsol
 from src.multiagent_mpc import MultiMPC, mpcp_to_nlpp, nlpx_to_mpcx
 from vehicle_parameters import VehicleParameters
+from src.vehicle_mpc_information import Trajectory
 
 
 def solve_best_response(
-        warm_key,
-        warm_trajectory,
+        warm_key: str,
+        warm_trajectory: Trajectory,
         response_vehicle,
         cntrld_vehicles,
         nonresponse_vehicle_list,
@@ -85,7 +86,7 @@ def solve_best_response(
 
 
 def solve_warm_starts(
-        ux_warm_profiles,
+        warm_start_trajectories: Dict[str, Trajectory],
         response_veh_info,
         world,
         solver_params,
@@ -106,9 +107,9 @@ def solve_warm_starts(
 
     cntrld_vehicles = [veh_info.vehicle for veh_info in cntrl_veh_info]
     cntrld_x0 = [veh_info.x0 for veh_info in cntrl_veh_info]
-    cntrld_u = [veh_info.u for veh_info in cntrl_veh_info]
-    cntrld_x = [veh_info.x for veh_info in cntrl_veh_info]
-    cntrld_xd = [veh_info.xd for veh_info in cntrl_veh_info]
+    cntrld_u_warm = [veh_info.u for veh_info in cntrl_veh_info]
+    cntrld_x_warm = [veh_info.x for veh_info in cntrl_veh_info]
+    cntrld_xd_warm = [veh_info.xd for veh_info in cntrl_veh_info]
 
     warm_solve_partial = functools.partial(solve_best_response_c,
                                            response_vehicle=response_vehicle,
@@ -124,20 +125,20 @@ def solve_warm_starts(
                                            nonresponse_u_list=nonresponse_u_list,
                                            nonresponse_x_list=nonresponse_x_list,
                                            nonresponse_xd_list=nonresponse_xd_list,
-                                           cntrld_u=cntrld_u,
-                                           cntrld_x=cntrld_x,
-                                           cntrld_xd=cntrld_xd,
+                                           cntrld_u_warm=cntrld_u_warm,
+                                           cntrld_x_warm=cntrld_x_warm,
+                                           cntrld_xd_warm=cntrld_xd_warm,
                                            return_bri=False)
 
     if params['n_processors'] > 1:
         pool = multiprocessing.Pool(processes=params['n_processors'])
         solve_costs_solutions = pool.starmap(warm_solve_partial,
-                                             ux_warm_profiles.items())  #will apply k=1...N to plot_partial
+                                             warm_start_trajectories.items())  #will apply k=1...N to plot_partial
         pool.terminate()
     else:
         solve_costs_solutions = []
-        for k_warm in ux_warm_profiles:
-            solve_costs_solutions += [warm_solve_partial(k_warm, ux_warm_profiles[k_warm])]
+        for k_warm in warm_start_trajectories:
+            solve_costs_solutions += [warm_solve_partial(k_warm, warm_start_trajectories[k_warm])]
 
     if debug_flag:
         for ki in range(len(solve_costs_solutions)):
@@ -153,9 +154,10 @@ def solve_warm_starts(
 
     return min_cost_solution
 
+
 def solve_best_response_c(
-        warm_key,
-        warm_trajectory,
+        warm_key: str,
+        warm_trajectory: Trajectory,
         response_vehicle,
         cntrld_vehicles,
         nonresponse_vehicle_list,
@@ -169,46 +171,42 @@ def solve_best_response_c(
         nonresponse_u_list,
         nonresponse_x_list,
         nonresponse_xd_list,
-        cntrld_u=None,
-        cntrld_x=None,
-        cntrld_xd=None,
+        cntrld_u_warm=None,
+        cntrld_x_warm=None,
+        cntrld_xd_warm=None,
         return_bri=False) -> Tuple[bool, float, float, np.array, np.array, np.array, str, List, List[Tuple[np.array]]]:
     '''Create the iterative best response object and solve.  Assumes that it receives warm start profiles.
     This really should only require a u_warm, x_warm, x_des_warm and then one level above we generate those values'''
-
-    u_warm, x_warm, x_des_warm = warm_trajectory
 
     nc = len(cntrld_vehicles)
     nnc = len(nonresponse_vehicle_list)
     params["collision_avoidance_checking_distance"] = 100
 
-    # Get warm starts
-    nlp_x0 = get_warm_start_x0(nc, x_warm, u_warm, x_des_warm, cntrld_x, cntrld_u, cntrld_xd)
+    nlp_x0 = get_warm_start_x0(nc, nnc, warm_trajectory, cntrld_x_warm, cntrld_u_warm, cntrld_xd_warm)
 
-    # This doesn't change and could be moved outside this method
     mpc = MultiMPC(params["N"], world, nc, nnc, solver_params, params, ipopt_params)
-    
     nlp_lbg, nlp_ubg = get_bounds_from_mpc(mpc)
-    nlp_solver = load_solver_from_mpc(mpc)
+    nlp_solver = load_solver_from_mpc(mpc, precompiled=False)
 
-    # Get the constants for the MPC solver
-    p_ego, p_cntrld, p_nc = convert_vehicles_to_parameters(nc, nnc, response_vehicle, cntrld_vehicles, nonresponse_vehicle_list)
-    theta_ego_i, theta_ic, theta_i_nc = get_svo_values()
-    nlp_p = mpcp_to_nlpp(response_x0, p_ego, 
-                    theta_ego_i, theta_ic, theta_i_nc, 
-                    cntrld_x0, p_cntrld, nonresponse_x0_list,
-                    p_nc, nonresponse_x_list, nonresponse_u_list, nonresponse_xd_list)
-    
+    p_ego, p_cntrld, p_nc = convert_vehicles_to_parameters(nc, nnc, response_vehicle, cntrld_vehicles,
+                                                           nonresponse_vehicle_list)
+    theta_ego_i, theta_ic, theta_i_nc = get_fake_svo_values(nc, nnc)
+    nlp_p = mpcp_to_nlpp(response_x0, p_ego, theta_ego_i, theta_ic, theta_i_nc, cntrld_x0, p_cntrld,
+                         nonresponse_x0_list, p_nc, nonresponse_x_list, nonresponse_u_list, nonresponse_xd_list)
+
     set_constant_v_constraint(params)  #this is carry over and should be removed
-
+    response_x0t, p_egot, theta_ego_it, theta_ict, theta_i_nct, cntrld_xt, p_cntrldt, nonresponse_x0_listt, p_nct, nonresponse_x_listt, nonresponse_u_listt, nonresponse_xd_listt = nlpp_to_mpcp(
+        nlp_p, params["N"], nc, nnc, 6, mpc.p_size)
     # Call the solver
     try:
         solution = nlp_solver(x0=nlp_x0, p=nlp_p, lbg=nlp_lbg, ubg=nlp_ubg)
-        x_ego, u_ego, xd_ego, cntrld_vehicle_trajectories, max_slack, current_cost = get_trajectories_from_solution(solution, params["N"], nc, nnc)
+        x_ego, u_ego, xd_ego, cntrld_vehicle_trajectories, max_slack, current_cost = get_trajectories_from_solution(
+            solution, params["N"], nc, nnc)
 
         debug_list = []
         return True, current_cost, max_slack, x_ego, xd_ego, u_ego, warm_key, debug_list, cntrld_vehicle_trajectories
-    except RuntimeError:
+    except Exception as e:
+        print(e)
         return False, np.infty, np.infty, None, None, None, None, [], None
 
 
@@ -223,14 +221,20 @@ def get_trajectories_from_solution(nlp_solution, N, nc, nnc):
     cntrld_vehicle_trajectories = [(x_ctrl[j], xd_ctrl[j], u_ctrl[j]) for j in range(len(x_ctrl))]
 
     # Compute the maximum slack
+
     all_slack_vars = [s_i_jnc, s_i_jc] + [s for s in s_ic_jc] + [s for s in s_ic_jnc]
     max_slack = np.max([np.max(s) for s in all_slack_vars] + [0.000000000000])
 
     return x_ego, u_ego, xd_ego, cntrld_vehicle_trajectories, max_slack, current_cost
 
 
-def get_svo_values():
-    return NotImplementedError
+def get_fake_svo_values(n_ctrl, n_other):
+    ''' Generate fake svo parameters with correct output for testing'''
+
+    theta_i_ego = np.pi / 4
+    theta_ic = [np.pi / 4 for _ in range(n_ctrl)]
+    theta_inc = [np.pi / 4 for _ in range(n_other)]
+    return theta_i_ego, theta_ic, theta_inc
 
 
 def load_solver_from_file(filename):
@@ -240,14 +244,19 @@ def load_solver_from_file(filename):
     return nlpsolver
 
 
-def load_solver_from_mpc(mpc):
+def load_solver_from_mpc(mpc, precompiled: bool = True):
     ''' Get name of sovler from mpc'''
-    solver_name_prefix = mpc.solver_prefix
-    solver = load_solver_from_file("./%s.so"%solver_name_prefix)
+    if precompiled:
+        solver_name_prefix = mpc.solver_prefix
+        solver = load_solver_from_file("./%s.so" % solver_name_prefix)
+    else:
+        solver = mpc.solver
 
     return solver
 
+
 def get_bounds_from_mpc(mpc):
+
     lbg = mpc._lbg_list
     ubg = mpc._ubg_list
 
@@ -268,6 +277,7 @@ def init_slack_vars_zero(N, n_vehs_cntrld, n_other_vehicle):
 
     return s_i_jnc, s_ic_jnc, s_i_jc, s_ic_jc, s_top, s_bottom, s_c_top, s_c_bottom
 
+
 def init_random_warm_starts(n_vehs_cntrld, x_warm, u_warm, x_des_warm):
     # initialize with random warm starts
     x_ctrld_warm = [np.random.uniform(size=x_warm.shape) for _ in range(n_vehs_cntrld)]
@@ -276,16 +286,28 @@ def init_random_warm_starts(n_vehs_cntrld, x_warm, u_warm, x_des_warm):
 
     return x_ctrld_warm, u_ctrld_warm, xd_ctrld_warm
 
-def get_warm_start_x0(n_vehs_cntrld, n_other, x_warm, u_warm, x_des_warm, x_ctrld_warm=None, u_cntrld_warm=None, xd_cntrld_warm=None):
-    ''' Convert warm starts for the ego vehicle and control vehicle into a nx X 1 array'''
-    N = x_warm.shape[1]
 
-    s_i_jnc, s_ic_jnc, s_i_jc, s_ic_jc, s_top, s_bottom, s_c_top, s_c_bottom = init_slack_vars_zero(N, n_vehs_cntrld, n_other)
-    
+def get_warm_start_x0(n_vehs_cntrld,
+                      n_other,
+                      ego_warm_trajectory,
+                      x_ctrld_warm=None,
+                      u_ctrld_warm=None,
+                      xd_ctrld_warm=None):
+    ''' Convert warm starts for the ego vehicle and control vehicle into a nx X 1 array'''
+    x_warm = ego_warm_trajectory.x
+    u_warm = ego_warm_trajectory.u
+    x_des_warm = ego_warm_trajectory.xd
+
+    N = u_warm.shape[1]
+
+    s_i_jnc, s_ic_jnc, s_i_jc, s_ic_jc, s_top, s_bottom, s_c_top, s_c_bottom = init_slack_vars_zero(
+        N, n_vehs_cntrld, n_other)
+
     if x_ctrld_warm is None:
         x_ctrld_warm, u_ctrld_warm, xd_ctrld_warm = init_random_warm_starts(n_vehs_cntrld, x_warm, u_warm, x_des_warm)
-    
-    nlp_x = mpcx_to_nlpx(n_other, x_warm, u_warm, x_des_warm, x_ctrld_warm, u_ctrld_warm, xd_ctrld_warm, s_i_jnc, s_ic_jnc, s_i_jc, s_ic_jc, s_top, s_bottom, s_c_top, s_c_bottom)
+
+    nlp_x = mpcx_to_nlpx(n_other, x_warm, u_warm, x_des_warm, x_ctrld_warm, u_ctrld_warm, xd_ctrld_warm, s_i_jnc,
+                         s_ic_jnc, s_i_jc, s_ic_jc, s_top, s_bottom, s_c_top, s_c_bottom)
 
     return nlp_x
 
@@ -297,6 +319,7 @@ def get_non_response_p0():
 
 
 def set_constant_v_constraint(solver_params):
+    return None
     raise NotImplementedError
     if "constant_v" in solver_params and solver_params["constant_v"]:
         bri.opti.subject_to(bri.u_ego[1, :] == 0)
