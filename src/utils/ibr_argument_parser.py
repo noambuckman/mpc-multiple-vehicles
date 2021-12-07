@@ -37,7 +37,7 @@ class IBRParser(ArgumentParser):
         self.add_argument('--print-flag', action='store_true')
 
         # MPC Settings
-        self.add_argument('--T', type=int, default=5, help="Planning horizon for MPC")
+        self.add_argument('--T', type=float, default=5.0, help="Planning horizon for MPC")
         self.add_argument('--dt', type=float, default=0.2, help="Time discretization for MPC")
         self.add_argument('--p-exec',
                           type=float,
