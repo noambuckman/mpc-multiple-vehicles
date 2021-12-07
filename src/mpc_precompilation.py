@@ -12,7 +12,6 @@ parser.add_argument("--nnc", type=int, default=4, help="Number of Non-Response V
 args = parser.parse_args()
 params = vars(args)
 
-
 # Determine number of control points in the optimization
 params["N"] = max(1, int(params["T"] / params["dt"]))
 params["number_ctrl_pts_executed"] = max(1, int(np.floor(params["N"] * params["p_exec"])))
@@ -30,18 +29,15 @@ solver_params["k_CA"] = params["k_CA_d"]
 solver_params["k_CA_power"] = params["k_CA_power"]
 solver_params["k_slack"] = params["k_slack_d"]
 
-
-solver_name_prefix = "mpc_%02d_%02d"%(args.nc, args.nnc)
-
+solver_name_prefix = "mpc_%02d_%02d" % (args.nc, args.nnc)
 
 params["safety_constraint"] = True
 
 mpc = MultiMPC(params["N"], world, args.nc, args.nnc, solver_params, params, ipopt_params)
 start_time = datetime.datetime.now()
 
-
-print("Compiling %s"%(solver_name_prefix))
-mpc.solver.generate_dependencies('%s.c'%solver_name_prefix)
+print("Compiling %s" % (solver_name_prefix))
+mpc.solver.generate_dependencies('%s.c' % solver_name_prefix)
 # -O3 is the most optimized
-system('gcc -fPIC -shared -O %s.c -o %s.so'%(solver_name_prefix, solver_name_prefix))
-print("Done Compiling %s.  Duration: %s"%(solver_name_prefix, (datetime.datetime.now() - start_time)))
+system('gcc -fPIC -shared -O %s.c -o %s.so' % (solver_name_prefix, solver_name_prefix))
+print("Done Compiling %s.  Duration: %s" % (solver_name_prefix, (datetime.datetime.now() - start_time)))
