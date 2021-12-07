@@ -1,7 +1,6 @@
 import numpy as np
 from src.traffic_world import TrafficWorld
-
-# from simple_optimizations import spatial_only_optimization
+from src.vehicle_mpc_information import Trajectory
 
 
 def generate_warm_x(car_mpc, world: TrafficWorld, x0: np.array, average_v=None):
@@ -231,20 +230,9 @@ def generate_warm_starts(vehicle,
             x_des_warm,
         ]
 
-    return ux_warm_profiles
+    warm_start_trajectories = {}
+    for key, (u, x, xd) in ux_warm_profiles.items():
 
+        warm_start_trajectories[key] = Trajectory(u=u, x=x, xd=xd)
 
-# def generate_warm_starts_advanced(x_initial, u_initial, xd_initial, x_cntrld_initial, x_non_response, response_veh,
-#                                   cntrld_veh, non_response_veh, distance_threshold):
-#     ''' Generate warm_starts that first solve an initial relaxed optimization
-#     '''
-
-#     ux_warm_profiles = {}
-
-#     x_response_warm, x_cntrld_warm = spatial_only_optimization(x_initial, x_cntrld_initial, x_non_response,
-#                                                                response_veh, cntrld_veh, non_response_veh,
-#                                                                distance_threshold)
-
-#     ux_warm_profiles["previous_mpc_spatial"] = [u_initial, x_response_warm, xd_initial]
-
-#     return ux_warm_profiles
+    return warm_start_trajectories
