@@ -4,10 +4,10 @@ import copy as cp
 from collections import deque
 from typing import List, Tuple
 
-from src.vehicle_mpc_information import VehicleMPCInformation
+from src.vehicle_mpc_information import VehicleMPCInformation, Trajectory
 import src.vehicle as vehicle
 from src.simple_optimizations import feasible_guess
-from src.best_response import solve_best_response
+from src.best_response import solve_best_response_c
 
 
 def nonresponse_subset(list_of_veh_idxs, all_other_x0, all_other_vehicles, all_other_u, all_other_x, all_other_x_des):
@@ -32,24 +32,6 @@ def nonresponse_slice(i, all_other_x0, all_other_vehicles, all_other_u, all_othe
     nonresponse_xd_list = all_other_x_des[:i] + all_other_x_des[i + 1:]
 
     return nonresponse_x0_list, nonresponse_vehicle_list, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list
-
-
-def warm_profiles_subset(n_warm_keys: int, ux_warm_profiles):
-    '''choose randomly n_warm_keys keys from ux_warm_profiles and return the subset'''
-
-    priority_warm_keys = []
-    if n_warm_keys >= 1 and "previous_mpc_hold" in ux_warm_profiles:
-        priority_warm_keys += ["previous_mpc_hold"]
-    if n_warm_keys >= 2 and "previous_ibr" in ux_warm_profiles:
-        priority_warm_keys += ["previous_ibr"]
-    remaining_n_keys = n_warm_keys - len(priority_warm_keys)
-    remaining_keys = [k for k in ux_warm_profiles.keys() if k not in priority_warm_keys]
-    random.shuffle(remaining_keys)
-
-    warm_subset_keys = priority_warm_keys + remaining_keys[:remaining_n_keys]
-    ux_warm_profiles_subset = dict((k, ux_warm_profiles[k]) for k in warm_subset_keys)
-
-    return ux_warm_profiles_subset
 
 
 def get_min_dist_i(ambulance_x0, all_other_x0, restrict_greater=False):
@@ -523,11 +505,11 @@ def lane_following_optimizations(N, vehicle, x0, params, world):
     u_warm = np.zeros((2, N))
     x_warm, x_des_warm = cp_vehicle.forward_simulate_all(x0.reshape(6, 1), u_warm)
 
-    warm_traj = u_warm, x_warm, x_des_warm
+    warm_traj = Trajectory(u=u_warm, x=x_warm, xd=x_des_warm)
 
-    _, _, max_slack, x, x_des, u, _, _, _ = solve_best_response("test", warm_traj, cp_vehicle, [], [], x0, [], [],
-                                                                world, solver_params, cp_params, ipopt_params, [], [],
-                                                                [])
+    _, _, max_slack, x, x_des, u, _, _, _ = solve_best_response_c("test", warm_traj, cp_vehicle, [], [], x0, [], [],
+                                                                  world, solver_params, cp_params, ipopt_params, [], [],
+                                                                  [])
     del cp_vehicle
 
     if max_slack < np.infty:

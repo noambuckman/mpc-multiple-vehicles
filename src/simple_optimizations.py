@@ -1,8 +1,8 @@
 import numpy as np
 import casadi as cas
 import copy as cp
-from src.best_response import solve_best_response
-
+from src.best_response import solve_best_response_c
+from src.vehicle_mpc_information import Trajectory
 from typing import List
 from src.geometry_helper import minkowski_ellipse_collision_distance
 
@@ -50,12 +50,12 @@ def feasible_guess(N, vehicle, x0, params, world, other_vehicle_info):
                                           3 * cp_vehicle.L)
 
     # warm start with feasible x (not dynamically feasible)
-    warm_traj = u_warm_intial, x_warm, x_des_warm_initial
+    warm_traj = Trajectory(u=u_warm_intial, x=x_warm, xd=x_des_warm_initial)
     # max_slack = np.infty
-    _, _, max_slack, x, x_des, u, _, _, _ = solve_best_response("mix spatial none", warm_traj, cp_vehicle, [],
-                                                                other_vehicles, x0, [], x0_other_vehicles, world,
-                                                                solver_params, cp_params, ipopt_params, u_other,
-                                                                x_other, xd_other)
+    _, _, max_slack, x, x_des, u, _, _, _ = solve_best_response_c("mix spatial none", warm_traj, cp_vehicle, [],
+                                                                  other_vehicles, x0, [], x0_other_vehicles, world,
+                                                                  solver_params, cp_params, ipopt_params, u_other,
+                                                                  x_other, xd_other)
 
     del cp_vehicle  # needed to fix: TypeError: cannot pickle 'SwigPyObject' object
     del other_vehicles
