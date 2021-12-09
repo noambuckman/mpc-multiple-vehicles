@@ -8,7 +8,7 @@ from vehicle_parameters import VehicleParameters
 from src.vehicle_mpc_information import Trajectory
 
 
-def solve_best_response(
+def _solve_best_response(
         warm_key: str,
         warm_trajectory: Trajectory,
         response_vehicle,
@@ -218,7 +218,11 @@ def get_trajectories_from_solution(nlp_solution, N, nc, nnc):
     x_ego, u_ego, xd_ego, x_ctrl, u_ctrl, xd_ctrl, s_i_jnc, s_ic_jnc, s_i_jc, s_ic_jc, _, _, _, _ = nlpx_to_mpcx(
         traj, N, nc, nnc)
 
-    cntrld_vehicle_trajectories = [(x_ctrl[j], xd_ctrl[j], u_ctrl[j]) for j in range(len(x_ctrl))]
+    x_ego = np.array(x_ego)
+    u_ego = np.array(u_ego)
+    xd_ego = np.array(xd_ego)
+    cntrld_vehicle_trajectories = [(np.array(x_ctrl[j]), np.array(xd_ctrl[j]), np.array(u_ctrl[j]))
+                                   for j in range(len(x_ctrl))]
 
     # Compute the maximum slack
 
