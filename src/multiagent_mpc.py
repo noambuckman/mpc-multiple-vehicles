@@ -53,9 +53,9 @@ class NonconvexOptimization(object):
             if self._g_list[ix].shape[1] != 1:
                 tall_dim = self._g_list[ix].shape[0] * self._g_list[ix].shape[1]
 
-                tall_g_list += [self._g_list[ix].reshape((tall_dim, 1))]
-                tall_lbg_list += [self._lbg_list[ix].reshape((tall_dim, 1))]
-                tall_ubg_list += [self._ubg_list[ix].reshape((tall_dim, 1))]
+                tall_g_list += [cas.reshape(self._g_list[ix], (tall_dim, 1))]
+                tall_lbg_list += [cas.reshape(self._lbg_list[ix], (tall_dim, 1))]
+                tall_ubg_list += [cas.reshape(self._ubg_list[ix], (tall_dim, 1))]
             else:
                 tall_g_list += [self._g_list[ix]]
                 tall_lbg_list += [self._lbg_list[ix]]
@@ -411,8 +411,8 @@ class MultiMPC(NonconvexOptimization):
     def get_nlpsol(self, ipopt_params):
         self.reshape_lists()
         prob = {'f': self._f, 'g': self._g_list, 'x': self._x_list, 'p': self._p_list}
-        print(ipopt_params)
-        solver = cas.nlpsol('solver', 'ipopt', prob, ipopt_params)
+
+        solver = cas.nlpsol('solver', 'ipopt', prob, {'ipopt': ipopt_params})
 
         solver_name_prefix = "mpc_%02d_%02d" % (self.n_vehs_cntrld, self.n_other_vehicle)
         return solver, solver_name_prefix
@@ -1056,8 +1056,8 @@ def nlpp_to_mpcp(nlp_p,
 
     # Get ego vehicle parameters
     idx = 0
-    x0_ego = nlp_p[idx:idx + x0_size].reshape((x0_size, 1))
-    idx += 6
+    x0_ego = cas.reshape(nlp_p[idx:idx + x0_size], (x0_size, 1))
+    idx += x0_size
     p_ego = nlp_p[idx:idx + p_size]
     idx += p_size
     p_theta_i_ego = nlp_p[idx:idx + 1]
@@ -1100,7 +1100,7 @@ def nlpp_to_mpcp(nlp_p,
         u_other_nc.append(cas.reshape(nlp_p[idx:idx + n_ctrl * N], (n_ctrl, N)))
         idx += n_ctrl * N
         xd_other_nc.append(cas.reshape(nlp_p[idx:idx + n_desired * (N + 1)], (n_desired, N + 1)))
-        idx += n_desired * N + 1
+        idx += n_desired * (N + 1)
 
     return x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld_list, p_cntrld_list, x0_other_vehicle, p_other_vehicle_list, x_other_nc, u_other_nc, xd_other_nc
 
@@ -1118,7 +1118,7 @@ def mpcx_to_nlpx(n_other: int, x_ego, u_ego, xd_ego, x_ctrl: List, u_ctrl: List,
 
     long_list.append(cas.reshape(x_ego, (n_state * (N + 1), 1)))
     long_list.append(cas.reshape(u_ego, (n_ctrl * N, 1)))
-    long_list.append(xd_ego.reshape((n_desired * (N + 1), 1)))
+    long_list.append(cas.reshape(xd_ego, (n_desired * (N + 1), 1)))
 
     for i in range(n_ctrld_vehicles):
         long_list.append(cas.reshape(x_ctrl[i], (n_state * (N + 1), 1)))
@@ -1167,7 +1167,7 @@ def nlpx_to_mpcx(nlp_x, N: int = 0, n_ctrld_vehicles: int = 0, n_other: int = 0,
         u_ctrl.append(cas.reshape(nlp_x[idx:idx + n_ctrl * N], (n_ctrl, N)))
         idx += n_ctrl * N
         xd_ctrl.append(cas.reshape(nlp_x[idx:idx + n_desired * (N + 1)], (n_desired, N + 1)))
-        idx += n_desired * N + 1
+        idx += n_desired * (N + 1)
 
     s_i_jnc = 0
     s_ic_jnc = []
