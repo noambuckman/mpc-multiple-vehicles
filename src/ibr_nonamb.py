@@ -9,10 +9,10 @@ from shapely.affinity import rotate
 from src.traffic_world import TrafficWorld
 from src.vehicle import Vehicle
 from src.multiagent_mpc import load_state, save_state
-from src.warm_starts import generate_warm_starts
+from src.warm_starts import generate_warm_starts, warm_profiles_subset
 from src.utils.ibr_argument_parser import IBRParser
 from src.best_response import solve_warm_starts
-from src.utils.solver_helper import warm_profiles_subset, poission_positions, extend_last_mpc_and_follow, initialize_cars_from_positions
+from src.utils.solver_helper import poission_positions, extend_last_mpc_and_follow, initialize_cars_from_positions
 from src.vehicle_mpc_information import VehicleMPCInformation
 
 
@@ -220,12 +220,12 @@ def run_iterative_best_response(other_vehicles,
 
                 if solve_number == params["k_max_solve_number"]:
                     if i_rounds_ibr > 0:
-                        u_ibr, x_ibr, x_des_ibr = warm_starts['previous_ibr']
+                        default_traj = warm_starts['previous_ibr']
                     else:
-                        u_ibr, x_ibr, x_des_ibr = warm_starts['previous_mpc_hold']
+                        default_traj = warm_starts['previous_mpc_hold']
 
-                    othervehs_ibr_info[response_i].update_state(u_ibr, x_ibr, x_des_ibr)
-                    vehs_ibr_info_predicted[response_i].update_state(u_ibr, x_ibr, x_des_ibr)
+                    othervehs_ibr_info[response_i].update_state(default_traj.u, default_traj.x, default_traj.xd)
+                    vehs_ibr_info_predicted[response_i].update_state(default_traj.u, default_traj.x, default_traj.xd)
 
                     print(
                         "......Reached max # resolves. veh: %02d | mpc: %d | ibr: %d | Slack %.05f > thresh %.05f  | solver time: %0.1f"
