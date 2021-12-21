@@ -95,7 +95,7 @@ class IBRParser(ArgumentParser):
         self.add_argument('--k-politeness', type=float, default=None, help="parameter for IDM")
 
         self.add_argument('--safety-constraint', type=str2bool, default=False, help="Stopping constraint")
-
+        self.add_argument('--plot-initial-positions', type=str2bool, default=True, help="Plot & save initial conditions")
 
 def str2bool(v):
     if isinstance(v, bool):
