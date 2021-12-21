@@ -6,7 +6,7 @@ from os import system
 import datetime
 
 parser = IBRParser()
-parser.add_argument("--nc", type=int, default=2, help="Number of Controlled Vehicles")
+parser.add_argument("--nc", type=int, default=1, help="Number of Controlled Vehicles")
 parser.add_argument("--nnc", type=int, default=4, help="Number of Non-Response Vehicles")
 
 args = parser.parse_args()
@@ -18,7 +18,7 @@ params["number_ctrl_pts_executed"] = max(1, int(np.floor(params["N"] * params["p
 world = TrafficWorld(params["n_lanes"], 0, 999999)
 
 # Create the
-ipopt_params = {'ipopt': {"print_level": 5}}
+ipopt_params = {"print_level": 5}
 params['slack'] = True
 
 solver_params = {}
@@ -29,13 +29,12 @@ solver_params["k_CA"] = params["k_CA_d"]
 solver_params["k_CA_power"] = params["k_CA_power"]
 solver_params["k_slack"] = params["k_slack_d"]
 
-solver_name_prefix = "mpc_%02d_%02d" % (args.nc, args.nnc)
 
 params["safety_constraint"] = True
 
 mpc = MultiMPC(params["N"], world, args.nc, args.nnc, solver_params, params, ipopt_params)
 start_time = datetime.datetime.now()
-
+solver_name_prefix = mpc.get_solver_name()
 print("Compiling %s" % (solver_name_prefix))
 mpc.solver.generate_dependencies('%s.c' % solver_name_prefix)
 # -O3 is the most optimized
