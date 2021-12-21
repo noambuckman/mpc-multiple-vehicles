@@ -4,7 +4,7 @@ from typing import List, Tuple, Dict
 from src.multiagent_mpc import MultiMPC, mpcx_to_nlpx, nlpp_to_mpcp
 from casadi import nlpsol
 from src.multiagent_mpc import MultiMPC, mpcp_to_nlpp, nlpx_to_mpcx
-from vehicle_parameters import VehicleParameters
+from src.vehicle_parameters import VehicleParameters
 from src.vehicle_mpc_information import Trajectory
 
 
@@ -94,6 +94,7 @@ def solve_warm_starts(
         ipopt_params,
         nonresponse_veh_info,
         cntrl_veh_info,
+        max_slack = np.infty,
         debug_flag=False) -> Tuple[bool, float, float, np.array, np.array, np.array, str, List, List[Tuple[np.array]]]:
 
     response_vehicle = response_veh_info.vehicle
@@ -101,9 +102,7 @@ def solve_warm_starts(
 
     nonresponse_vehicle_list = [veh_info.vehicle for veh_info in nonresponse_veh_info]
     nonresponse_x0_list = [veh_info.x0 for veh_info in nonresponse_veh_info]
-    nonresponse_u_list = [veh_info.u for veh_info in nonresponse_veh_info]
     nonresponse_x_list = [veh_info.x for veh_info in nonresponse_veh_info]
-    nonresponse_xd_list = [veh_info.xd for veh_info in nonresponse_veh_info]
 
     cntrld_vehicles = [veh_info.vehicle for veh_info in cntrl_veh_info]
     cntrld_x0 = [veh_info.x0 for veh_info in cntrl_veh_info]
@@ -122,9 +121,7 @@ def solve_warm_starts(
                                            solver_params=solver_params,
                                            params=params,
                                            ipopt_params=ipopt_params,
-                                           nonresponse_u_list=nonresponse_u_list,
                                            nonresponse_x_list=nonresponse_x_list,
-                                           nonresponse_xd_list=nonresponse_xd_list,
                                            cntrld_u_warm=cntrld_u_warm,
                                            cntrld_x_warm=cntrld_x_warm,
                                            cntrld_xd_warm=cntrld_xd_warm,
@@ -149,9 +146,12 @@ def solve_warm_starts(
             else:
                 print("Costs: Total Cost %.04f Vehicle-Only Cost:  %.04f Collision Cost %0.04f  Slack Cost %0.04f" %
                       (tuple(debug_list[0:4])))
-
-    min_cost_solution = min(solve_costs_solutions, key=lambda r: r[1])
-
+    
+    below_max_slack_sols = [s for s in solve_costs_solutions if s[2] <= max_slack]
+    if len(below_max_slack_sols) > 0:
+        return min(below_max_slack_sols, key=lambda r: r[1])
+    else:
+        min_cost_solution = min(solve_costs_solutions, key=lambda r: r[1])
     return min_cost_solution
 
 
@@ -168,9 +168,7 @@ def solve_best_response_c(
         solver_params,
         params,
         ipopt_params,
-        nonresponse_u_list,
         nonresponse_x_list,
-        nonresponse_xd_list,
         cntrld_u_warm=None,
         cntrld_x_warm=None,
         cntrld_xd_warm=None,
@@ -192,11 +190,11 @@ def solve_best_response_c(
                                                            nonresponse_vehicle_list)
     theta_ego_i, theta_ic, theta_i_nc = get_fake_svo_values(nc, nnc)
     nlp_p = mpcp_to_nlpp(response_x0, p_ego, theta_ego_i, theta_ic, theta_i_nc, cntrld_x0, p_cntrld,
-                         nonresponse_x0_list, p_nc, nonresponse_x_list, nonresponse_u_list, nonresponse_xd_list)
+                         nonresponse_x0_list, p_nc, nonresponse_x_list)
 
     set_constant_v_constraint(params)  #this is carry over and should be removed
-    response_x0t, p_egot, theta_ego_it, theta_ict, theta_i_nct, cntrld_xt, p_cntrldt, nonresponse_x0_listt, p_nct, nonresponse_x_listt, nonresponse_u_listt, nonresponse_xd_listt = nlpp_to_mpcp(
-        nlp_p, params["N"], nc, nnc, 6, mpc.p_size)
+    # response_x0t, p_egot, theta_ego_it, theta_ict, theta_i_nct, cntrld_xt, p_cntrldt, nonresponse_x0_listt, p_nct, nonresponse_x_listt = nlpp_to_mpcp(
+    #     nlp_p, params["N"], nc, nnc, 6, mpc.p_size)
     # Call the solver
     try:
         solution = nlp_solver(x0=nlp_x0, p=nlp_p, lbg=nlp_lbg, ubg=nlp_ubg)
@@ -223,6 +221,7 @@ def get_trajectories_from_solution(nlp_solution, N, nc, nnc):
     xd_ego = np.array(xd_ego)
     cntrld_vehicle_trajectories = [(np.array(x_ctrl[j]), np.array(xd_ctrl[j]), np.array(u_ctrl[j]))
                                    for j in range(len(x_ctrl))]
+    # cntrld_vehicle_trajectories = [(x_ctrl[j], xd_ctrl[j], u_ctrl[j]) for j in range(len(x_ctrl))]
 
     # Compute the maximum slack
 
