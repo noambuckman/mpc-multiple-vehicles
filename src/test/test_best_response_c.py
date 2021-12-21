@@ -6,13 +6,13 @@ from src.utils.solver_helper import poission_positions, initialize_cars_from_pos
 from vehicle import Vehicle
 from vehicle_parameters import VehicleParameters
 from src.vehicle_mpc_information import VehicleMPCInformation, Trajectory
-from src.best_response import solve_best_response_c
+from src.best_response import solve_best_response_c, solve_warm_starts
 from src.warm_starts import generate_warm_starts
 
 parser = IBRParser()
 args = parser.parse_args()
 params = vars(args)
-# params["T"] =
+params["T"] = 1.0
 # params["n_other"] = 6
 i_mpc_start = 0
 params["N"] = max(1, int(params["T"] / params["dt"]))
@@ -60,12 +60,12 @@ solver_params["k_CA"] = params["k_CA_d"]
 solver_params["k_CA_power"] = params["k_CA_power"]
 solver_params["k_slack"] = params["k_slack_d"]
 
-ipopt_params = {'ipopt': {"print_level": 2}}
+ipopt_params = {"print_level": 2}
 params['slack'] = True
 
 ego_idx = 0
-c_idx = [1]
-nc_idx = [2]
+c_idx = []
+nc_idx = [1, 2, 3]
 
 nc = len(c_idx)
 nnc = len(nc_idx)
@@ -102,32 +102,48 @@ for i in range(len(cntrld_vehicles)):
     ctrld_u_warm[i] = np.zeros((2, params["N"]))
     ctrld_x_warm[i], ctrld_xd_warm[i] = cntrld_vehicles[i].forward_simulate_all(cntrld_x0[i], ctrld_u_warm[i])
 
-results = {}
-for warm_key, warm_trajectory in warm_starts.items():
-    r = solve_best_response_c(warm_key,
-                              warm_trajectory,
-                              response_veh_info.vehicle,
-                              cntrld_vehicles,
-                              nonresponse_vehicle_list,
-                              response_x0,
-                              cntrld_x0,
-                              nonresponse_x0_list,
-                              world,
-                              solver_params,
-                              params,
-                              ipopt_params,
-                              other_u_initial,
-                              other_x_initial,
-                              other_xd_initial,
-                              cntrld_u_warm=None,
-                              cntrld_x_warm=None,
-                              cntrld_xd_warm=None,
-                              return_bri=False)
+nonresponse_veh_info = [
+    VehicleMPCInformation(nonresponse_vehicle_list[i], nonresponse_x0_list[i], other_u_initial[i], other_x_initial[i],
+                          other_xd_initial[i]) for i in range(len(nonresponse_vehicle_list))
+]
 
-    results[warm_key] = {"converged": r[0], "value": r[1], "max_slack": r[2]}
+cntrl_veh_info = [
+    VehicleMPCInformation(cntrld_vehicles[i], cntrld_x0[i], ctrld_u_warm[i], ctrld_x_warm[i], ctrld_xd_warm[i])
+    for i in range(len(cntrld_vehicles))
+]
 
-for k in results:
-    print(k, results[k]["max_slack"])
+min_cost_solution = solve_warm_starts(warm_starts, response_veh_info, world, solver_params, params, ipopt_params,
+                                      nonresponse_veh_info, cntrl_veh_info)
+
+print(min_cost_solution[2])
+print("Debug here")
+# # Testing just solve_best_response_
+# results = {}
+# for warm_key, warm_trajectory in warm_starts.items():
+#     r = solve_best_response_c(warm_key,
+#                               warm_trajectory,
+#                               response_veh_info.vehicle,
+#                               cntrld_vehicles,
+#                               nonresponse_vehicle_list,
+#                               response_x0,
+#                               cntrld_x0,
+#                               nonresponse_x0_list,
+#                               world,
+#                               solver_params,
+#                               params,
+#                               ipopt_params,
+#                               other_u_initial,
+#                               other_x_initial,
+#                               other_xd_initial,
+#                               cntrld_u_warm=None,
+#                               cntrld_x_warm=None,
+#                               cntrld_xd_warm=None,
+#                               return_bri=False)
+
+#     results[warm_key] = {"converged": r[0], "value": r[1], "max_slack": r[2]}
+
+# for k in results:
+#     print(k, results[k]["max_slack"])
 generate = True
 # if generate:
 #     from os import system

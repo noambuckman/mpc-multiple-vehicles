@@ -15,3 +15,8 @@ january_notebooks/
 *code-workspace
 *tfevents.*
 *.pt*
+
+jupyter_notebooks/
+*.c
+*.p
+*.so
