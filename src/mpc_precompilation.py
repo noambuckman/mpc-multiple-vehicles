@@ -38,5 +38,6 @@ solver_name_prefix = mpc.get_solver_name()
 print("Compiling %s" % (solver_name_prefix))
 mpc.solver.generate_dependencies('%s.c' % solver_name_prefix)
 # -O3 is the most optimized
+print("Running gcc...")
 system('gcc -fPIC -shared -O %s.c -o %s.so' % (solver_name_prefix, solver_name_prefix))
 print("Done Compiling %s.  Duration: %s" % (solver_name_prefix, (datetime.datetime.now() - start_time)))
