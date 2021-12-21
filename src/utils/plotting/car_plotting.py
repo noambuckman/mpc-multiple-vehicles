@@ -552,3 +552,18 @@ def concat_imgs(folder: str) -> str:
     filename = folder + 'single.png'
     dst.save(filename, "PNG")
     return filename
+
+
+def plot_initial_positions(log_dir: str, world:TrafficWorld, vehicles:List[Vehicle], initial_positions: List[np.array], number_cars_included: int=10):
+    '''Plot and save initial conditions
+    
+        log_dir:  Path to log directory for experiment
+
+    
+    ''' 
+    vehicles_to_plot = vehicles[:number_cars_included]
+    x0_to_plot = initial_positions[:number_cars_included]
+    x0_to_plot_reshaped = [x0.reshape(6,1) for x0 in x0_to_plot]
+
+    plot_cars(world, None, None, x0_to_plot_reshaped, log_dir, n_processors=1, all_other_vehicles=vehicles_to_plot)
+
