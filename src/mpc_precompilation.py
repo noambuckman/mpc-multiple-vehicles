@@ -22,7 +22,6 @@ ipopt_params = {"print_level": 5}
 params['slack'] = True
 
 solver_params = {}
-solver_params["solve_amb"] = True
 solver_params["slack"] = True
 solver_params["n_warm_starts"] = params["default_n_warm_starts"]
 solver_params["k_CA"] = params["k_CA_d"]
