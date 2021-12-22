@@ -28,19 +28,18 @@ class ExperimentHelper(object):
             save_ibr(self.log_dir, i_mpc, i_rounds_ibr, response_i,
                      vehs_ibr_info_predicted)
 
-
-
     def check_collisions(self, all_other_vehicles: List[Vehicle],
-                        all_other_x_executed: List[np.array]) -> bool:
+                         all_other_x_executed: List[np.array]) -> bool:
         car_collisions = self.get_collision_pairs(all_other_vehicles,
-                                            all_other_x_executed)
+                                                  all_other_x_executed)
         if len(car_collisions) > 0:
             return True
         else:
             return False
 
-    def get_collision_pairs(self, all_other_vehicles: List[Vehicle],
-                            all_other_x_executed: List[np.array]) -> List[tuple]:
+    def get_collision_pairs(
+            self, all_other_vehicles: List[Vehicle],
+            all_other_x_executed: List[np.array]) -> List[tuple]:
         car_collisions = []
         for i in range(len(all_other_vehicles)):
             for j in range(len(all_other_vehicles)):
@@ -48,64 +47,62 @@ class ExperimentHelper(object):
                     continue
                 else:
                     collision = self.check_collision(all_other_vehicles[i],
-                                                all_other_vehicles[j],
-                                                all_other_x_executed[i],
-                                                all_other_x_executed[j])
+                                                     all_other_vehicles[j],
+                                                     all_other_x_executed[i],
+                                                     all_other_x_executed[j])
                     if collision:
                         car_collisions += [(i, j)]
         return car_collisions
 
-
-
-
-    def update_sim_states(self, othervehs_ibr_info, all_other_x_ibr_g, actual_t,
-                        i_mpc, xothers_actual, uothers_actual):
+    def update_sim_states(self, othervehs_ibr_info, all_other_x_ibr_g,
+                          actual_t, i_mpc, xothers_actual, uothers_actual):
         ''' Update the simulation states with the solutions from Iterative Best Response / MPC round 
             We update multiple sim steps at a time (params["number_cntrl_pts_executed"])    
         '''
 
         all_other_u_mpc = [cp.deepcopy(veh.u) for veh in othervehs_ibr_info]
         all_other_x_executed = [
-            all_other_x_ibr_g[i][:, :self.params["number_ctrl_pts_executed"] + 1]
-            for i in range(self.params["n_other"])
+            all_other_x_ibr_g[i][:, :self.params["number_ctrl_pts_executed"] +
+                                 1] for i in range(self.params["n_other"])
         ]
         all_other_u_executed = [
-            othervehs_ibr_info[i].u[:, :self.params["number_ctrl_pts_executed"]]
+            othervehs_ibr_info[i].u[:, :self.
+                                    params["number_ctrl_pts_executed"]]
             for i in range(self.params["n_other"])
         ]
 
         # Append to the executed trajectories history of x
         for i in range(self.params["n_other"]):
             xothers_actual[i][:, actual_t:actual_t +
-                            self.params["number_ctrl_pts_executed"] +
-                            1] = all_other_x_executed[i]
-            uothers_actual[
-                i][:, actual_t:actual_t +
-                self.params["number_ctrl_pts_executed"]] = all_other_u_executed[i]
+                              self.params["number_ctrl_pts_executed"] +
+                              1] = all_other_x_executed[i]
+            uothers_actual[i][:, actual_t:actual_t + self.params[
+                "number_ctrl_pts_executed"]] = all_other_u_executed[i]
 
         # SAVE STATES AND PLOT
         file_name = self.log_dir + "data/" + "mpc_%03d" % (i_mpc)
         print("Saving MPC Rd %03d / %03d to ... %s" %
-            (i_mpc, self.params["n_mpc"] - 1, file_name))
+              (i_mpc, self.params["n_mpc"] - 1, file_name))
 
         if self.params["save_state"]:
             other_u_ibr_temp = [veh.u for veh in othervehs_ibr_info]
             other_xd_ibr_temp = [veh.xd for veh in othervehs_ibr_info]
 
             save_state(file_name, None, None, None, all_other_x_ibr_g,
-                    other_u_ibr_temp, other_xd_ibr_temp)
+                       other_u_ibr_temp, other_xd_ibr_temp)
             save_state(self.log_dir + "data/" + "all_%03d" % (i_mpc),
-                    None,
-                    None,
-                    None,
-                    xothers_actual,
-                    uothers_actual,
-                    None,
-                    end_t=actual_t + self.params["number_ctrl_pts_executed"] + 1)
+                       None,
+                       None,
+                       None,
+                       xothers_actual,
+                       uothers_actual,
+                       None,
+                       end_t=actual_t +
+                       self.params["number_ctrl_pts_executed"] + 1)
 
         actual_t += self.params["number_ctrl_pts_executed"]
 
-        return actual_t, all_other_u_mpc, all_other_x_executed, all_other_u_executed, xothers_actual, uothers_actual            
+        return actual_t, all_other_u_mpc, all_other_x_executed, all_other_u_executed, xothers_actual, uothers_actual
 
     def initialize_states(self):
 
@@ -113,16 +110,23 @@ class ExperimentHelper(object):
         u_mpc = [None for i in range(self.params["n_other"])]
         N_total = self.params["n_mpc"] * self.params["number_ctrl_pts_executed"]
 
-        u_actual = [np.zeros((2, N_total)) for _ in range(self.params["n_other"])]
-        x_actual = [np.zeros((6, N_total + 1)) for _ in range(self.params["n_other"])]
+        u_actual = [
+            np.zeros((2, N_total)) for _ in range(self.params["n_other"])
+        ]
+        x_actual = [
+            np.zeros((6, N_total + 1)) for _ in range(self.params["n_other"])
+        ]
         t_actual = 0
         return x_executed, u_mpc, x_actual, u_actual, t_actual
 
     def load_log_data(self, i_mpc_start):
         N_total = self.params["n_mpc"] * self.params["number_ctrl_pts_executed"]
-        uothers_actual = [np.zeros((2, N_total)) for _ in range(self.params["n_other"])]
-        xothers_actual = [np.zeros((6, N_total + 1)) for _ in range(self.params["n_other"])]
-
+        uothers_actual = [
+            np.zeros((2, N_total)) for _ in range(self.params["n_other"])
+        ]
+        xothers_actual = [
+            np.zeros((6, N_total + 1)) for _ in range(self.params["n_other"])
+        ]
 
         previous_mpc_file = self.log_dir + "data/mpc_%03d" % (i_mpc_start - 1)
         print("Loaded initial positions from %s" % (previous_mpc_file))
@@ -142,29 +146,29 @@ class ExperimentHelper(object):
 
         return all_other_x_executed, all_other_u_mpc, xothers_actual, uothers_actual, actual_t
 
-    def check_collision(self, vehicle_a: Vehicle, vehicle_b: Vehicle, X_a: np.array,
-                        X_b: np.array) -> bool:
+    def check_collision(self, vehicle_a: Vehicle, vehicle_b: Vehicle,
+                        X_a: np.array, X_b: np.array) -> bool:
         for t in range(X_a.shape[1]):
             x_a, y_a, theta_a = X_a[0, t], X_a[1, t], X_a[2, t]
             x_b, y_b, theta_b = X_b[0, t], X_b[1, t], X_b[2, t]
             box_a = box(x_a - vehicle_a.L / 2.0, y_a - vehicle_a.W / 2.0,
                         x_a + vehicle_a.L / 2.0, y_a + vehicle_a.W / 2.0)
             rotated_box_a = rotate(box_a,
-                                theta_a,
-                                origin='center',
-                                use_radians=True)
+                                   theta_a,
+                                   origin='center',
+                                   use_radians=True)
 
             box_b = box(x_b - vehicle_b.L / 2.0, y_b - vehicle_b.W / 2.0,
                         x_b + vehicle_b.L / 2.0, y_b + vehicle_b.W / 2.0)
             rotated_box_b = rotate(box_b,
-                                theta_b,
-                                origin='center',
-                                use_radians=True)
+                                   theta_b,
+                                   origin='center',
+                                   use_radians=True)
 
             if rotated_box_a.intersects(rotated_box_b):
                 return True
 
-        return False                     
+        return False
 
     def print_vehicle_id(self, response_i):
         print("...Veh %02d Solver:" % response_i)
@@ -204,11 +208,10 @@ class ExperimentHelper(object):
         print("Simulation Done!  Runtime: %s" %
               (datetime.timedelta(seconds=(time.time() - self.start_time))))
 
-
     def check_machine_memory(self):
         if psutil.virtual_memory().percent >= 95.0:
-            raise Exception("Virtual Memory is too high, exiting to save computer")
-
+            raise Exception(
+                "Virtual Memory is too high, exiting to save computer")
 
 
 def generate_test_scenario(n_other, N, dt, n_lanes=2, car_density=5000):
@@ -289,9 +292,6 @@ def convert_to_global_units(x_reference_global: np.array, x: np.array):
     return x_global
 
 
-
-
-
 def vehicles_within_range(other_x0, amb_x0, distance_from_ambulance):
 
     veh_idxs = [
@@ -300,9 +300,6 @@ def vehicles_within_range(other_x0, amb_x0, distance_from_ambulance):
     ]
 
     return veh_idxs
-
-
-
 
 
 def save_ibr(log_dir, i_mpc, i_rounds_ibr, response_i,
@@ -327,23 +324,68 @@ def get_ibr_vehs_idxs(vehicle_list):
     return list(range(len(vehicle_list)))
 
 
-def get_within_range_other_vehicle_idxs(response_i, allvehs_ibr_info):
-    ''' Only grab vehicles that are within 20 vehicle lengths in the X direction'''
-    response_veh_info = allvehs_ibr_info[response_i]
+def get_max_dist_traveled(response_vehinfo, params):
+    ''' '''
+    T = params["T"]  #planning horizon
+    max_speed = response_vehinfo.vehicle.max_v
 
-    within_range_idxs = [
-        j for j in range(len(allvehs_ibr_info))
-        if j != response_i and (-20 * response_veh_info.vehicle.L <= (
-            allvehs_ibr_info[j].x0[0] - response_veh_info.x0[0]) <= 20 *
-                                response_veh_info.vehicle.L)
-    ]
+    max_distance_traveled = max_speed * T
+
+    return max_distance_traveled
+
+
+def get_within_range_other_vehicle_idxs(response_i,
+                                        vehsinfo,
+                                        max_distance: float = 100
+                                        ) -> List[int]:
+    ''' Only grab vehicles that are within 20 vehicle lengths in the X direction'''
+    response_veh_info = vehsinfo[response_i]
+
+    within_range_idxs = []
+    for j in range(len(vehsinfo)):
+        initial_distance = vehsinfo[j].x0[0] - response_veh_info.x0[0]
+        interspace = abs(initial_distance) - response_veh_info.vehicle.L
+        if j != response_i and interspace <= max_distance:
+            within_range_idxs += [j]
 
     return within_range_idxs
 
 
-def assign_shared_control(params, i_rounds_ibr, veh_idxs_in_mpc,
+def get_obstacle_vehs_closeby(response_vehinfo,
+                              cntrld_vehicle_info,
+                              osbstacle_vehs_info,
+                              distance_threshold=20.0):
+    ''' Check whether response or cntrld vehinfo are close by
+        to the obstacle cars at any point during trajectory.
+        Assuming the current/previous warm start of the vehicles
+
+        We don't do explicit geometry checking but use a distance threshold and length of car.
+    '''
+    x_other = np.stack([vi.x for vi in osbstacle_vehs_info], axis=0)
+    x_other = np.expand_dims(x_other, axis=1)  #[nother x 1 x 6 x N]
+
+    x_planning = np.stack([response_vehinfo.x] +
+                          [vi.x for vi in cntrld_vehicle_info],
+                          axis=0)
+    x_planning = np.expand_dims(x_planning, axis=0)  # [1 x nplanning x 6 x N]
+
+    # [nother x nplanning x  N]
+    dist = np.sqrt(np.sum(((x_planning - x_other)[:, :, 0:2, :]**2),
+                          axis=2)) - response_vehinfo.vehicle.L
+    within_dist = np.any(dist <= distance_threshold,
+                         axis=(1, 2))  # [nother x 1]
+
+    obstacles_within_dist = []
+    for idx in range(len(osbstacle_vehs_info)):
+        if within_dist[idx]:
+            obstacles_within_dist += [osbstacle_vehs_info[idx]]
+
+    return obstacles_within_dist
+
+
+def assign_shared_control(params, i_rounds_ibr, idxs_in_mpc,
                           vehicles_index_best_responders, response_veh_info,
-                          vehs_ibr_info_predicted):
+                          vehs_ibrinfo_pred):
     ''' Divide up vehicles in MPC between shared control and not-shared control / non response'''
 
     # Determine the number of vehicles in shared control
@@ -358,41 +400,36 @@ def assign_shared_control(params, i_rounds_ibr, veh_idxs_in_mpc,
     else:
         raise Exception("Shrd Controller Not Specified")
 
+    cntrld_idx = []
+    cntrld_vehicle_info = []
+
     if n_cntrld > 0:
-        delta_x = [
-            response_veh_info.x0[0] - otherveh_info.x0[0]
-            for otherveh_info in vehs_ibr_info_predicted
-        ]
-        # This necessary but could limit fringe best response interactions with outside best response
-        sorted_i = [
-            i for i in np.argsort(delta_x)
-            if (delta_x[i] > 0 and i in veh_idxs_in_mpc
-                and i in vehicles_index_best_responders)
-        ]
-        cntrld_i = sorted_i[:n_cntrld]
+        delta_x = []
+        for _, otherveh_info in enumerate(vehs_ibrinfo_pred):
+            delta_x += [response_veh_info.x0[0] - otherveh_info.x0[0]]
 
-        if len(cntrld_i) > 0:
-            cntrld_vehicle_info = [
-                vehs_ibr_info_predicted[i]
-                for i in range(len(vehs_ibr_info_predicted)) if i in cntrld_i
-            ]
-        else:
-            cntrld_i = []
-            cntrld_vehicle_info = []
+        # This necessary but could limit fringe
+        # best response interactions with outside best response
+        sorted_all_idx = np.argsort(delta_x)
+        sorted_candidate_idx = []
+        for idx in sorted_all_idx:
+            if delta_x[idx] < 0:
+                # dont include vehicles ahead
+                continue
+            if idx not in idxs_in_mpc:
+                # dont include vehicles not in mpc
+                continue
+            if idx not in vehicles_index_best_responders:
+                # dont include vehs not in best responderes list
+                continue
 
-        veh_idxs_in_mpc = [
-            idx for idx in veh_idxs_in_mpc if idx not in cntrld_i
-        ]
-        nonresponse_veh_info = [
-            vehs_ibr_info_predicted[i] for i in veh_idxs_in_mpc
-        ]
-    else:
-        cntrld_i = []
-        cntrld_vehicle_info = []
-        nonresponse_veh_info = [
-            vehs_ibr_info_predicted[i] for i in veh_idxs_in_mpc
-        ]
+            sorted_candidate_idx += [idx]
 
-    return cntrld_vehicle_info, nonresponse_veh_info, cntrld_i
+        cntrld_idx = sorted_candidate_idx[:n_cntrld]
+        cntrld_vehicle_info = [vehs_ibrinfo_pred[idx] for idx in cntrld_idx]
 
+    nonresponse_veh_info = [
+        vehs_ibrinfo_pred[idx] for idx in idxs_in_mpc if idx not in cntrld_idx
+    ]
 
+    return cntrld_vehicle_info, nonresponse_veh_info, cntrld_idx
