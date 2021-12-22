@@ -200,9 +200,12 @@ def plot_multiple_cars(k,
                                                 fill=False,
                                                 edgecolor=color)
                 ax.add_patch(ellipse_patch)
-
-                if car_labels is not None:
+                if car_labels is None:
+                    pass
+                elif type(car_labels) == list:
                     ax.annotate(str(car_labels[i]), xy=(x, y))
+                elif type(car_labels) == bool:
+                    ax.annotate(str(all_other_vehicles[i].agent_id), xy=(x,y))
 
     if car_plot_shape.lower() == "image" or car_plot_shape.lower() == "both":
         for i in range(len(xothers_plot)):
