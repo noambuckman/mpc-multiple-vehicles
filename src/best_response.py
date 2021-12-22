@@ -26,8 +26,7 @@ def _solve_best_response(
         nonresponse_xd_list,
         cntrld_u=[],
         cntrld_x=[],
-        cntrld_xd=[],
-        return_bri=False) -> Tuple[bool, float, float, np.array, np.array, np.array, str, List, List[Tuple[np.array]]]:
+        cntrld_xd=[]) -> Tuple[bool, float, float, np.array, np.array, np.array, str, List, List[Tuple[np.array]]]:
     '''Create the iterative best response object and solve.  Assumes that it receives warm start profiles.
     This really should only require a u_warm, x_warm, x_des_warm and then one level above we generate those values'''
 
@@ -75,13 +74,13 @@ def _solve_best_response(
             bri.solution.value(bri.k_CA * bri.collision_cost),
             bri.solution.value(bri.k_slack * bri.slack_cost), all_slack_vars
         ]
-        if return_bri:
-            debug_list += [bri]
+        # if return_bri:
+        #     debug_list += [bri]
         cntrld_vehicle_trajectories = [(x_cntrld[j], x_des_cntrld[j], u_cntrld[j]) for j in range(len(x_cntrld))]
         return True, current_cost, max_slack, x_ibr, x_des_ibr, u_ibr, warm_key, debug_list, cntrld_vehicle_trajectories
     except RuntimeError:
-        if return_bri:
-            return bri
+        # if return_bri:
+        #     return bri
         return False, np.infty, np.infty, None, None, None, None, [], None
 
 
@@ -124,8 +123,7 @@ def solve_warm_starts(
                                            nonresponse_x_list=nonresponse_x_list,
                                            cntrld_u_warm=cntrld_u_warm,
                                            cntrld_x_warm=cntrld_x_warm,
-                                           cntrld_xd_warm=cntrld_xd_warm,
-                                           return_bri=False)
+                                           cntrld_xd_warm=cntrld_xd_warm)
 
     if params['n_processors'] > 1:
         pool = multiprocessing.Pool(processes=params['n_processors'])
@@ -171,8 +169,7 @@ def solve_best_response_c(
         nonresponse_x_list,
         cntrld_u_warm=None,
         cntrld_x_warm=None,
-        cntrld_xd_warm=None,
-        return_bri=False) -> Tuple[bool, float, float, np.array, np.array, np.array, str, List, List[Tuple[np.array]]]:
+        cntrld_xd_warm=None) -> Tuple[bool, float, float, np.array, np.array, np.array, str, List, List[Tuple[np.array]]]:
     '''Create the iterative best response object and solve.  Assumes that it receives warm start profiles.
     This really should only require a u_warm, x_warm, x_des_warm and then one level above we generate those values'''
 
@@ -219,7 +216,7 @@ def get_trajectories_from_solution(nlp_solution, N, nc, nnc):
     x_ego = np.array(x_ego)
     u_ego = np.array(u_ego)
     xd_ego = np.array(xd_ego)
-    cntrld_vehicle_trajectories = [(np.array(x_ctrl[j]), np.array(xd_ctrl[j]), np.array(u_ctrl[j]))
+    cntrld_vehicle_trajectories = [Trajectory(x=np.array(x_ctrl[j]), xd=np.array(xd_ctrl[j]), u=np.array(u_ctrl[j]))
                                    for j in range(len(x_ctrl))]
     # cntrld_vehicle_trajectories = [(x_ctrl[j], xd_ctrl[j], u_ctrl[j]) for j in range(len(x_ctrl))]
 
