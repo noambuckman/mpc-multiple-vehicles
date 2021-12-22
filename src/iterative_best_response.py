@@ -5,7 +5,7 @@ from contextlib import redirect_stdout
 
 from src.traffic_world import TrafficWorld
 from src.multiagent_mpc import load_state, save_state
-from src.warm_starts import generate_warm_starts
+from src.warm_starts import generate_warmstarts
 
 from src.utils.ibr_argument_parser import IBRParser
 import src.utils.solver_helper as helper
@@ -154,7 +154,7 @@ def run_iterative_best_response(ambulance,
             nonresponse_veh_info = [othervehs_ibr_info[i] for i in veh_idxs_in_amb_mpc]
 
             # Generate the warm starts
-            warm_starts = generate_warm_starts(response_veh_info.vehicle, world, response_veh_info.x0,
+            warm_starts = generate_warmstarts(response_veh_info.vehicle, world, response_veh_info.x0,
                                                othervehs_ibr_info, params, uamb_mpc, response_veh_info.u)
 
             # Initialize parameters relevant to solving the mpc
@@ -265,7 +265,7 @@ def run_iterative_best_response(ambulance,
                 if len(cntrld_vehicle_info) == 0:
                     nonresponse_veh_info += [amb_ibr_info]
 
-                warm_starts = generate_warm_starts(response_veh_info.vehicle, world, response_veh_info.x0,
+                warm_starts = generate_warmstarts(response_veh_info.vehicle, world, response_veh_info.x0,
                                                    othervehs_ibr_info, params, all_other_u_mpc[response_i],
                                                    othervehs_ibr_info[response_i].u)
 

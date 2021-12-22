@@ -172,17 +172,19 @@ def generate_warm_u(N: int, car_mpc, car_x0):
     return u_warm_profiles, ux_warm_profiles
 
 
-def generate_warm_starts(vehicle,
+def generate_warmstarts(response_vehicle_info,
                          world: TrafficWorld,
-                         x0: np.array,
                          other_veh_info,
                          params: dict,
-                         u_mpc_previous=None,
-                         u_ibr_previous=None):
+                         u_mpc_previous: np.array =None,
+                         u_ibr_previous: np.array=None):
     """ Generate a dictionary of warm starts for the solver.  
     
         Returns:  Dictionary with warm_start_name: (state, control, desired_state)
     """
+    vehicle = response_vehicle_info.vehicle
+    x0 = response_vehicle_info.x0
+
     other_x0 = [veh_info.x0 for veh_info in other_veh_info]
 
     u_warm_profiles, ux_warm_profiles = generate_warm_u(params["N"], vehicle, x0)
@@ -240,7 +242,7 @@ def generate_warm_starts(vehicle,
     return warm_start_trajectories
 
 
-def warm_profiles_subset(n_warm_keys: int, ux_warm_profiles: Dict[str, Trajectory]):
+def get_subset_warmstarts(n_warm_keys: int, ux_warm_profiles: Dict[str, Trajectory]):
     '''choose randomly n_warm_keys keys from ux_warm_profiles and return the subset'''
 
     priority_warm_keys = []

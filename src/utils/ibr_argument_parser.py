@@ -88,7 +88,7 @@ class IBRParser(ArgumentParser):
         self.add_argument('--k-slack-d', type=float, default=1000, help="Default constant for slack collision costs")
         self.add_argument('--k-CA-d', type=float, default=0.05, help="Default collision avoidance cost")
         self.add_argument('--k-CA-power', type=float, default=1.0, help="Default collision avoidance power")
-        self.add_argument('--wall-CA', type=int, default=1, help="Add collision avoidance cost for approaching walls")
+        self.add_argument('--wall-CA', type=str2bool, default=True, help="Add collision avoidance cost for approaching walls")
         self.add_argument('--print-level', type=int, default=0, help="Print level for IPOPT solver")
         self.add_argument('--k-lat', type=float, default=None, help="lateral cost for vehicles")
 

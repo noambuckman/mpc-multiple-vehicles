@@ -520,3 +520,18 @@ def lane_following_optimizations(N, vehicle, x0, params, world):
         return u, x, x_des
     else:
         return u_warm, x_warm, x_des_warm
+
+
+
+def generate_solver_params(params, i_ibr, solve_number):
+    solver_params = {}
+    solver_params["slack"] = (True if i_ibr <= params["k_max_round_with_slack"]
+                              else False)
+    solver_params[
+        "n_warm_starts"] = params["default_n_warm_starts"] + 5 * solve_number
+    solver_params["k_CA"] = params["k_CA_d"]
+    solver_params["k_CA_power"] = params["k_CA_power"]
+
+    solver_params["k_slack"] = (params["k_slack_d"] * 10**solve_number)
+
+    return solver_params

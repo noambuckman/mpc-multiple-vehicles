@@ -120,7 +120,6 @@ class MultiMPC(NonconvexOptimization):
             self.k_slack = 99999
             self.k_CA = 0
             self.k_CA_power = 1
-            self.collision_cost = 0
         else:
             self.k_slack = solver_params["k_slack"]
             self.k_CA = solver_params["k_CA"]
@@ -279,7 +278,7 @@ class MultiMPC(NonconvexOptimization):
 
                 self.add_bounded_constraint(1 - slack_i_jc[j, k], dist, None)
 
-            if (params["wall_CA"] == 1):  # Add a collision cost related to distance from wall
+            if params["wall_CA"]:  # Add a collision cost related to distance from wall
                 dist_btw_wall_bottom = x_ego[1, k] - p_ego.min_y
                 dist_btw_wall_top = p_ego.max_y - x_ego[1, k]
                 self.add_bounded_constraint(0 - bottom_wall_slack[0, k], dist_btw_wall_bottom, None)
@@ -299,9 +298,9 @@ class MultiMPC(NonconvexOptimization):
                     self.add_bounded_constraint(((1 - slack_ic_jnc[ic][j, k]) * within_collision_distance), dist, None)
 
                 for j in range(n_vehs_cntrld):
+                    #TODO: get rid of this slack variable                    
                     if j <= ic:
-                        self.add_equal_constraint(slack_ic_jc[ic][j, k], np.zeros(
-                            (1, 1)))  #TODO: get rid of this slack variable
+                        self.add_equal_constraint(slack_ic_jc[ic][j, k], np.zeros((1, 1)))  
                     else:
                         initial_displacement = x0_ctrld[j] - x0_ctrld[ic]
                         initial_xy_distance = cas.sqrt(initial_displacement[0]**2 + initial_displacement[1]**2)
@@ -316,11 +315,11 @@ class MultiMPC(NonconvexOptimization):
 
                         self.add_bounded_constraint(((1 - slack_ic_jc[ic][j, k]) * within_collision_distance), dist,
                                                     None)
-
-                dist_btw_wall_bottom = x_ctrld[ic][1, k] - p_ctrld_list[ic].min_y
-                dist_btw_wall_top = p_ctrld_list[ic].max_y - x_ctrld[ic][1, k]
-                self.add_bounded_constraint((0 - bottom_wall_slack_c[ic][0, k]), dist_btw_wall_bottom, None)
-                self.add_bounded_constraint((0 - top_wall_slack_c[ic][0, k]), dist_btw_wall_top, None)
+                if params["wall_CA"]:
+                    dist_btw_wall_bottom = x_ctrld[ic][1, k] - p_ctrld_list[ic].min_y
+                    dist_btw_wall_top = p_ctrld_list[ic].max_y - x_ctrld[ic][1, k]
+                    self.add_bounded_constraint((0 - bottom_wall_slack_c[ic][0, k]), dist_btw_wall_bottom, None)
+                    self.add_bounded_constraint((0 - top_wall_slack_c[ic][0, k]), dist_btw_wall_top, None)
 
         # TODO: Conver the Add velocity based constraints
         if "safety_constraint" in params and params["safety_constraint"] == True:
