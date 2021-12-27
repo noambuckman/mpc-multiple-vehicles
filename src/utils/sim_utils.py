@@ -351,6 +351,72 @@ def get_within_range_other_vehicle_idxs(response_i,
     return within_range_idxs
 
 
+def get_closest_n_obstacle_vehs(
+    response_vehinfo,
+    cntrld_vehicle_info,
+    osbstacle_vehs_info,
+    max_num_obstacles: int = None,
+    min_num_obstacles_ego: int = None,
+):
+    ''' Return the closest vehicles by distance to the response and cntrld_vehicle info'''
+
+    if max_num_obstacles is None or len(osbstacle_vehs_info)==0:
+        return osbstacle_vehs_info
+        
+    ego_obstacle_info = []
+    if min_num_obstacles_ego is None:
+        remaining_obstacle_info = osbstacle_vehs_info
+    else:
+        # First get the closest vehicles to to the ego
+        # Get distances
+        remaining_obstacle_info = []    
+        x_other = np.stack([vi.x for vi in osbstacle_vehs_info], axis=0)
+        x_other = np.expand_dims(x_other, axis=1)  #[nother x 1 x 6 x N]
+        x_planning = np.stack([response_vehinfo.x] + [], axis=0)
+        # [1 x nplanning x 6 x N]
+        x_planning = np.expand_dims(x_planning, axis=0)
+
+        # [nother x nplanning x  N]
+        dist = np.sqrt(
+            np.sum(((x_planning - x_other)[:, :, 0:2, :]**2),
+                   axis=2)) - response_vehinfo.vehicle.L
+
+        distance_cost = np.sum(dist**2, axis=(1, 2))
+        sorted_idx = np.argsort(distance_cost)
+        sorted_idx = sorted_idx[:min_num_obstacles_ego]
+
+        for idx in range(len(osbstacle_vehs_info)):
+            if idx in sorted_idx:
+                ego_obstacle_info += [osbstacle_vehs_info[idx]]
+            else:
+                remaining_obstacle_info += [osbstacle_vehs_info[idx]]
+    
+    
+    max_num_obstacles = max_num_obstacles - len(ego_obstacle_info)
+    sorted_remaining_obstacle_info = []
+    if max_num_obstacles > 0 and len(remaining_obstacle_info) > 0:
+        x_other = np.stack([vi.x for vi in remaining_obstacle_info], axis=0)
+        x_other = np.expand_dims(x_other, axis=1)  #[nother x 1 x 6 x N]
+        x_planning = np.stack([response_vehinfo.x] +
+                            [vi.x for vi in cntrld_vehicle_info],
+                            axis=0)
+        x_planning = np.expand_dims(x_planning, axis=0)  # [1 x nplanning x 6 x N]
+
+        # [nother x nplanning x  N]
+        dist = np.sqrt(np.sum(((x_planning - x_other)[:, :, 0:2, :]**2),
+                            axis=2)) - response_vehinfo.vehicle.L
+
+        distance_cost = np.sum(dist**2, axis=(1, 2))
+        sorted_idx = np.argsort(distance_cost)
+        sorted_idx = sorted_idx[:max_num_obstacles]
+
+        for idx in sorted_idx:
+            sorted_remaining_obstacle_info += [remaining_obstacle_info[idx]]
+        
+    return ego_obstacle_info + sorted_remaining_obstacle_info
+
+
+
 def get_obstacle_vehs_closeby(response_vehinfo,
                               cntrld_vehicle_info,
                               osbstacle_vehs_info,

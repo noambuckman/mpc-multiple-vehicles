@@ -12,7 +12,7 @@ from src.vehicle_mpc_information import VehicleMPCInformation
 from src.utils.ibr_argument_parser import IBRParser
 from src.utils.solver_helper import generate_solver_params, poission_positions, extend_last_mpc_and_follow, initialize_cars_from_positions
 from src.utils.plotting.car_plotting import plot_initial_positions
-from src.utils.sim_utils import ExperimentHelper, get_obstacle_vehs_closeby, get_max_dist_traveled, get_ibr_vehs_idxs, assign_shared_control, get_within_range_other_vehicle_idxs
+from src.utils.sim_utils import ExperimentHelper, get_closest_n_obstacle_vehs, get_obstacle_vehs_closeby, get_max_dist_traveled, get_ibr_vehs_idxs, assign_shared_control, get_within_range_other_vehicle_idxs
 
 
 def run_iterative_best_response(vehicles,
@@ -34,10 +34,11 @@ def run_iterative_best_response(vehicles,
     ipopt_params = {"print_level": params["print_level"]}
 
     if load_log_dir:
-        x_executed, u_mpc, x_actual, u_actual, t_actual = experiment.load_log_data(i_mpc_start)
+        x_executed, u_mpc, x_actual, u_actual, t_actual = experiment.load_log_data(
+            i_mpc_start)
     else:
-        x_executed, u_mpc, x_actual, u_actual, t_actual = experiment.initialize_states()
-
+        x_executed, u_mpc, x_actual, u_actual, t_actual = experiment.initialize_states(
+        )
 
     # Run the simulation and solve mpc for all vehicles for each round of MPC
     for i_mpc in range(i_mpc_start, params["n_mpc"]):
@@ -89,17 +90,20 @@ def run_iterative_best_response(vehicles,
 
                 response_vehinfo = vehsinfo_ibr[ag_idx]
 
-                max_dist_traveled = get_max_dist_traveled(response_vehinfo, params) 
+                max_dist_traveled = get_max_dist_traveled(
+                    response_vehinfo, params)
                 veh_idxs_in_mpc = get_within_range_other_vehicle_idxs(
                     ag_idx, vehsinfo_ibr, max_dist_traveled)
 
-                    
                 ctrld_vehsinfo, obstacle_vehsinfo, cntrld_i = assign_shared_control(
                     params, i_ibr, veh_idxs_in_mpc,
                     vehicles_idx_best_responders, response_vehinfo,
                     vehsinfo_ibr_pred)
 
-                obstacle_vehsinfo = get_obstacle_vehs_closeby(response_vehinfo, ctrld_vehsinfo, obstacle_vehsinfo)
+                obstacle_vehsinfo = get_obstacle_vehs_closeby(
+                    response_vehinfo, ctrld_vehsinfo, obstacle_vehsinfo)
+                obstacle_vehsinfo = get_closest_n_obstacle_vehs(
+                    response_vehinfo, ctrld_vehsinfo, obstacle_vehsinfo, 8, 3)
 
                 warmstarts_dict = generate_warmstarts(response_vehinfo, world,
                                                       vehsinfo_ibr_pred,
@@ -111,7 +115,8 @@ def run_iterative_best_response(vehicles,
                 # each time increasing # warmstarts and slack cost
                 solve_number = 0
                 while solve_number < params["k_max_solve_number"]:
-                    s_params = generate_solver_params(params, i_ibr, solve_number)
+                    s_params = generate_solver_params(params, i_ibr,
+                                                      solve_number)
                     warmstarts_subset = get_subset_warmstarts(
                         s_params["n_warm_starts"], warmstarts_dict)
 
@@ -128,7 +133,7 @@ def run_iterative_best_response(vehicles,
                         _, _, max_slack, x_i, xd_i, u_i, _, _, ctrld_vehs_traj = pre_caller(
                             warmstarts_subset, response_vehinfo, world,
                             s_params, params, ipopt_params, obstacle_vehsinfo,
-                            ctrld_vehsinfo)                            
+                            ctrld_vehsinfo)
 
                     if max_slack < min(params["k_max_slack"], np.infty):
                         vehsinfo_ibr[ag_idx].update_state(u_i, x_i, xd_i)
@@ -136,14 +141,14 @@ def run_iterative_best_response(vehicles,
 
                         for cntrld_i_idx, veh_id in enumerate(cntrld_i):
                             c_veh_traj = ctrld_vehs_traj[cntrld_i_idx]
-                            vehsinfo_ibr_pred[veh_id].update_state_from_traj(c_veh_traj)
+                            vehsinfo_ibr_pred[veh_id].update_state_from_traj(
+                                c_veh_traj)
                         experiment.print_solved_status(ag_idx, i_mpc, i_ibr,
-                                            t_start_ipopt)
+                                                       t_start_ipopt)
                         break
                     else:
-                        experiment.print_not_solved_status(ag_idx, i_mpc, i_ibr,
-                                                max_slack,
-                                                t_start_ipopt)
+                        experiment.print_not_solved_status(
+                            ag_idx, i_mpc, i_ibr, max_slack, t_start_ipopt)
                         solve_number += 1
 
                 if solve_number == params["k_max_solve_number"]:
@@ -153,9 +158,11 @@ def run_iterative_best_response(vehicles,
                         default_traj = warmstarts_dict['previous_mpc_hold']
 
                     vehsinfo_ibr[ag_idx].update_state_from_traj(default_traj)
-                    vehsinfo_ibr_pred[ag_idx].update_state_from_traj(default_traj)
-                    experiment.print_max_solved_status(ag_idx, i_mpc, i_ibr, max_slack,
-                                            t_start_ipopt)
+                    vehsinfo_ibr_pred[ag_idx].update_state_from_traj(
+                        default_traj)
+                    experiment.print_max_solved_status(ag_idx, i_mpc, i_ibr,
+                                                       max_slack,
+                                                       t_start_ipopt)
 
                 experiment.save_ibr(i_mpc, i_ibr, ag_idx, vehsinfo_ibr_pred)
 
@@ -165,8 +172,8 @@ def run_iterative_best_response(vehicles,
             experiment.save_ibr(i_mpc, i_ibr, None, vehsinfo_ibr_pred)
 
         t_actual, u_mpc, x_executed, _, x_actual, u_actual, = experiment.update_sim_states(
-            vehsinfo_ibr, all_other_x_ibr_g, t_actual, i_mpc,
-            x_actual, u_actual)
+            vehsinfo_ibr, all_other_x_ibr_g, t_actual, i_mpc, x_actual,
+            u_actual)
 
         collision = experiment.check_collisions(vehicles, x_executed)
         if collision:

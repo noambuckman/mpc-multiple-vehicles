@@ -568,5 +568,5 @@ def plot_initial_positions(log_dir: str, world:TrafficWorld, vehicles:List[Vehic
     x0_to_plot = initial_positions[:number_cars_included]
     x0_to_plot_reshaped = [x0.reshape(6,1) for x0 in x0_to_plot]
 
-    plot_cars(world, None, None, x0_to_plot_reshaped, log_dir, n_processors=1, all_other_vehicles=vehicles_to_plot)
+    plot_cars(world, None, None, x0_to_plot_reshaped, log_dir, n_processors=1, all_other_vehicles=vehicles_to_plot, car_labels=True)
 
