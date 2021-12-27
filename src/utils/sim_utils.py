@@ -427,6 +427,9 @@ def get_obstacle_vehs_closeby(response_vehinfo,
 
         We don't do explicit geometry checking but use a distance threshold and length of car.
     '''
+    if len(osbstacle_vehs_info) == 0 or distance_threshold == np.infty:
+        return osbstacle_vehs_info
+
     x_other = np.stack([vi.x for vi in osbstacle_vehs_info], axis=0)
     x_other = np.expand_dims(x_other, axis=1)  #[nother x 1 x 6 x N]
 
