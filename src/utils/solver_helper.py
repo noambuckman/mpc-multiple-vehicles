@@ -528,7 +528,7 @@ def generate_solver_params(params, i_ibr, solve_number):
     solver_params["slack"] = (True if i_ibr <= params["k_max_round_with_slack"]
                               else False)
     solver_params[
-        "n_warm_starts"] = params["default_n_warm_starts"] + 5 * solve_number
+        "n_warm_starts"] = params["n_processors"]  + 5 * solve_number
     solver_params["k_CA"] = params["k_CA_d"]
     solver_params["k_CA_power"] = params["k_CA_power"]
 
