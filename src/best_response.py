@@ -6,7 +6,8 @@ from casadi import nlpsol
 from src.multiagent_mpc import MultiMPC, mpcp_to_nlpp, nlpx_to_mpcx
 from src.vehicle_parameters import VehicleParameters
 from src.vehicle_mpc_information import Trajectory
-import time
+import time, os, pickle
+from casadi import nlpsol
 
 
 def _solve_best_response(
@@ -168,14 +169,18 @@ def solve_warm_starts(
         s for s in solve_costs_solutions if s[2] <= max_slack
     ]
     if len(below_max_slack_sols) > 0:
+        print("# Feasible Solutions Below Max Slack: %d"%len(below_max_slack_sols))
         return min(below_max_slack_sols, key=lambda r: r[1])
     else:
         min_cost_solution = min(solve_costs_solutions, key=lambda r: r[1])
+        print("# No Feasible Solutions Below Max Slack. Returning with Slack = %.02f"%min_cost_solution[2])
+
     return min_cost_solution
 
 
 def pre_caller(warmstart_dict: Dict[str, Trajectory], response_veh_info, world,
-               solver_params, params, ipopt_params, nonresponse_veh_info, cntrl_veh_info):
+               solver_params, params, ipopt_params, nonresponse_veh_info,
+               cntrl_veh_info, pickled:bool=True):
     # Grab components needed for generating MPC
     response_vehicle = response_veh_info.vehicle
     response_x0 = response_veh_info.x0
@@ -192,18 +197,20 @@ def pre_caller(warmstart_dict: Dict[str, Trajectory], response_veh_info, world,
 
     nc = len(cntrld_vehicles)
     nnc = len(nonresponse_vehicles)
-    params["collision_avoidance_checking_distance"] = 100
     # Generate an MPC
-    
+
     # Convert vehicle paramaters into an array
     p_ego, p_cntrld, p_nc = convert_vehicles_to_parameters(
         nc, nnc, response_vehicle, cntrld_vehicles, nonresponse_vehicles)
     theta_ego_i, theta_ic, theta_i_nc = get_fake_svo_values(nc, nnc)
 
-    set_constant_v_constraint(params)  #this is carry over and should be removed
-    # Parallelize
+    # nlp_solver = load_solver_from_mpc(mpc, precompiled=False)
+    precompiled_code_dir = params["precompiled_solver_dir"]
+
     call_mpc_solver_on_warm = functools.partial(
         call_mpc_solver,
+        pickled=pickled,
+        precompiled_code_dir=precompiled_code_dir,
         cntrld_u_warm=cntrld_u_warm,
         cntrld_x_warm=cntrld_x_warm,
         cntrld_xd_warm=cntrld_xd_warm,
@@ -223,7 +230,7 @@ def pre_caller(warmstart_dict: Dict[str, Trajectory], response_veh_info, world,
         params=params,
         solver_params=solver_params,
         ipopt_params=ipopt_params)
-    t5 = time.time()
+
     if params["n_processors"] > 1:
         pool = multiprocessing.Pool(processes=params['n_processors'])
         solve_costs_solutions = pool.starmap(call_mpc_solver_on_warm,
@@ -235,25 +242,27 @@ def pre_caller(warmstart_dict: Dict[str, Trajectory], response_veh_info, world,
             solve_costs_solutions += [
                 call_mpc_solver_on_warm(warm_key, warm_trajectory)
             ]
-    t6= time.time()
+
     below_max_slack_sols = [
         s for s in solve_costs_solutions if s[2] <= params["k_max_slack"]
     ]
 
-    times = [t5, t6]
-    for i in range(len(times)-1):
-        print("t%d->t%d:  %.03f"%(i+1, i+2, times[i+1] - times[i]))    
-    
+
     if len(below_max_slack_sols) > 0:
-        return min(below_max_slack_sols, key=lambda r: r[1])
+        print("# Feasible Solutions Below Max Slack: %d"%len(below_max_slack_sols))
+        min_cost_solution = min(below_max_slack_sols, key=lambda r: r[1])
     else:
         min_cost_solution = min(solve_costs_solutions, key=lambda r: r[1])
+        print("# No Feasible Solutions Below Max Slack. Returning with Slack = %.02f"%min_cost_solution[2])
+    
     return min_cost_solution
 
 
 def call_mpc_solver(
     warm_key: str,
     warm_trajectory: Trajectory,
+    precompiled_code_dir: str,
+    pickled: bool,
     cntrld_u_warm,
     cntrld_x_warm,
     cntrld_xd_warm,
@@ -270,7 +279,9 @@ def call_mpc_solver(
     cntrld_x0,
     nonresponse_x0_list,
     nonresponse_x_list,
-    params, solver_params, ipopt_params,
+    params,
+    solver_params,
+    ipopt_params,
 ) -> Tuple[bool, float, float, np.array, np.array, np.array, str, List,
            List[Tuple[np.array]]]:
     '''Create the iterative best response object and solve.  Assumes that it receives warm start profiles.
@@ -280,16 +291,22 @@ def call_mpc_solver(
                          nonresponse_x_list)
     nlp_x0 = get_warm_start_x0(nc, nnc, warm_trajectory, cntrld_x_warm,
                                cntrld_u_warm, cntrld_xd_warm)
+
+
+
     # Call the solver
-   
+    # Load pre-compiled solver and bounds
+    if pickled:
+        nlp_solver_name = "mpc_%02d_%02d.p" % (nc, nnc)
+        nlp_solver_path = os.path.join(precompiled_code_dir, nlp_solver_name)      
+        nlp_solver = pickle.load(open(nlp_solver_path, "rb"))  
+    else:
+        nlp_solver_name = "mpc_%02d_%02d.so" % (nc, nnc)
+        nlp_solver_path = os.path.join(precompiled_code_dir, nlp_solver_name)
+        nlp_solver = nlpsol('solver', 'ipopt', nlp_solver_path)
+    nlp_lbg, nlp_ubg = get_bounds_from_compiled_mpc(nc, nnc, precompiled_code_dir)
 
-    mpc = MultiMPC(params["N"], world, nc, nnc, solver_params, params,
-                   ipopt_params)
-    nlp_lbg, nlp_ubg = get_bounds_from_mpc(mpc)
 
-
-
-    nlp_solver = load_solver_from_mpc(mpc, precompiled=False)    
     try:
         solution = nlp_solver(x0=nlp_x0, p=nlp_p, lbg=nlp_lbg, ubg=nlp_ubg)
         x_ego, u_ego, xd_ego, cntrld_vehicle_trajectories, max_slack, current_cost = get_trajectories_from_solution(
@@ -322,52 +339,37 @@ def solve_best_response_c(
            List[Tuple[np.array]]]:
     '''Create the iterative best response object and solve.  Assumes that it receives warm start profiles.
     This really should only require a u_warm, x_warm, x_des_warm and then one level above we generate those values'''
-    t0 = time.time()
     nc = len(cntrld_vehicles)
     nnc = len(nonresponse_vehicle_list)
     params["collision_avoidance_checking_distance"] = 100
-    
+
     nlp_x0 = get_warm_start_x0(nc, nnc, warm_trajectory, cntrld_x_warm,
                                cntrld_u_warm, cntrld_xd_warm)
-    t1 = time.time()
     mpc = MultiMPC(params["N"], world, nc, nnc, solver_params, params,
                    ipopt_params)
-    
-    t2 = time.time()
+
     nlp_lbg, nlp_ubg = get_bounds_from_mpc(mpc)
     nlp_solver = load_solver_from_mpc(mpc, precompiled=False)
-    t3 = time.time()
     p_ego, p_cntrld, p_nc = convert_vehicles_to_parameters(
         nc, nnc, response_vehicle, cntrld_vehicles, nonresponse_vehicle_list)
-    t4 = time.time()
     theta_ego_i, theta_ic, theta_i_nc = get_fake_svo_values(nc, nnc)
     nlp_p = mpcp_to_nlpp(response_x0, p_ego, theta_ego_i, theta_ic, theta_i_nc,
                          cntrld_x0, p_cntrld, nonresponse_x0_list, p_nc,
                          nonresponse_x_list)
-    t5 = time.time()
 
     set_constant_v_constraint(
         params)  #this is carry over and should be removed
     # response_x0t, p_egot, theta_ego_it, theta_ict, theta_i_nct, cntrld_xt, p_cntrldt, nonresponse_x0_listt, p_nct, nonresponse_x_listt = nlpp_to_mpcp(
     #     nlp_p, params["N"], nc, nnc, 6, mpc.p_size)
     # Call the solver
-    ipopt_solver_time = time.time()
-    t6 = time.time()
     try:
         solution = nlp_solver(x0=nlp_x0, p=nlp_p, lbg=nlp_lbg, ubg=nlp_ubg)
         x_ego, u_ego, xd_ego, cntrld_vehicle_trajectories, max_slack, current_cost = get_trajectories_from_solution(
             solution, params["N"], nc, nnc)
-        print("IPOPT Call Time %0.02f" % (time.time() - ipopt_solver_time))
         debug_list = []
-        t7 = time.time()
-        print("TIMES")
-        times = [t0, t1, t2, t3, t4, t5, t6, t7]
-        for i in range(len(times)-1):
-            print("t%d->t%d = %.02f"%(i, i+1, times[i+1] - times[i]))
         return True, current_cost, max_slack, x_ego, xd_ego, u_ego, warm_key, debug_list, cntrld_vehicle_trajectories
     except Exception as e:
         print(e)
-        print("IPOPT Call Time %0.02f" % (time.time() - ipopt_solver_time))
         return False, np.infty, np.infty, None, None, None, None, [], None
 
 
@@ -424,6 +426,12 @@ def load_solver_from_mpc(mpc, precompiled: bool = True):
 
     return solver
 
+def get_bounds_from_compiled_mpc(nc, nnc, precompiled_code_dir):
+    bounds_path_name = "bounds_%02d%02d.p"%(nc, nnc)
+    bounds_full_path = os.path.join(precompiled_code_dir, bounds_path_name)
+    lbg, ubg = pickle.load(open(bounds_full_path, 'rb'))
+
+    return lbg, ubg
 
 def get_bounds_from_mpc(mpc):
 

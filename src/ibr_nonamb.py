@@ -31,7 +31,10 @@ def run_iterative_best_response(vehicles,
 
     experiment = ExperimentHelper(log_dir, params)
 
-    ipopt_params = {"print_level": params["print_level"]}
+    ipopt_params = {
+        "print_level": params["print_level"],
+        "max_cpu_time": params["max_cpu_time"]
+    }
 
     if load_log_dir:
         x_executed, u_mpc, x_actual, u_actual, t_actual = experiment.load_log_data(
@@ -131,9 +134,15 @@ def run_iterative_best_response(vehicles,
                         #     s_params, params, ipopt_params, obstacle_vehsinfo,
                         #     ctrld_vehsinfo, params["k_max_slack"])
                         _, _, max_slack, x_i, xd_i, u_i, _, _, ctrld_vehs_traj = pre_caller(
-                            warmstarts_subset, response_vehinfo, world,
-                            s_params, params, ipopt_params, obstacle_vehsinfo,
-                            ctrld_vehsinfo)
+                            warmstarts_subset,
+                            response_vehinfo,
+                            world,
+                            s_params,
+                            params,
+                            ipopt_params,
+                            obstacle_vehsinfo,
+                            ctrld_vehsinfo,
+                            pickled=params["pickled_solver"])
 
                     if max_slack < min(params["k_max_slack"], np.infty):
                         vehsinfo_ibr[ag_idx].update_state(u_i, x_i, xd_i)

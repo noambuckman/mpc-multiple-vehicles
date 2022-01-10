@@ -29,7 +29,7 @@ def feasible_guess(N, vehicle, x0, params, world, other_vehicle_info):
     solver_params["k_CA_power"] = params["k_CA_power"]
     solver_params["k_slack"] = params["k_slack_d"]
 
-    ipopt_params = {'print_level': 0}
+    ipopt_params = {'print_level': 5}
     x_other = [v.x for v in other_vehicle_info]
     xd_other = [v.xd for v in other_vehicle_info]
     u_other = [v.u for v in other_vehicle_info]
