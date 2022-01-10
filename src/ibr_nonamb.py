@@ -24,7 +24,6 @@ def run_iterative_best_response(vehicles,
                                 i_mpc_start: int = 0):
     """ 
         Runs iterative best response for a system of ambulance and other vehicles.
-        TODO:  Add something that checks required params.  Or has default params somewhere.
     """
     out_file = open(log_dir + "out.txt", "w")
     ipopt_out_file = open(log_dir + "ipopt_out.txt", "w")
@@ -131,15 +130,9 @@ def run_iterative_best_response(vehicles,
                     with redirect_stdout(ipopt_out_file):
 
                         _, _, max_slack, x_i, xd_i, u_i, _, _, ctrld_vehs_traj = parallel_mpc_solve(
-                            warmstarts_subset,
-                            response_vehinfo,
-                            world,
-                            s_params,
-                            params,
-                            ipopt_params,
-                            obstacle_vehsinfo,
-                            ctrld_vehsinfo,
-                            pickled=params["pickled_solver"])
+                            warmstarts_subset, response_vehinfo, world,
+                            s_params, params, ipopt_params, obstacle_vehsinfo,
+                            ctrld_vehsinfo)
 
                     if max_slack < min(params["k_max_slack"], np.infty):
                         vehsinfo_ibr[ag_idx].update_state(u_i, x_i, xd_i)

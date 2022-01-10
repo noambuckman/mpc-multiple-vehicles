@@ -1,15 +1,20 @@
 import numpy as np
 import casadi as cas
 import copy as cp
-from src.multiagent_mpc import NonconvexOptimization, mpcx_to_nlpx
-from src.best_response import solve_best_response_c
+from src.multiagent_mpc import NonconvexOptimization
+from src.best_response import call_mpc_solver
 from src.vehicle_mpc_information import Trajectory
 from typing import List
 from src.geometry_helper import minkowski_ellipse_collision_distance
 
 
 def feasible_guess(N, vehicle, x0, params, world, other_vehicle_info):
-    ''' Solve for the ego vehicle. '''
+    ''' Try to get a feasible solution for a single vehicle without 
+        considering the actual cost.
+
+        We warm-start the ego vehicle with a solution for a state-only
+        optimization without dynamics.  
+    '''
 
     # We need to deepcopy and del vehicles to allow multiprocesssing (see Note elsewhere)
     cp_vehicle = cp.deepcopy(vehicle)
@@ -18,11 +23,7 @@ def feasible_guess(N, vehicle, x0, params, world, other_vehicle_info):
     cp_params = cp.deepcopy(params)
     cp_params["N"] = N
 
-    # Try not to change the velocity of the car (i.e. assume velocity zero)
-    # cp_vehicle.k_u_v = 1000
-    # cp_vehicle.strict_wall_constraint = True
 
-    # TODO:  Allow for default values for this. Distinguish between solver, params, and ipopt params
     solver_params = {}
     solver_params["slack"] = True
     solver_params["k_CA"] = params["k_CA_d"]
@@ -52,8 +53,10 @@ def feasible_guess(N, vehicle, x0, params, world, other_vehicle_info):
 
     # warm start with feasible x (not dynamically feasible)
     warm_traj = Trajectory(u=u_warm_intial, x=x_warm, xd=x_des_warm_initial)
-    # max_slack = np.infty
-    _, _, max_slack, x, x_des, u, _, _, _ = solve_best_response_c("mix spatial none", warm_traj, cp_vehicle, [],
+    precompiled_code_dir = params["precompiled_solver_dir"]
+    solver_mode = params["solver_mode"]
+
+    _, _, max_slack, x, x_des, u, _, _, _ = call_mpc_solver("mix spatial none", warm_traj, precompiled_code_dir, solver_mode, cp_vehicle, [],
                                                                   other_vehicles, x0, [], x0_other_vehicles, world,
                                                                   solver_params, cp_params, ipopt_params, x_other)
 
@@ -157,20 +160,3 @@ def vehicles_close(planning_vehicles_x: List[np.array], other_vehicles_x: List[n
 
     return vehs_close
 
-
-# if __name__ == "__main__":
-#     n_vehs = 5
-#     N = 25
-#     other_x0 = [np.random.uniform(size=(6, 1)) for _ in range(n_vehs)]
-#     other_vehicles = [vehicle.Vehicle(0.2) for _ in range(n_vehs)]
-#     world = TrafficWorld(2, 0)
-
-#     for i in range(len(other_vehicles)):
-#         other_vehicles[i].update_desired_lane(world, 0, right_direction=True)
-
-#     parser = IBRParser()
-#     args = parser.parse_args()
-#     params = vars(args)
-
-#     prev_u_mpc = [np.random.uniform(size=(2, N)) for _ in range(n_vehs)]
-#     new_u_mpc = extend_last_mpc_and_follow(prev_u_mpc, 12, other_vehicles, other_x0, params, world)
