@@ -6,7 +6,7 @@ from typing import List
 
 from src.traffic_world import TrafficWorld
 from src.warm_starts import generate_warmstarts, get_subset_warmstarts
-from src.best_response import pre_caller, solve_warm_starts
+from src.best_response import parallel_mpc_solve
 from src.vehicle_mpc_information import VehicleMPCInformation
 
 from src.utils.ibr_argument_parser import IBRParser
@@ -129,11 +129,8 @@ def run_iterative_best_response(vehicles,
                     experiment.print_mpc_ibr_round(i_mpc, i_ibr, params)
                     experiment.print_nc_nnc(ctrld_vehsinfo, obstacle_vehsinfo)
                     with redirect_stdout(ipopt_out_file):
-                        # _, _, max_slack, x_i, xd_i, u_i, _, _, ctrld_vehs_traj = solve_warm_starts(
-                        #     warmstarts_subset, response_vehinfo, world,
-                        #     s_params, params, ipopt_params, obstacle_vehsinfo,
-                        #     ctrld_vehsinfo, params["k_max_slack"])
-                        _, _, max_slack, x_i, xd_i, u_i, _, _, ctrld_vehs_traj = pre_caller(
+
+                        _, _, max_slack, x_i, xd_i, u_i, _, _, ctrld_vehs_traj = parallel_mpc_solve(
                             warmstarts_subset,
                             response_vehinfo,
                             world,
