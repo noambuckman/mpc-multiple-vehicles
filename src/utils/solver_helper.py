@@ -1,13 +1,11 @@
 import numpy as np
-import random
 import copy as cp
 from collections import deque
 from typing import List, Tuple
 
-from src.vehicle_mpc_information import VehicleMPCInformation, Trajectory
+from src.vehicle_mpc_information import VehicleMPCInformation
 import src.vehicle as vehicle
-from src.simple_optimizations import feasible_guess
-from src.best_response import solve_best_response_c
+from src.simple_optimizations import feasible_guess, lane_following_optimizations
 
 
 def nonresponse_subset(list_of_veh_idxs, all_other_x0, all_other_vehicles, all_other_u, all_other_x, all_other_x_des):
@@ -486,40 +484,6 @@ def poission_positions_multiple(cars_per_hour_list,
 
     return initial_vehicle_positions
 
-
-def lane_following_optimizations(N, vehicle, x0, params, world):
-    cp_vehicle = cp.deepcopy(vehicle)
-    cp_params = cp.deepcopy(params)
-    cp_params["N"] = N
-
-    # Try not to change the velocity of the car (i.e. assume velocity zero)
-    cp_vehicle.k_u_v = 1000
-    cp_vehicle.strict_wall_constraint = False
-
-    # TODO:  Allow for default values for this. Distinguish between solver, params, and ipopt params
-    solver_params = {}
-    solver_params["slack"] = True
-    solver_params["k_CA"] = params["k_CA_d"]
-    solver_params["k_CA_power"] = params["k_CA_power"]
-    solver_params["k_slack"] = params["k_slack_d"]
-
-    ipopt_params = {'print_level': 0}
-
-    # warm start with no control inputs
-    u_warm = np.zeros((2, N))
-    x_warm, x_des_warm = cp_vehicle.forward_simulate_all(x0.reshape(6, 1), u_warm)
-
-    warm_traj = Trajectory(u=u_warm, x=x_warm, xd=x_des_warm)
-
-    _, _, max_slack, x, x_des, u, _, _, _ = solve_best_response_c("test", warm_traj, cp_vehicle, [], [], x0, [], [],
-                                                                  world, solver_params, cp_params, ipopt_params, [], [],
-                                                                  [])
-    del cp_vehicle
-
-    if max_slack < np.infty:
-        return u, x, x_des
-    else:
-        return u_warm, x_warm, x_des_warm
 
 
 
