@@ -38,7 +38,8 @@ def feasible_guess(N, vehicle, x0, params, world,
     cp_params["solver_mode"] = "regenerate"
     solver_params = generate_solver_params(params, 0, 0)
 
-    ipopt_params = {'print_level': 5}
+    ipopt_params = {'print_level': 5, 'max_cpu_time': 20}
+
 
     # warm start with no control inputs
     u_warm_intial = np.zeros((2, N))
@@ -59,7 +60,7 @@ def feasible_guess(N, vehicle, x0, params, world,
     }
 
     response_veh_info = VehicleMPCInformation(cp_vehicle, x0)
-
+    print("Solving Vehicle %d"% response_veh_info.vehicle.agent_id)
     _, _, max_slack, x, x_des, u, _, _, _ = parallel_mpc_solve(
         warm_traj_dict, response_veh_info, world, solver_params, cp_params,
         ipopt_params, cp_other_vehicle_info, [])
@@ -183,7 +184,7 @@ def lane_following_optimizations(N: int, vehicle, x0: np.array, params: dict,
     cp_vehicle.strict_wall_constraint = False
 
     solver_params = generate_solver_params(params, 0, 0)
-    ipopt_params = {'print_level': 0}
+    ipopt_params = {'print_level': 5, 'max_cpu_time': 20}
 
     # warm start with no control inputs
     u_warm = np.zeros((2, N))
