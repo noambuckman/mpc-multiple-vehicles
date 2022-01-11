@@ -2,14 +2,15 @@ import numpy as np
 import casadi as cas
 import copy as cp
 from src.multiagent_mpc import NonconvexOptimization
-from src.best_response import call_mpc_solver
-from src.vehicle_mpc_information import Trajectory
+from src.best_response import call_mpc_solver, parallel_mpc_solve, generate_solver_params
+from src.vehicle_mpc_information import Trajectory, VehicleMPCInformation
 from src.traffic_world import TrafficWorld
 from typing import List
 from src.geometry_helper import minkowski_ellipse_collision_distance
 
 
-def feasible_guess(N, vehicle, x0, params, world, other_vehicle_info):
+def feasible_guess(N, vehicle, x0, params, world,
+                   other_vehicle_info: List[VehicleMPCInformation]):
     ''' Try to get a feasible solution for a single vehicle without 
         considering the actual cost.
 
@@ -19,29 +20,25 @@ def feasible_guess(N, vehicle, x0, params, world, other_vehicle_info):
 
     # We need to deepcopy and del vehicles to allow multiprocesssing (see Note elsewhere)
     cp_vehicle = cp.deepcopy(vehicle)
-    other_vehicles = [cp.deepcopy(vi.vehicle) for vi in other_vehicle_info]
+    cp_other_vehicle_info = cp.deepcopy(other_vehicle_info)
+    
+    for j, vinfo in enumerate(cp_other_vehicle_info):
+        if vinfo.u is None:
+            u_j = np.zeros((2, N))
+            x0_j = vinfo.x0.reshape(6, 1)
+            x_j, xd_j = vinfo.vehicle.forward_simulate_all(x0_j, u_j)
+
+            vinfo.update_state(u_j, x_j, xd_j)
+            cp_other_vehicle_info[j] = vinfo
+
 
     cp_params = cp.deepcopy(params)
     cp_params["N"] = N
-
-    solver_params = {}
-    solver_params["slack"] = True
-    solver_params["k_CA"] = params["k_CA_d"]
-    solver_params["k_CA_power"] = params["k_CA_power"]
-    solver_params["k_slack"] = params["k_slack_d"]
+    # turnoff any pre-compiled since we're changing N
+    cp_params["solver_mode"] = "regenerate"
+    solver_params = generate_solver_params(params, 0, 0)
 
     ipopt_params = {'print_level': 5}
-    x_other = [v.x for v in other_vehicle_info]
-    xd_other = [v.xd for v in other_vehicle_info]
-    u_other = [v.u for v in other_vehicle_info]
-    x0_other_vehicles = [v.x0 for v in other_vehicle_info]
-
-    for j in range(len(other_vehicle_info)):
-
-        if other_vehicle_info[j].u is None:
-            u_other[j] = np.zeros((2, N))
-            x_other[j], xd_other[j] = other_vehicles[j].forward_simulate_all(
-                other_vehicle_info[j].x0.reshape(6, 1), u_other[j])
 
     # warm start with no control inputs
     u_warm_intial = np.zeros((2, N))
@@ -49,22 +46,26 @@ def feasible_guess(N, vehicle, x0, params, world, other_vehicle_info):
         x0.reshape(6, 1), u_warm_intial)
 
     # solve for a spatially feasible x that we will use as a warm start
+    x_other = [v.x for v in cp_other_vehicle_info]
+    cp_other_vehicles = [cp.deepcopy(vi.vehicle) for vi in cp_other_vehicle_info]
     x_warm, _ = spatial_only_optimization(x_warm_initial, [], x_other,
-                                          cp_vehicle, None, other_vehicles,
+                                          cp_vehicle, None, cp_other_vehicles,
                                           3 * cp_vehicle.L)
 
     # warm start with feasible x (not dynamically feasible)
-    warm_traj = Trajectory(u=u_warm_intial, x=x_warm, xd=x_des_warm_initial)
-    precompiled_code_dir = params["precompiled_solver_dir"]
-    solver_mode = params["solver_mode"]
+    warm_traj_dict = {
+        'mix spatial none':
+        Trajectory(u=u_warm_intial, x=x_warm, xd=x_des_warm_initial)
+    }
 
-    _, _, max_slack, x, x_des, u, _, _, _ = call_mpc_solver(
-        "mix spatial none", warm_traj, precompiled_code_dir, solver_mode,
-        cp_vehicle, [], other_vehicles, x0, [], x0_other_vehicles, world,
-        solver_params, cp_params, ipopt_params, x_other)
+    response_veh_info = VehicleMPCInformation(cp_vehicle, x0)
 
-    del cp_vehicle  # needed to fix: TypeError: cannot pickle 'SwigPyObject' object
-    del other_vehicles
+    _, _, max_slack, x, x_des, u, _, _, _ = parallel_mpc_solve(
+        warm_traj_dict, response_veh_info, world, solver_params, cp_params,
+        ipopt_params, cp_other_vehicle_info, [])
+
+    del cp_vehicle, response_veh_info  # needed to fix: TypeError: cannot pickle 'SwigPyObject' object
+    del cp_other_vehicle_info, cp_other_vehicles
 
     if max_slack < np.infty:
         return u, x, x_des
@@ -181,13 +182,7 @@ def lane_following_optimizations(N: int, vehicle, x0: np.array, params: dict,
     cp_vehicle.k_u_v = 1000
     cp_vehicle.strict_wall_constraint = False
 
-    # TODO:  Allow for default values for this. Distinguish between solver, params, and ipopt params
-    solver_params = {}
-    solver_params["slack"] = True
-    solver_params["k_CA"] = params["k_CA_d"]
-    solver_params["k_CA_power"] = params["k_CA_power"]
-    solver_params["k_slack"] = params["k_slack_d"]
-
+    solver_params = generate_solver_params(params, 0, 0)
     ipopt_params = {'print_level': 0}
 
     # warm start with no control inputs
@@ -195,12 +190,15 @@ def lane_following_optimizations(N: int, vehicle, x0: np.array, params: dict,
     x_warm, x_des_warm = cp_vehicle.forward_simulate_all(
         x0.reshape(6, 1), u_warm)
 
+    response_veh_info = VehicleMPCInformation(cp_vehicle, x0)
     warm_traj = Trajectory(u=u_warm, x=x_warm, xd=x_des_warm)
 
-    _, _, max_slack, x, x_des, u, _, _, _ = call_mpc_solver(
-        "test", warm_traj, cp_vehicle, [], [], x0, [], [], world,
-        solver_params, cp_params, ipopt_params, [], [], [])
-    del cp_vehicle
+    warm_start_dict = {"test": warm_traj}
+    _, _, max_slack, x, x_des, u, _, _, _ = parallel_mpc_solve(
+        warm_start_dict, response_veh_info, world, solver_params, params,
+        ipopt_params, [], [])
+
+    del response_veh_info, cp_vehicle
 
     if max_slack < np.infty:
         return u, x, x_des
