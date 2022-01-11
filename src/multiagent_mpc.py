@@ -417,8 +417,7 @@ class MultiMPC(NonconvexOptimization):
                         None)
 
         # TODO: Conver the Add velocity based constraints
-        if "safety_constraint" in params and params[
-                "safety_constraint"] == True:
+        if "safety_constraint" in params and params["safety_constraint"] in [True, "True", "true"]:
             max_deceleration = cas.fabs(self.p_ego.max_deceleration)
             if len(x_ctrld) > 0:
                 self.generate_circles_stopping_constraint(
