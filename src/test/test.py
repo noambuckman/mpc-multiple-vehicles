@@ -3,11 +3,10 @@ from src.utils.ibr_argument_parser import IBRParser
 import numpy as np
 from src.traffic_world import TrafficWorld
 from src.utils.solver_helper import poission_positions, initialize_cars_from_positions
-from vehicle import Vehicle
-from vehicle_parameters import VehicleParameters
-from src.vehicle_mpc_information import VehicleMPCInformation, Trajectory
+from src.vehicle_parameters import VehicleParameters
+from src.vehicle_mpc_information import VehicleMPCInformation
 from src.best_response import solve_best_response_c
-from src.warm_starts import generate_warm_starts
+from src.warm_starts import generate_warmstarts
 parser = IBRParser()
 args = parser.parse_args()
 params = vars(args)
@@ -15,7 +14,8 @@ params["T"] = 0.6
 params["n_other"] = 6
 i_mpc_start = 0
 params["N"] = max(1, int(params["T"] / params["dt"]))
-params["number_ctrl_pts_executed"] = max(1, int(np.floor(params["N"] * params["p_exec"])))
+params["number_ctrl_pts_executed"] = max(
+    1, int(np.floor(params["N"] * params["p_exec"])))
 
 # Create the world and vehicle objects
 world = TrafficWorld(params["n_lanes"], 0, 999999)
@@ -23,29 +23,36 @@ world = TrafficWorld(params["n_lanes"], 0, 999999)
 # Create the vehicle placement based on a Poisson distribution
 MAX_VELOCITY = 25 * 0.447  # m/s
 VEHICLE_LENGTH = 4.5  # m
-time_duration_s = (params["n_other"] * 3600.0 / params["car_density"]) * 10  # amount of time to generate traffic
-initial_vehicle_positions = poission_positions(params["car_density"],
-                                               params["n_other"] + 1,
-                                               params["n_lanes"],
-                                               MAX_VELOCITY,
-                                               2 * VEHICLE_LENGTH,
-                                               position_random_seed=params["seed"])
+time_duration_s = (params["n_other"] * 3600.0 / params["car_density"]
+                   ) * 10  # amount of time to generate traffic
+initial_vehicle_positions = poission_positions(
+    params["car_density"],
+    params["n_other"] + 1,
+    params["n_lanes"],
+    MAX_VELOCITY,
+    2 * VEHICLE_LENGTH,
+    position_random_seed=params["seed"])
 position_list = initial_vehicle_positions[:params["n_other"] + 1]
 
 # Create the SVOs for each vehicle
 if params["random_svo"] == 1:
-    list_of_svo = [np.random.choice([0, np.pi / 4.0, np.pi / 2.01]) for i in range(params["n_other"])]
+    list_of_svo = [
+        np.random.choice([0, np.pi / 4.0, np.pi / 2.01])
+        for i in range(params["n_other"])
+    ]
 else:
     list_of_svo = [params["svo_theta"] for i in range(params["n_other"])]
 
-(_, _, all_vehicles, all_x0) = initialize_cars_from_positions(params["N"], params["dt"], world, True, position_list,
-                                                              list_of_svo)
+(_, _, all_vehicles,
+ all_x0) = initialize_cars_from_positions(params["N"], params["dt"], world,
+                                          True, position_list, list_of_svo)
 
 for vehicle in all_vehicles:
     # Set theta_ij randomly for all vehicles
     vehicle.theta_ij[-1] = np.random.uniform(0.001, np.pi / 2.01)
     for vehicle_j in all_vehicles:
-        vehicle.theta_ij[vehicle_j.agent_id] = np.random.uniform(0.001, np.pi / 2.01)
+        vehicle.theta_ij[vehicle_j.agent_id] = np.random.uniform(
+            0.001, np.pi / 2.01)
 
 if params["k_lat"]:
     for vehicle in all_vehicles:
@@ -59,12 +66,12 @@ solver_params["k_CA"] = params["k_CA_d"]
 solver_params["k_CA_power"] = params["k_CA_power"]
 solver_params["k_slack"] = params["k_slack_d"]
 
-ipopt_params = {'ipopt': {"print_level": 1}}
+ipopt_params = {"print_level": 5}
 params['slack'] = True
 
-ego_idx = 0
-c_idx = []
-nc_idx = []
+ego_idx = 2
+c_idx = [0, 1]
+nc_idx = [3, 4, 5]
 
 nc = len(c_idx)
 nnc = len(nc_idx)
@@ -88,23 +95,26 @@ theta_ic = [np.pi / 4 for j in range(nc)]
 theta_i_nc = [np.pi / 4 for j in range(nnc)]
 params["safety_constraint"] = False
 
-mpc = MultiMPC(params["N"], world, nc, nnc, solver_params, params, ipopt_params)
+mpc = MultiMPC(params["N"], world, nc, nnc, solver_params, params,
+               ipopt_params)
 
 # At each round, we need to call this
 ## Testing Best Response
 other_vehicles = [all_vehicles[i] for i in nc_idx]
 other_x0 = [all_x0[i] for i in nc_idx]
 
-previous_all_other_u_mpc = [np.zeros((2, params["N"])) for i in range(len(other_vehicles))]
+previous_all_other_u_mpc = [
+    np.zeros((2, params["N"])) for i in range(len(other_vehicles))
+]
 
 # p0 = mpcp_to_nlpp(x0, p_ego, theta_ego_i, theta_ic, theta_i_nc, x0_cntrld, p_cntrld, x0_nc, p_nc, other_x_initial,
 #                   other_u_initial, other_xd_initial)
 # x0warm = np.random.uniform(size=(mpc.nx, 1))
 
-response_veh_info = VehicleMPCInformation(all_vehicles[ego_idx], all_x0[ego_idx])
+response_veh_info = VehicleMPCInformation(all_vehicles[ego_idx],
+                                          all_x0[ego_idx])
 vehs_ibr_info_predicted = [response_veh_info]
-warm_starts = generate_warm_starts(response_veh_info.vehicle, world, response_veh_info.x0, vehs_ibr_info_predicted,
-                                   params, None, None)
+warm_starts = generate_warmstarts(response_veh_info, world, vehs_ibr_info_predicted, params, None, None)
 
 cntrld_vehicles = [all_vehicles[idx] for idx in c_idx]
 nonresponse_vehicle_list = [all_vehicles[idx] for idx in nc_idx]
@@ -117,28 +127,35 @@ other_x_initial = [None for i in range(len(other_vehicles))]
 other_xd_initial = [None for i in range(len(other_vehicles))]
 for i in range(len(other_vehicles)):
     other_u_initial[i] = np.zeros((2, params["N"]))
-    other_x_initial[i], other_xd_initial[i] = other_vehicles[i].forward_simulate_all(other_x0[i], other_u_initial[i])
+    other_x_initial[i], other_xd_initial[i] = other_vehicles[
+        i].forward_simulate_all(other_x0[i], other_u_initial[i])
+
+cntrld_u_warm = [None for _ in range(len(cntrld_vehicles))]
+cntrld_x_warm = [None for _ in range(len(cntrld_vehicles))]
+cntrld_xd_warm = [None for _ in range(len(cntrld_vehicles))]
+for i in range(len(cntrld_vehicles)):
+    cntrld_u_warm[i] = np.zeros((2, params["N"]))
+    cntrld_x_warm[i], cntrld_xd_warm[i] = cntrld_vehicles[i].forward_simulate_all(cntrld_x0[i], cntrld_u_warm[i])
 
 for warm_key, warm_trajectory in warm_starts.items():
-    r = solve_best_response_c(warm_key,
-                              warm_trajectory,
-                              response_veh_info.vehicle,
-                              cntrld_vehicles,
-                              nonresponse_vehicle_list,
-                              response_x0,
-                              cntrld_x0,
-                              nonresponse_x0_list,
-                              world,
-                              solver_params,
-                              params,
-                              ipopt_params,
-                              other_u_initial,
-                              other_x_initial,
-                              other_xd_initial,
-                              cntrld_u_warm=None,
-                              cntrld_x_warm=None,
-                              cntrld_xd_warm=None,
-                              return_bri=False)
+    r = solve_best_response_c(
+        warm_key,
+        warm_trajectory,
+        response_veh_info.vehicle,
+        cntrld_vehicles,
+        nonresponse_vehicle_list,
+        response_x0,
+        cntrld_x0,
+        nonresponse_x0_list,
+        world,
+        solver_params,
+        params,
+        ipopt_params,
+        other_x_initial,
+        cntrld_u_warm,
+        cntrld_x_warm,
+        cntrld_xd_warm,
+    )
 
     print(r[0:3])
 

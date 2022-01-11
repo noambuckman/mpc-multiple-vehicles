@@ -7,7 +7,7 @@ from vehicle import Vehicle
 from vehicle_parameters import VehicleParameters
 from src.vehicle_mpc_information import VehicleMPCInformation, Trajectory
 from src.best_response import solve_best_response_c, solve_warm_starts
-from src.warm_starts import generate_warm_starts
+from src.warm_starts import generate_warmstarts
 
 parser = IBRParser()
 args = parser.parse_args()
@@ -77,7 +77,7 @@ params["safety_constraint"] = True
 
 response_veh_info = VehicleMPCInformation(all_vehicles[ego_idx], all_x0[ego_idx])
 vehs_ibr_info_predicted = [response_veh_info]
-warm_starts = generate_warm_starts(response_veh_info.vehicle, world, response_veh_info.x0, vehs_ibr_info_predicted,
+warm_starts = generate_warmstarts(response_veh_info.vehicle, world, response_veh_info.x0, vehs_ibr_info_predicted,
                                    params, None, None)
 
 cntrld_vehicles = [all_vehicles[idx] for idx in c_idx]
