@@ -8,6 +8,7 @@ from src.multiagent_mpc import MultiMPC, mpcx_to_nlpx
 from src.multiagent_mpc import MultiMPC, mpcp_to_nlpp, nlpx_to_mpcx
 from src.vehicle_parameters import VehicleParameters
 from src.traffic_world import TrafficWorld
+from vehicle import Vehicle
 
 
 
@@ -41,7 +42,7 @@ def parallel_mpc_solve(warmstart_dict: Dict[str, Trajectory],
     # Convert vehicle paramaters into an array
     p_ego, p_cntrld, p_nc = convert_vehicles_to_parameters(
         nc, nnc, response_vehicle, cntrld_vehicles, nonresponse_vehicles)
-    theta_ego_i, theta_ic, theta_i_nc = get_fake_svo_values(nc, nnc)
+    theta_ego_i, theta_ic, theta_i_nc = get_svo_values(response_vehicle, cntrld_vehicles, nonresponse_vehicles)
 
     precompiled_code_dir = params["precompiled_solver_dir"]
     solver_mode = params["solver_mode"]
@@ -214,6 +215,19 @@ def get_trajectories_from_solution(nlp_solution, N, nc, nnc):
 
     return x_ego, u_ego, xd_ego, cntrld_vehicle_trajectories, max_slack, current_cost
 
+def get_svo_values(response_vehicle: Vehicle, cntrld_vehicles: List[Vehicle], noncontrolled_vehicles: List[Vehicle]):
+    ''' Return the theta_ij w.r.t the control vehicles'''
+    theta_ic = []
+    for cntrld_vehicle in cntrld_vehicles:
+        theta_ic += [response_vehicle.get_theta_ij(cntrld_vehicle.agent_id)]
+
+    theta_inc = []
+    for vehicle in noncontrolled_vehicles:
+        theta_inc += [response_vehicle.get_theta_ij(vehicle)]
+    
+    theta_i_ego = response_vehicle.theta_ij[-1]
+
+    return theta_i_ego, theta_ic, theta_inc
 
 def get_fake_svo_values(n_ctrl, n_other):
     ''' Generate fake svo parameters with correct output for testing'''
