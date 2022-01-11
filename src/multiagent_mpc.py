@@ -1302,11 +1302,11 @@ def get_vehicle_corners(x_state, length, width):
     return list_of_xy_corners
 
 
-def get_vehicle_circles(x_state):
+def get_vehicle_circles(x_state, dx=1.075, r=1.77):
     ''' Circles that circumscribe the collision ellipse generated earlier'''
     ## Hardcoded for length L, W, ideally should be solved for at run time
-    dx = 1.028
-    r = 1.878
+    # dx = 1.028
+    # r = 1.878
 
     translation = x_state[0:2]
 
