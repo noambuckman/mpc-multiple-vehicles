@@ -3,7 +3,7 @@ import multiprocessing, functools, time, os, pickle
 from typing import List, Tuple, Dict
 from casadi import nlpsol
 
-from src.multiagent_mpc import MultiMPC, mpcp_to_nlpp, nlpx_to_mpcx
+from src.multiagent_mpc import MultiMPC, mpcp_to_nlpp, nlpx_to_mpcx, mpcx_to_nlpx
 from src.vehicle_parameters import VehicleParameters
 from src.traffic_world import TrafficWorld
 from src.vehicle import Vehicle
