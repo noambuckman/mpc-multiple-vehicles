@@ -1,3 +1,4 @@
+import os, pickle
 import numpy as np
 import casadi as cas
 from typing import List
@@ -110,12 +111,14 @@ class MultiMPC(NonconvexOptimization):
     '''
     def __init__(self,
                  N: int,
+                 dt: float,
                  world: TrafficWorld,
                  n_vehs_cntrld: int = 0,
                  n_other_vehicles: int = 0,
-                 solver_params: dict = None,
                  params: dict = None,
-                 ipopt_params=None):
+                 ipopt_params=None,
+                 safety_constraint=True,
+                 collision_avoidance_checking_distance = np.infty):
 
         super(MultiMPC, self).__init__()
         ''' Setup an optimization for the response vehicle, shared control vehicles, and surrounding vehicles
@@ -128,19 +131,12 @@ class MultiMPC(NonconvexOptimization):
                 ipopt_params:  paramaters for the optimizatio solver
         '''
 
-        if solver_params is None:
-            solver_params = {}
-            self.k_slack = 99999
-            self.k_CA = 0
-            self.k_CA_power = 1
-        else:
-            self.k_slack = solver_params["k_slack"]
-            self.k_CA = solver_params["k_CA"]
-            self.k_CA_power = solver_params["k_CA_power"]
 
+
+        self.safety_constraint = safety_constraint
+        self.collision_avoidance_checking_distance = collision_avoidance_checking_distance
         self.world = world
-        self.dt = params["dt"]
-
+        self.dt = dt
         self.N = N
         self.n_vehs_cntrld = n_vehs_cntrld
         self.n_other_vehicle = n_other_vehicles
@@ -217,6 +213,7 @@ class MultiMPC(NonconvexOptimization):
         self.p_theta_inc = cas.MX.sym('svo_ego_nc', self.n_other_vehicle, 1)
         self.p_theta_i_ego = cas.MX.sym('svo_ego_self', 1, 1)
 
+
         # Cntrld Vehicle Parameters
         self.x0_cntrld = [
             cas.MX.sym('x0_ctrl%02d' % i, n_state, 1)
@@ -244,18 +241,24 @@ class MultiMPC(NonconvexOptimization):
                               "nc%02d" % i)
             for i in range(self.n_other_vehicle)
         ]
+
+        self.k_slack = cas.MX.sym('k_slack', 1, 1)
+        self.k_CA = cas.MX.sym('k_CA', 1, 1)
+        self.k_CA_power = cas.MX.sym('k_CA_power', 1, 1)
+
         self._p_list = mpcp_to_nlpp(self.x0_ego, self.p_ego,
                                     self.p_theta_i_ego, self.p_theta_ic,
                                     self.p_theta_inc, self.x0_cntrld,
                                     self.p_cntrld_list, self.x0_allother,
-                                    self.p_other_vehicle_list, self.x_other)
+                                    self.p_other_vehicle_list, self.x_other,
+                                    self.k_slack, self.k_CA, self.k_CA_power)
 
         if params is None:
             params = {}
 
         if "collision_avoidance_checking_distance" not in params:
             print("No collision avoidance checking distance")
-            params["collision_avoidance_checking_distance"] = 400
+            self.collision_avoidance_checking_distance = 400
 
         # Generate costs for each vehicle
         self.k_ca2 = 0.77  #This number must be less than 1
@@ -274,7 +277,7 @@ class MultiMPC(NonconvexOptimization):
 
         ###########################3 CONSTRAINTS #########################################
         self.add_mpc_constraints(
-            params["N"], n_vehs_cntrld, self.n_other_vehicle, world,
+            self.N, n_vehs_cntrld, self.n_other_vehicle, world,
             self.x_ego, self.u_ego, self.xd_ego, self.x0_ego, self.p_ego,
             self.x_ctrld, self.u_ctrld, self.xd_ctrld, self.x0_cntrld,
             self.p_cntrld_list, self.x_other, self.x0_allother,
@@ -331,7 +334,7 @@ class MultiMPC(NonconvexOptimization):
                                                initial_displacement[1]**2)
                 within_collision_distance = (
                     initial_xy_distance <=
-                    params["collision_avoidance_checking_distance"])
+                    self.collision_avoidance_checking_distance)
 
                 dist = minkowski_ellipse_collision_distance(
                     p_ego, p_other_vehicle_list[i], x_ego[0, k], x_ego[1, k],
@@ -368,7 +371,7 @@ class MultiMPC(NonconvexOptimization):
                                                    initial_displacement[1]**2)
                     within_collision_distance = (
                         initial_xy_distance <=
-                        params["collision_avoidance_checking_distance"])
+                        self.collision_avoidance_checking_distance)
                     dist = minkowski_ellipse_collision_distance(
                         p_ctrld_list[ic], p_other_vehicle_list[j],
                         x_ctrld[ic][0, k], x_ctrld[ic][1, k], x_ctrld[ic][2,
@@ -391,7 +394,7 @@ class MultiMPC(NonconvexOptimization):
                             initial_displacement[1]**2)
                         within_collision_distance = (
                             initial_xy_distance <=
-                            params["collision_avoidance_checking_distance"])
+                            self.collision_avoidance_checking_distance)
 
                         dist = minkowski_ellipse_collision_distance(
                             p_ctrld_list[ic], p_ctrld_list[j], x_ctrld[ic][0,
@@ -415,7 +418,7 @@ class MultiMPC(NonconvexOptimization):
                     None)
 
         # TODO: Conver the Add velocity based constraints
-        if "safety_constraint" in params and params["safety_constraint"] in [True, "True", "true"]:
+        if self.safety_constraint:
             max_deceleration = cas.fabs(self.p_ego.max_deceleration)
             if len(x_ctrld) > 0:
                 self.generate_circles_stopping_constraint(
@@ -504,12 +507,12 @@ class MultiMPC(NonconvexOptimization):
                                                        slack_ic_jnc,
                                                        slack_i_jc, slack_ic_jc)
         slack_cost += self.compute_wall_slack_costs(
-            params["N"], n_vehs_cntrld, top_wall_slack, bottom_wall_slack,
+            self.N, n_vehs_cntrld, top_wall_slack, bottom_wall_slack,
             top_wall_slack_c, bottom_wall_slack_c, params)
 
         # Compute Collision Avoidance ellipses using Minkowski sum
         collision_cost = self.compute_collision_avoidance_costs(
-            params["N"], n_other_vehicle, n_vehs_cntrld, x0_ego, x0_allother,
+            self.N, n_other_vehicle, n_vehs_cntrld, x0_ego, x0_allother,
             x0_cntrld, p_ego, p_other_vehicle_list, p_cntrld_list, x_ego,
             x_other, x_ctrld, params, k_ca2, k_CA_power)
 
@@ -544,10 +547,8 @@ class MultiMPC(NonconvexOptimization):
         return slack_cost
 
     def get_solver_name(self):
-        solver_name_prefix = "mpc_%02d_%02d" % (self.n_vehs_cntrld,
-                                                self.n_other_vehicle)
-
-        return solver_name_prefix
+        
+        return get_solver_name(self.N, self.n_vehs_cntrld, self.n_other_vehicle, self.safety_constraint)
 
     def add_state_constraints_g(self,
                                 X,
@@ -810,7 +811,7 @@ class MultiMPC(NonconvexOptimization):
                                                initial_displacement[1]**2)
                 within_collision_distance = (
                     initial_xy_distance <=
-                    params["collision_avoidance_checking_distance"])
+                    self.collision_avoidance_checking_distance)
 
                 dist = minkowski_ellipse_collision_distance(
                     p_ego, p_other_vehicle_list[i], x_ego[0, k], x_ego[1, k],
@@ -844,7 +845,7 @@ class MultiMPC(NonconvexOptimization):
                                                    initial_displacement[1]**2)
                     within_collision_distance = (
                         initial_xy_distance <=
-                        params["collision_avoidance_checking_distance"])
+                        self.collision_avoidance_checking_distance)
                     dist = minkowski_ellipse_collision_distance(
                         p_cntrld_list[ic], p_other_vehicle_list[j],
                         x_ctrld[ic][0, k], x_ctrld[ic][1, k], x_ctrld[ic][2,
@@ -867,7 +868,7 @@ class MultiMPC(NonconvexOptimization):
                             initial_displacement[1]**2)
                         within_collision_distance = (
                             initial_xy_distance <=
-                            params["collision_avoidance_checking_distance"])
+                            self.collision_avoidance_checking_distance)
 
                         dist = minkowski_ellipse_collision_distance(
                             p_cntrld_list[ic], p_cntrld_list[j],
@@ -1176,6 +1177,26 @@ class MultiMPC(NonconvexOptimization):
                         999 * amb_behind,
                     )
                     self.add_bounded_constraint(0, v_max_constraint - v_amb**2)
+    
+    def save_solver_pickle(self, precompiled_code_dir):
+        nlp_solver = self.solver
+        
+        
+        nlp_solver_name = get_pickled_solver_name(self.N, self.n_vehs_cntrld, self.n_other_vehicle, self.safety_constraint)
+        nlp_solver_path = os.path.join(precompiled_code_dir, nlp_solver_name)      
+
+        pickle.dump(nlp_solver, open(nlp_solver_path, 'wb'))
+        
+    def save_bounds_pickle(self, precompiled_code_dir):
+
+        nlp_lbg, nlp_ubg = self._lbg_list, self._ubg_list
+
+        bounds = (nlp_lbg, nlp_ubg)
+
+        bounds_path_name = get_pickled_bounds_name(self.N, self.n_vehs_cntrld, self.n_other_vehicle, self.safety_constraint)
+        bounds_full_path = os.path.join(precompiled_code_dir, bounds_path_name)
+        pickle.dump(bounds, open(bounds_full_path, 'wb'))
+
 
 
 def load_state(file_name, n_others, ignore_des=False):
@@ -1353,7 +1374,7 @@ def get_vehicle_circles(x_state, dx=1.075, r=1.77):
 
 def mpcp_to_nlpp(x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc,
                  x0_cntrld, p_cntrld_list, x0_allother, p_other_vehicle_list,
-                 x_other_nc):
+                 x_other_nc, k_slack, k_CA, k_CA_power):
     ''' Converts 3 seperate parameter lists to a single long vector np X 1'''
     # Add ego parameters
     long_list = []
@@ -1383,6 +1404,10 @@ def mpcp_to_nlpp(x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc,
         long_list.append(cas.reshape(x_other_nc[i], (n_state * (N + 1), 1)))
         # long_list.append(cas.reshape(u_other_nc[i], (n_ctrl * N, 1)))
         # long_list.append(cas.reshape(xd_other_nc[i], (n_desired * (N + 1), 1)))
+
+    long_list.append(k_slack)
+    long_list.append(k_CA)
+    long_list.append(k_CA_power)
 
     nlp_p = cas.vcat(long_list)
     return nlp_p
@@ -1451,7 +1476,15 @@ def nlpp_to_mpcp(nlp_p,
         # xd_other_nc.append(cas.reshape(nlp_p[idx:idx + n_desired * (N + 1)], (n_desired, N + 1)))
         # idx += n_desired * (N + 1)
 
-    return x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld_list, p_cntrld_list, x0_other_vehicle, p_other_vehicle_list, x_other_nc
+
+    k_slack = nlp_p[idx: idx + 1]
+    idx += 1
+    k_CA = nlp_p[idx: idx + 1]
+    idx += 1
+    k_CA_power = nlp_p[idx: idx + 1]
+    idx += 1
+
+    return x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld_list, p_cntrld_list, x0_other_vehicle, p_other_vehicle_list, x_other_nc, k_slack, k_CA, k_CA_power
 
 
 def mpcx_to_nlpx(n_other: int, x_ego, u_ego, xd_ego, x_ctrl: List,
@@ -1570,3 +1603,86 @@ def nlpx_to_mpcx(nlp_x,
         idx += N + 1
 
     return x_ego, u_ego, xd_ego, x_ctrl, u_ctrl, xd_ctrl, s_i_jnc, s_ic_jnc, s_i_jc, s_ic_jc, s_top, s_bottom, s_c_top, s_c_bottom
+
+
+def get_solver_name(N, n_vehs_cntrld, n_other_vehicle, safety_constraint):
+    solver_name_prefix = "mpc_N%dnc%02dnnc%02dSC%d" % (N, n_vehs_cntrld,
+                                            n_other_vehicle, safety_constraint)
+    
+    return solver_name_prefix
+
+def get_pickled_solver_name(N, nc, nnc, safety_constraint):
+    
+    nlp_solver_prefix = get_solver_name(N, nc, nnc, safety_constraint)
+    nlp_solver_name = "%s.p" % nlp_solver_prefix
+
+    return nlp_solver_name
+
+def get_pickled_bounds_name(N, nc, nnc, safety_constraint):
+
+    nlp_solver_prefix = get_solver_name(N, nc, nnc, safety_constraint)
+    nlp_bounds_name = "%s_bounds.p" % (nlp_solver_prefix)
+
+    return nlp_bounds_name
+
+def get_pickled_solver(precompiled_code_dir, N, nc, nnc, safety_constraint):
+    ''' Load the NLP Solver from a pickled version of it'''
+    nlp_solver_name = get_pickled_solver_name(N, nc, nnc, safety_constraint)
+    nlp_solver_path = os.path.join(precompiled_code_dir, nlp_solver_name)
+
+    nlp_solver = pickle.load(open(nlp_solver_path, "rb"))
+
+    nlp_lbg, nlp_ubg = get_bounds_from_compiled_mpc(N, nc, nnc, safety_constraint,
+                                                    precompiled_code_dir)
+
+    return nlp_solver, nlp_lbg, nlp_ubg
+
+
+def get_compiled_solver(precompiled_code_dir, N, nc, nnc, safety_constraint):
+    ''' Use a compiled .so version of the solver '''
+    nlp_solver_prefix = get_solver_name(N, nc, nnc, safety_constraint)
+
+    nlp_solver_name = "%s.so" % (nlp_solver_prefix)
+    nlp_solver_path = os.path.join(precompiled_code_dir, nlp_solver_name)
+
+    nlp_solver = cas.nlpsol('solver', 'ipopt', nlp_solver_path)
+
+    nlp_lbg, nlp_ubg = get_bounds_from_compiled_mpc(N, nc, nnc, safety_constraint,
+                                                    precompiled_code_dir)
+
+    return nlp_solver, nlp_lbg, nlp_ubg
+
+
+def get_bounds_from_compiled_mpc(N, nc, nnc, safety_constraint, precompiled_code_dir):
+    
+    bounds_path_name = get_pickled_bounds_name(N, nc, nnc, safety_constraint)    
+    bounds_full_path = os.path.join(precompiled_code_dir, bounds_path_name)
+    lbg, ubg = pickle.load(open(bounds_full_path, 'rb'))
+
+    return lbg, ubg
+
+
+def get_bounds_from_mpc(mpc):
+
+    lbg = mpc._lbg_list
+    ubg = mpc._ubg_list
+
+    return lbg, ubg
+
+
+def load_solver_from_file(filename):
+    ''' Load the .so file'''
+    nlpsolver = cas.nlpsol('solver', 'ipopt', filename)
+
+    return nlpsolver
+
+
+def load_solver_from_mpc(mpc, precompiled: bool = True):
+    ''' Get name of sovler from mpc'''
+    if precompiled:
+        solver_name_prefix = mpc.solver_prefix
+        solver = load_solver_from_file("./%s.so" % solver_name_prefix)
+    else:
+        solver = mpc.solver
+
+    return solver

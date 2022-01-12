@@ -3,7 +3,7 @@ import multiprocessing, functools, time, os, pickle
 from typing import List, Tuple, Dict
 from casadi import nlpsol
 
-from src.multiagent_mpc import MultiMPC, mpcp_to_nlpp, nlpx_to_mpcx, mpcx_to_nlpx
+from src.multiagent_mpc import MultiMPC, mpcp_to_nlpp, nlpx_to_mpcx, mpcx_to_nlpx, get_pickled_solver, get_compiled_solver, load_solver_from_mpc, get_bounds_from_mpc
 from src.vehicle_parameters import VehicleParameters
 from src.traffic_world import TrafficWorld
 from src.vehicle import Vehicle
@@ -128,22 +128,27 @@ def call_mpc_solver(
            List[Tuple[np.array]]]:
     '''Create the iterative best response object and solve.  Assumes that it receives warm start profiles.
     This really should only require a u_warm, x_warm, x_des_warm and then one level above we generate those values'''
+    
+    k_slack = solver_params["k_slack"]
+    k_CA = solver_params["k_CA"]
+    k_CA_power = solver_params["k_CA_power"]
+    
     nlp_p = mpcp_to_nlpp(response_x0, p_ego, theta_ego_i, theta_ic, theta_i_nc,
                          cntrld_x0, p_cntrld, nonresponse_x0_list, p_nc,
-                         nonresponse_x_list)
+                         nonresponse_x_list, k_slack, k_CA, k_CA_power)
     nlp_x0 = get_warm_start_x0(nc, nnc, warm_trajectory, cntrld_x_warm,
                                cntrld_u_warm, cntrld_xd_warm)
-
+    
     if solver_mode.lower() == "pickled":
         nlp_solver, nlp_lbg, nlp_ubg = get_pickled_solver(
-            precompiled_code_dir, nc, nnc)
+            precompiled_code_dir, params["N"], nc, nnc, params["safety_constraint"])
     elif solver_mode.lower() == "compiled":
         nlp_solver, nlp_lbg, nlp_ubg = get_compiled_solver(
-            precompiled_code_dir, nc, nnc)
+            precompiled_code_dir, params["N"], nc, nnc, params["safety_constraint"])
     else:
         # Generate the solver from scratch. This can take ~8s for large
-        mpc = MultiMPC(params["N"], world, nc, nnc, solver_params, params,
-                       ipopt_params)
+        mpc = MultiMPC(params["N"], params["dt"], world, nc, nnc, params,
+                       ipopt_params, safety_constraint=params["safety_constraint"])
         nlp_solver = load_solver_from_mpc(mpc, precompiled=False)
         nlp_lbg, nlp_ubg = get_bounds_from_mpc(mpc)
 
@@ -157,34 +162,6 @@ def call_mpc_solver(
     except Exception as e:
         print(e)
         return False, np.infty, np.infty, None, None, None, None, [], None
-
-
-def get_compiled_solver(precompiled_code_dir, nc, nnc):
-    ''' Use a compiled .so version of the solver '''
-
-    nlp_solver_name = "mpc_%02d_%02d.so" % (nc, nnc)
-    nlp_solver_path = os.path.join(precompiled_code_dir, nlp_solver_name)
-
-    nlp_solver = nlpsol('solver', 'ipopt', nlp_solver_path)
-
-    nlp_lbg, nlp_ubg = get_bounds_from_compiled_mpc(nc, nnc,
-                                                    precompiled_code_dir)
-
-    return nlp_solver, nlp_lbg, nlp_ubg
-
-
-def get_pickled_solver(precompiled_code_dir, nc, nnc):
-    ''' Load the NLP Solver from a pickled version of it'''
-
-    nlp_solver_name = "mpc_%02d_%02d.p" % (nc, nnc)
-    nlp_solver_path = os.path.join(precompiled_code_dir, nlp_solver_name)
-
-    nlp_solver = pickle.load(open(nlp_solver_path, "rb"))
-
-    nlp_lbg, nlp_ubg = get_bounds_from_compiled_mpc(nc, nnc,
-                                                    precompiled_code_dir)
-
-    return nlp_solver, nlp_lbg, nlp_ubg
 
 
 def get_trajectories_from_solution(nlp_solution, N, nc, nnc):
@@ -236,40 +213,6 @@ def get_fake_svo_values(n_ctrl, n_other):
     theta_ic = [np.pi / 4 for _ in range(n_ctrl)]
     theta_inc = [np.pi / 4 for _ in range(n_other)]
     return theta_i_ego, theta_ic, theta_inc
-
-
-def load_solver_from_file(filename):
-    ''' Load the .so file'''
-    nlpsolver = nlpsol('solver', 'ipopt', filename)
-
-    return nlpsolver
-
-
-def load_solver_from_mpc(mpc, precompiled: bool = True):
-    ''' Get name of sovler from mpc'''
-    if precompiled:
-        solver_name_prefix = mpc.solver_prefix
-        solver = load_solver_from_file("./%s.so" % solver_name_prefix)
-    else:
-        solver = mpc.solver
-
-    return solver
-
-
-def get_bounds_from_compiled_mpc(nc, nnc, precompiled_code_dir):
-    bounds_path_name = "bounds_%02d%02d.p" % (nc, nnc)
-    bounds_full_path = os.path.join(precompiled_code_dir, bounds_path_name)
-    lbg, ubg = pickle.load(open(bounds_full_path, 'rb'))
-
-    return lbg, ubg
-
-
-def get_bounds_from_mpc(mpc):
-
-    lbg = mpc._lbg_list
-    ubg = mpc._ubg_list
-
-    return lbg, ubg
 
 
 def init_slack_vars_zero(N, n_vehs_cntrld, n_other_vehicle):
