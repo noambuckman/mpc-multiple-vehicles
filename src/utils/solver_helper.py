@@ -100,8 +100,11 @@ def extend_last_mpc_and_follow_i(previous_u_mpc,
 
 
 def extend_last_mpc_and_follow(previous_u_mpc, number_ctrl_pts_executed, all_other_vehicles, all_other_x0, params,
-                               world):
-    '''Copy the previous mpc and extend the last values with lane following control'''
+                               world, extend_strategy = "Feasible"):
+    '''Copy the previous mpc and extend the last values with lane following control
+        Two types of extend strategy. Either try hard to find a feasible solution. 
+        Or just try to lane follow. 
+    '''
     N = previous_u_mpc[0].shape[1]
     n_vehs = len(all_other_vehicles)
 
@@ -125,7 +128,6 @@ def extend_last_mpc_and_follow(previous_u_mpc, number_ctrl_pts_executed, all_oth
         initial_pt = prev_trajs[i][:, -1]
 
         other_vehicle_info_subset = temp_extended_veh_info[:i] + temp_extended_veh_info[i + 1:]
-        extend_strategy = "Feasible"
         if extend_strategy == "LaneFollowOnly":
             lane_following_ctrl, lane_following_traj, lane_following_traj_des = lane_following_optimizations(
                 number_ctrl_pts_executed + 1, all_other_vehicles[i], initial_pt, params, world)

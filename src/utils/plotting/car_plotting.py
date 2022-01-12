@@ -151,6 +151,7 @@ def plot_multiple_cars(k,
     center_frame = camera_positions[k]
 
     axlim_minx, axlim_maxx = center_frame - 20, center_frame + 60,
+
     if xlim is not None:
         axlim_minx = xlim[0]
         axlim_maxx = xlim[1]
@@ -205,7 +206,7 @@ def plot_multiple_cars(k,
                 elif type(car_labels) == list:
                     ax.annotate(str(car_labels[i]), xy=(x, y))
                 elif type(car_labels) == bool:
-                    ax.annotate(str(all_other_vehicles[i].agent_id), xy=(x,y))
+                    ax.annotate(str(all_other_vehicles[i].agent_id), xy=(x, y))
 
     if car_plot_shape.lower() == "image" or car_plot_shape.lower() == "both":
         for i in range(len(xothers_plot)):
@@ -557,16 +558,26 @@ def concat_imgs(folder: str) -> str:
     return filename
 
 
-def plot_initial_positions(log_dir: str, world:TrafficWorld, vehicles:List[Vehicle], initial_positions: List[np.array], number_cars_included: int=10):
+def plot_initial_positions(log_dir: str,
+                           world: TrafficWorld,
+                           vehicles: List[Vehicle],
+                           initial_positions: List[np.array],
+                           number_cars_included: int = 10):
     '''Plot and save initial conditions
     
         log_dir:  Path to log directory for experiment
 
     
-    ''' 
+    '''
     vehicles_to_plot = vehicles[:number_cars_included]
     x0_to_plot = initial_positions[:number_cars_included]
-    x0_to_plot_reshaped = [x0.reshape(6,1) for x0 in x0_to_plot]
+    x0_to_plot_reshaped = [x0.reshape(6, 1) for x0 in x0_to_plot]
 
-    plot_cars(world, None, None, x0_to_plot_reshaped, log_dir, n_processors=1, all_other_vehicles=vehicles_to_plot, car_labels=True)
-
+    plot_cars(world,
+              None,
+              None,
+              x0_to_plot_reshaped,
+              log_dir,
+              n_processors=1,
+              all_other_vehicles=vehicles_to_plot,
+              car_labels=True)
