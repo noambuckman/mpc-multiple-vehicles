@@ -20,3 +20,5 @@ jupyter_notebooks/
 *.c
 *.p
 *.so
+
+data/*
