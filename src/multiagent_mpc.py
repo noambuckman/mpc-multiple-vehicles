@@ -554,9 +554,6 @@ class MultiMPC(NonconvexOptimization):
         ''' Construct vehicle specific constraints that only rely on
         the ego vehicle's own state '''
         for k in range(X.shape[1]):
-            if strict_wall_y_constraint:
-                self.add_bounded_constraint(ego_veh.min_y, X[1, k],
-                                            ego_veh.max_y)
             self.add_bounded_constraint(-np.pi / 2, X[2, k],
                                         np.pi / 2)  #no crazy angle
             self.add_bounded_constraint(ego_veh.min_v, X[4, k], ego_veh.max_v)
@@ -802,24 +799,18 @@ class MultiMPC(NonconvexOptimization):
         for k in range(N + 1):
             # Compute response vehicles collision center points
             for i in range(n_other_vehicle):
-                initial_displacement = x0_allother[i] - x0_ego
-                initial_xy_distance = cas.sqrt(initial_displacement[0]**2 +
-                                               initial_displacement[1]**2)
-                within_collision_distance = (
-                    initial_xy_distance <=
-                    self.collision_avoidance_checking_distance)
+
 
                 dist = minkowski_ellipse_collision_distance(
                     p_ego, p_other_vehicle_list[i], x_ego[0, k], x_ego[1, k],
                     x_ego[2, k], x_other[i][0, k], x_other[i][1, k],
                     x_other[i][2, k])
 
-                # Only keep track if within_collision_distance == 1  (i.e. if outside, don't add cost or constraint)
                 distance_clipped = cas.fmax(
                     dist, k_ca2 +
                     0.001)  # This can be a smaller distance if we'd like
                 distance_clipped = cas.fmin(distance_clipped, 1.25)
-                collision_cost += (within_collision_distance * 1 /
+                collision_cost += (1 /
                                    (distance_clipped - k_ca2)**k_CA_power)
             for j in range(n_vehs_cntrld):
                 dist = minkowski_ellipse_collision_distance(
@@ -836,12 +827,6 @@ class MultiMPC(NonconvexOptimization):
             for k in range(N + 1):
                 # Genereate collision circles for cntrld vehicles and other car
                 for j in range(n_other_vehicle):
-                    initial_displacement = x0_allother[j] - x0_cntrld[ic]
-                    initial_xy_distance = cas.sqrt(initial_displacement[0]**2 +
-                                                   initial_displacement[1]**2)
-                    within_collision_distance = (
-                        initial_xy_distance <=
-                        self.collision_avoidance_checking_distance)
                     dist = minkowski_ellipse_collision_distance(
                         p_cntrld_list[ic], p_other_vehicle_list[j],
                         x_ctrld[ic][0, k], x_ctrld[ic][1, k], x_ctrld[ic][2,
@@ -852,20 +837,11 @@ class MultiMPC(NonconvexOptimization):
                         dist, k_ca2 +
                         0.001)  # This can be a smaller distance if we'd like
                     distance_clipped = cas.fmin(distance_clipped, 1.25)
-                    collision_cost += (within_collision_distance * 1 /
-                                       (distance_clipped - k_ca2)**k_CA_power)
+                    collision_cost += (1 /(distance_clipped - k_ca2)**k_CA_power)
                 for j in range(n_vehs_cntrld):
                     if j <= ic:
                         continue
                     else:
-                        initial_displacement = x0_cntrld[j] - x0_cntrld[ic]
-                        initial_xy_distance = cas.sqrt(
-                            initial_displacement[0]**2 +
-                            initial_displacement[1]**2)
-                        within_collision_distance = (
-                            initial_xy_distance <=
-                            self.collision_avoidance_checking_distance)
-
                         dist = minkowski_ellipse_collision_distance(
                             p_cntrld_list[ic], p_cntrld_list[j],
                             x_ctrld[ic][0, k], x_ctrld[ic][1, k],
@@ -876,7 +852,7 @@ class MultiMPC(NonconvexOptimization):
                         )  # This can be a smaller distance if we'd like
                         distance_clipped = cas.fmin(distance_clipped, 1.25)
                         collision_cost += (
-                            within_collision_distance * 1 /
+                            1 /
                             (distance_clipped - k_ca2)**k_CA_power)
 
         return collision_cost
