@@ -4,8 +4,6 @@ import numpy as np
 from src.traffic_world import TrafficWorld
 from src.best_response import generate_solver_params
 
-from os import system
-import pickle, os
 
 parser = IBRParser()
 parser.add_argument("--nc", type=int, default=1, help="Number of Controlled Vehicles")
