@@ -256,10 +256,6 @@ class MultiMPC(NonconvexOptimization):
         if params is None:
             params = {}
 
-        if "collision_avoidance_checking_distance" not in params:
-            print("No collision avoidance checking distance")
-            self.collision_avoidance_checking_distance = 400
-
         # Generate costs for each vehicle
         self.k_ca2 = 0.77  #This number must be less than 1
 
