@@ -35,10 +35,7 @@ conda install matplotlib
 conda install scipy
 
 If you use the code, please cite the paper:
-<Insert Title>
-
-Working paper can be found on Overleaf:
-https://www.overleaf.com/read/nckxcgkbdqbf
+N. Buckman, W. Schwarting, S. Karaman and D. Rus, "Semi-Cooperative Control for Autonomous Emergency Vehicles," 2021 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), 2021, pp. 7052-7059, doi: 10.1109/IROS51168.2021.9636849.
 
 
 The main settings that can be changed:
