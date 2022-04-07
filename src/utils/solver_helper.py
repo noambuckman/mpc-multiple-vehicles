@@ -298,13 +298,14 @@ def initialize_cars_from_positions(N, dt, world, no_grass=False, list_of_positio
         x1_MPC.k_phi_error = 0.001
         x1_MPC.k_phi_dot = 0.01
 
-        x1_MPC.min_y = world.y_min + x1_MPC.W/2.0
-        x1_MPC.max_y = world.y_max - x1_MPC.W/2.0
-        if no_grass:
-            x1_MPC.min_y += world.grass_width
-            x1_MPC.max_y -= world.grass_width
         
-        x1_MPC.strict_wall_constraint = False
+        # x1_MPC.min_y = world.y_min + x1_MPC.W/2.0
+        # x1_MPC.max_y = world.y_max - x1_MPC.W/2.0
+        # if no_grass:
+        #     x1_MPC.min_y += world.grass_width
+        #     x1_MPC.max_y -= world.grass_width
+        
+        # x1_MPC.strict_wall_constraint = False
 
         lane_number, next_x0 = list_of_positions[i + 1]  #index off by one since ambulance is index 0
 
@@ -337,11 +338,7 @@ def initialize_cars_from_positions(N, dt, world, no_grass=False, list_of_positio
     amb_MPC.k_phi_dot = 0.01
     amb_MPC.min_y = world.y_min + amb_MPC.W/2.0
     amb_MPC.max_y = world.y_max - amb_MPC.W/2.0
-    amb_MPC.strict_wall_constraint = True
-    if no_grass:
-        amb_MPC.min_y += world.grass_width
-        amb_MPC.max_y -= world.grass_width
-    
+
 
     lane_number, next_x0 = list_of_positions[0]
     amb_MPC.fd = amb_MPC.gen_f_desired_lane(world, lane_number, True)
