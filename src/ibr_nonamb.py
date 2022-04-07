@@ -86,7 +86,7 @@ def run_iterative_best_response(vehicles,
 
                 obstacle_vehsinfo = get_obstacle_vehs_closeby(response_vehinfo, ctrld_vehsinfo, obstacle_vehsinfo, distance_threshold=40.0)
                 obstacle_vehsinfo = get_closest_n_obstacle_vehs(response_vehinfo, ctrld_vehsinfo, obstacle_vehsinfo, max_num_obstacles=10,
-                                                                min_num_obstacles=3)
+                                                                min_num_obstacles_ego=3)
 
                 warmstarts_dict = generate_warmstarts(response_vehinfo, world, vehsinfo_ibr_pred, params, u_mpc[ag_idx],
                                                       vehsinfo_ibr[ag_idx].u)
