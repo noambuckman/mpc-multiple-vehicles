@@ -354,23 +354,23 @@ def get_within_range_other_vehicle_idxs(response_i,
 def get_closest_n_obstacle_vehs(
     response_vehinfo,
     cntrld_vehicle_info,
-    osbstacle_vehs_info,
+    obstacle_vehs_info,
     max_num_obstacles: int = None,
     min_num_obstacles_ego: int = None,
 ):
     ''' Return the closest vehicles by distance to the response and cntrld_vehicle info'''
 
-    if max_num_obstacles is None or len(osbstacle_vehs_info)==0:
-        return osbstacle_vehs_info
+    if max_num_obstacles is None or len(obstacle_vehs_info)==0:
+        return obstacle_vehs_info
         
     ego_obstacle_info = []
     if min_num_obstacles_ego is None:
-        remaining_obstacle_info = osbstacle_vehs_info
+        remaining_obstacle_info = obstacle_vehs_info
     else:
         # First get the closest vehicles to to the ego
         # Get distances
         remaining_obstacle_info = []    
-        x_other = np.stack([vi.x for vi in osbstacle_vehs_info], axis=0)
+        x_other = np.stack([vi.x for vi in obstacle_vehs_info], axis=0)
         x_other = np.expand_dims(x_other, axis=1)  #[nother x 1 x 6 x N]
         x_planning = np.stack([response_vehinfo.x] + [], axis=0)
         # [1 x nplanning x 6 x N]
@@ -385,11 +385,11 @@ def get_closest_n_obstacle_vehs(
         sorted_idx = np.argsort(distance_cost)
         sorted_idx = sorted_idx[:min_num_obstacles_ego]
 
-        for idx in range(len(osbstacle_vehs_info)):
+        for idx in range(len(obstacle_vehs_info)):
             if idx in sorted_idx:
-                ego_obstacle_info += [osbstacle_vehs_info[idx]]
+                ego_obstacle_info += [obstacle_vehs_info[idx]]
             else:
-                remaining_obstacle_info += [osbstacle_vehs_info[idx]]
+                remaining_obstacle_info += [obstacle_vehs_info[idx]]
     
     
     max_num_obstacles = max_num_obstacles - len(ego_obstacle_info)
@@ -419,7 +419,7 @@ def get_closest_n_obstacle_vehs(
 
 def get_obstacle_vehs_closeby(response_vehinfo,
                               cntrld_vehicle_info,
-                              osbstacle_vehs_info,
+                              obstacle_vehs_info,
                               distance_threshold=20.0):
     ''' Check whether response or cntrld vehinfo are close by
         to the obstacle cars at any point during trajectory.
@@ -427,10 +427,10 @@ def get_obstacle_vehs_closeby(response_vehinfo,
 
         We don't do explicit geometry checking but use a distance threshold and length of car.
     '''
-    if len(osbstacle_vehs_info) == 0 or distance_threshold == np.infty:
-        return osbstacle_vehs_info
+    if len(obstacle_vehs_info) == 0 or distance_threshold == np.infty:
+        return obstacle_vehs_info
 
-    x_other = np.stack([vi.x for vi in osbstacle_vehs_info], axis=0)
+    x_other = np.stack([vi.x for vi in obstacle_vehs_info], axis=0)
     x_other = np.expand_dims(x_other, axis=1)  #[nother x 1 x 6 x N]
 
     x_planning = np.stack([response_vehinfo.x] +
@@ -445,9 +445,9 @@ def get_obstacle_vehs_closeby(response_vehinfo,
                          axis=(1, 2))  # [nother x 1]
 
     obstacles_within_dist = []
-    for idx in range(len(osbstacle_vehs_info)):
+    for idx in range(len(obstacle_vehs_info)):
         if within_dist[idx]:
-            obstacles_within_dist += [osbstacle_vehs_info[idx]]
+            obstacles_within_dist += [obstacle_vehs_info[idx]]
 
     return obstacles_within_dist
 
