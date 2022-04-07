@@ -49,7 +49,7 @@ class IBRParser(ArgumentParser):
                           type=int,
                           default=3,
                           help="Number of rounds of iterative best response before excuting mpc")
-        self.add_argument('--n-cntrld', type=int, default=2, help="How many cars does the response control in planning")
+        self.add_argument('--n-cntrld', type=int, default=1, help="How many cars does the response control in planning")
         self.add_argument('--rnds-shrd-cntrl', type=int, default=2)
         self.add_argument('--shrd-cntrl-scheduler', type=str, default="constant")
 
