@@ -49,6 +49,18 @@ def run_simulation(log_dir, params):
                                                                                      no_grass=True,
                                                                                      list_of_positions=position_list)
 
+    for vehicle in all_other_vehicles:
+
+        vehicle.grass_max_y = world.get_top_grass_y[0] - vehicle.W/2.0
+        vehicle.grass_min_y = world.get_bottom_grass_y[1] + vehicle.W/2.0
+
+        if params["strict_wall_constraint"]:
+            vehicle.max_y = vehicle.grass_max_y
+            vehicle.min_y = vehicle.grass_min_y
+        else:
+            vehicle.max_y = np.infty
+            vehicle.min_y = -np.infty            
+
     # Generate the SVOs for the vehicles
     setting_rng = np.random.default_rng(params["seed"])
 

@@ -58,6 +58,8 @@ class Vehicle(object):
 
         self.k_phi_error = 0.001
         self.k_phi_dot = 0.0
+
+        self.k_on_grass_cost = 0.1
         ####
 
         # Constraints
@@ -77,7 +79,9 @@ class Vehicle(object):
         # Spatial constraints
         self.max_y = np.infty
         self.min_y = -np.infty
-        self.strict_wall_constraint = True
+
+        self.grass_max_y = np.infty
+        self.grass_min_y = np.infty
 
         self.max_X_dev = np.infty
         self.max_Y_dev = np.infty
@@ -188,8 +192,9 @@ class Vehicle(object):
         ''' Construct vehicle specific constraints that only rely on
         the ego vehicle's own state '''
 
-        if self.strict_wall_constraint:  #TODO, change this to when creating min_y and max_y
-            opti.subject_to(opti.bounded(self.min_y + self.W / 2.0, X[1, :], self.max_y - self.W / 2.0))
+        # if self.strict_wall_constraint:  #TODO, change this to when creating min_y and max_y
+            # opti.subject_to(opti.bounded(self.min_y + self.W / 2.0, X[1, :], self.max_y - self.W / 2.0))
+
         opti.subject_to(opti.bounded(-np.pi / 2, X[2, :], np.pi / 2))  #no crazy angle
         opti.subject_to(opti.bounded(self.min_v, X[4, :], self.max_v))
 

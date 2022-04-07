@@ -93,7 +93,7 @@ class IBRParser(ArgumentParser):
         self.add_argument('--k-lat', type=float, default=None, help="lateral cost for vehicles")
 
         self.add_argument('--k-politeness', type=float, default=None, help="parameter for IDM")
-
+        self.add_argument('--strict-wall-constraint', type=str2bool, default=False, help="Turn on a strict grass constraint")
         self.add_argument('--safety-constraint', type=str2bool, default=False, help="Stopping constraint")
         self.add_argument('--plot-initial-positions', type=str2bool, default=True, help="Plot & save initial conditions")
         self.add_argument('--max-cpu-time', type=float, default=10.0, help="Maximum solve time for IPOPT")
