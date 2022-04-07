@@ -151,6 +151,7 @@ def plot_multiple_cars(k,
     center_frame = camera_positions[k]
 
     axlim_minx, axlim_maxx = center_frame - 20, center_frame + 60,
+    axlim_minx, axlim_maxx = center_frame - 50, center_frame + 200,
 
     if xlim is not None:
         axlim_minx = xlim[0]
