@@ -26,14 +26,16 @@ s_params = generate_solver_params(params, 0, 0)
 
 params["safety_constraint"] = True
 
-
-for nc in range(0,3):
-    for nnc in range(0, 9):
-        mpc = MultiMPC(params["N"], params["dt"], world, nc, nnc, params, ipopt_params, params["safety_constraint"])
-        nlp_solver = mpc.solver
-        precompiled_code_dir = "/home/nbuckman/mpc-multiple-vehicles/src/compiled_code/"
-        
-        mpc.save_solver_pickle(precompiled_code_dir)
-        mpc.save_bounds_pickle(precompiled_code_dir)
-        
-        print("Saving bounds to...nc %d  nnc %d"%(nc, nnc))
+for safety_constraint in [True, False]:
+    for nc in range(0,3):
+        for nnc in range(0, 9):
+            mpc = MultiMPC(params["N"], params["dt"], world, nc, nnc, params, ipopt_params, safety_constraint)
+            nlp_solver = mpc.solver
+            precompiled_code_dir = "/home/nbuckman/mpc-multiple-vehicles/compiled_code/"
+            
+            solver_path = mpc.save_solver_pickle(precompiled_code_dir)
+            bounds_path = mpc.save_bounds_pickle(precompiled_code_dir)
+            
+            print("Saving bounds to...nc %d  nnc %d"%(nc, nnc))
+            print("Solver Path:  %s"%solver_path)
+            print("Bounds Path: %s"%bounds_path) 

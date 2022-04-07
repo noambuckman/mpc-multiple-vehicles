@@ -59,7 +59,7 @@ class Vehicle(object):
         self.k_phi_error = 0.001
         self.k_phi_dot = 0.0
 
-        self.k_on_grass_cost = 0.1
+        self.k_on_grass = 0.1
         ####
 
         # Constraints

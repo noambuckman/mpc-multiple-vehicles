@@ -499,8 +499,8 @@ class MultiMPC(NonconvexOptimization):
         x_cost = cas.sumsqr(X[0, :])
         x_dot_cost = cas.sumsqr(X[4, :] * cas.cos(X[2, :]))
 
-        distance_below_bottom_grass = cas.max(0.0, p_car.min_y - X[1,:])
-        distance_above_top_grass = cas.max(0.0, X[1,:] - p_car.max_y)
+        distance_below_bottom_grass = cas.fmax(0.0, p_car.grass_min_y - X[1,:])
+        distance_above_top_grass = cas.fmax(0.0, X[1,:] - p_car.grass_max_y)
         on_grass_cost = cas.sumsqr(distance_above_top_grass) + cas.sumsqr(distance_below_bottom_grass)
 
         all_costs = [
@@ -925,6 +925,7 @@ class MultiMPC(NonconvexOptimization):
         nlp_solver_path = os.path.join(precompiled_code_dir, nlp_solver_name)
 
         pickle.dump(nlp_solver, open(nlp_solver_path, 'wb'))
+        return nlp_solver_path
 
     def save_bounds_pickle(self, precompiled_code_dir):
 
@@ -936,6 +937,7 @@ class MultiMPC(NonconvexOptimization):
                                                    self.safety_constraint)
         bounds_full_path = os.path.join(precompiled_code_dir, bounds_path_name)
         pickle.dump(bounds, open(bounds_full_path, 'wb'))
+        return bounds_full_path
 
 
 def load_state(file_name, n_others, ignore_des=False):

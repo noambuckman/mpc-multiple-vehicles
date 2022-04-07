@@ -43,7 +43,7 @@ class VehicleParameters(object):
 
         self.k_final = cas.MX.sym('p_kfinal' + self.get_param_name(), 1, 1)
 
-        self.k_on_grass_cost = cas.MX.sym('p_kongrass' + self.get_param_name(), 1, 1)
+        self.k_on_grass = cas.MX.sym('p_kongrass' + self.get_param_name(), 1, 1)
 
         # Constraints
         self.max_steering_rate = cas.MX.sym('p_max_steering_rate' + self.get_param_name(), 1, 1)  # deg/sec
@@ -137,7 +137,7 @@ class VehicleParameters(object):
             self.by,
             self.grass_max_y,
             self.grass_min_y,            
-            self.k_on_grass_cost,
+            self.k_on_grass,
             # self.theta_i_ego[:],
             # self.theta_i_jc[:],
             # self.theta_i_jnc[:],
@@ -192,7 +192,7 @@ class VehicleParameters(object):
             vehicle.by,
             vehicle.grass_max_y,
             vehicle.grass_min_y,
-            vehicle.k_on_grass_cost,
+            vehicle.k_on_grass,
             # vehicle.theta_i_ego,
             # vehicle.theta_i_jc,
             # vehicle.theta_i_jnc
