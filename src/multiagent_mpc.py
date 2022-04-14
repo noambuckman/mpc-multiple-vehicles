@@ -268,10 +268,8 @@ class MultiMPC(NonconvexOptimization):
 
                 self.add_bounded_constraint(1 - slack_i_jc[j, k], dist, None)
 
-            dist_btw_wall_bottom = x_ego[1, k] - p_ego.min_y
-            dist_btw_wall_top = p_ego.max_y - x_ego[1, k]
-            self.add_bounded_constraint(0 - bottom_wall_slack[0, k], dist_btw_wall_bottom, None)
-            self.add_bounded_constraint(0 - top_wall_slack[0, k], dist_btw_wall_top, None)
+            self.add_bounded_constraint(p_ego.min_y - bottom_wall_slack[0, k], x_ego[1, k], None)
+            self.add_bounded_constraint(None, x_ego[1, k], p_ego.max_y + top_wall_slack[0, k])
 
         for ic in range(self.n_vehs_cntrld):
             for k in range(N + 1):
@@ -297,10 +295,8 @@ class MultiMPC(NonconvexOptimization):
                         self.add_bounded_constraint(((1 - slack_ic_jc[ic][j, k])), dist, None)
 
                 # Constrain distance to grass
-                dist_btw_wall_bottom = x_ctrld[ic][1, k] - p_ctrld_list[ic].min_y
-                dist_btw_wall_top = p_ctrld_list[ic].max_y - x_ctrld[ic][1, k]
-                self.add_bounded_constraint((0 - bottom_wall_slack_c[ic][0, k]), dist_btw_wall_bottom, None)
-                self.add_bounded_constraint((0 - top_wall_slack_c[ic][0, k]), dist_btw_wall_top, None)
+                self.add_bounded_constraint(p_ctrld_list[ic].min_y - bottom_wall_slack_c[ic][0, k], x_ctrld[ic][1, k], None)
+                self.add_bounded_constraint(None, x_ctrld[ic][1, k], p_ctrld_list[ic].max_y +  top_wall_slack_c[ic][0, k])
 
         if self.safety_constraint:
             max_deceleration = cas.fabs(self.p_ego.max_deceleration)
