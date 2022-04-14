@@ -77,11 +77,11 @@ class Vehicle(object):
         self.min_v = 0.0
 
         # Spatial constraints
-        self.max_y = np.infty
-        self.min_y = -np.infty
+        self.max_y = 9999999
+        self.min_y = -9999999
 
-        self.grass_max_y = np.infty
-        self.grass_min_y = np.infty
+        self.grass_max_y = 9999999
+        self.grass_min_y = -999999
 
         self.max_X_dev = np.infty
         self.max_Y_dev = np.infty
