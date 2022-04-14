@@ -58,8 +58,8 @@ def run_simulation(log_dir, params):
             vehicle.max_y = vehicle.grass_max_y
             vehicle.min_y = vehicle.grass_min_y
         else:
-            vehicle.max_y = np.infty
-            vehicle.min_y = -np.infty            
+            vehicle.max_y = 99999.99
+            vehicle.min_y = -99999.99            
 
     # Generate the SVOs for the vehicles
     setting_rng = np.random.default_rng(params["seed"])
@@ -112,16 +112,16 @@ if __name__ == "__main__":
     parser = IBRParser()
     parser.add_argument("my_task_id", type=int)
     parser.add_argument("num_tasks", type=int)
-    parser.add_argument("--experiment-random-seed", type=int, default=0)
-    parser.add_argument("--input-params", type=str, default=None, help="Path to jason")
+    parser.add_argument("--experiment-random-seed", type=int, default="0719")
+    parser.add_argument("--input-params", type=str, default="experiments/experiment.json", help="Path to jason")
     parser.add_argument("--results-dir", type=str, default=None)
 
     args = parser.parse_args()
     default_params = vars(args)
 
     # Grab the arguments that are passed in
-    my_task_id = int(sys.argv[1])
-    num_tasks = int(sys.argv[2])
+    my_task_id = int(args.my_task_id)
+    num_tasks = int(args.num_tasks)
     experiment_random_seed = args.experiment_random_seed
 
     if args.input_params is None:
