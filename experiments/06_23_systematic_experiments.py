@@ -87,6 +87,11 @@ def run_simulation(log_dir, params):
         all_other_vehicles[vehicle_it].max_v = setting_rng.uniform(25, 30) * 0.447  #20 to 25 mph
         all_other_x0[vehicle_it][-2] = initial_velocity
 
+        if 'k_lat' in params:
+            all_other_vehicles[vehicle_it].k_lat = params['k_lat']
+        if 'k_phi_dot' in params:
+            all_other_vehicles[vehicle_it].k_phi_dot = params['k_phi_dot']
+
     # Save the vehicles and world for this simulation
     os.makedirs(log_dir, exist_ok=True)
     pickle.dump(all_other_vehicles, open(log_dir + "/other_vehicles.p", "wb"))
