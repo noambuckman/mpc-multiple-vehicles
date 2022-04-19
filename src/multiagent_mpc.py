@@ -473,25 +473,25 @@ class MultiMPC(NonconvexOptimization):
         ''' Compute the all the vehicle specific costs corresponding to performance
             of the vehicle as it traverse a desired  trajectory
         '''
-        u_delta_cost = cas.sumsqr(U[0, :])
-        u_v_cost = cas.sumsqr(U[1, :])
-
-        lon_cost = self.generate_longitudinal_cost(X, X_desired)
-
-        phi_error_cost = cas.sumsqr(X_desired[2, :] - X[2, :])
-        X_ONLY = False
-        if X_ONLY:
-            s_cost = cas.sumsqr(X[0, -1])
-            lat_cost = cas.sumsqr(X[1, :])
-        else:
-            lat_cost = self.generate_lateral_cost(X, X_desired)
-            s_cost = cas.sumsqr(X[5, -1])
-        final_costs = 0  # for now I've diactivated this
-        v_cost = cas.sumsqr(X[4, :])
-        phidot_cost = self.generate_phidot_cost(X, p_car)  #this function assumes a kinematic bicycle model
         N = U.shape[1]
+
+        # Tracking costs
+        lon_cost = self.generate_longitudinal_cost(X, X_desired)
+        lat_cost = self.generate_lateral_cost(X, X_desired)
+        phi_error_cost = cas.sumsqr(X_desired[2, :] - X[2, :])
+        s_cost = cas.sumsqr(X[5, -1])
+
+        final_costs = 0  # for now I've diactivated this
+        # State / Control Costs
+        u_delta_cost = cas.sumsqr(U[0, :])
+        u_v_cost = cas.sumsqr(U[1, :])        
+        v_cost = cas.sumsqr(X[4, :])
+
+        # Derivative costs
+        phidot_cost = self.generate_phidot_cost(X, p_car)  #this function assumes a kinematic bicycle model
         change_u_delta = cas.sumsqr(U[0, 1:N - 1] - U[0, 0:N - 2])
         change_u_v = cas.sumsqr(U[1, 1:N - 1] - U[1, 0:N - 2])
+        
         x_cost = cas.sumsqr(X[0, :])
         x_dot_cost = cas.sumsqr(X[4, :] * cas.cos(X[2, :]))
 
