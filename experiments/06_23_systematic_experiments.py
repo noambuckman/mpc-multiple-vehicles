@@ -91,6 +91,9 @@ def run_simulation(log_dir, params):
             all_other_vehicles[vehicle_it].k_lat = params['k_lat']
         if 'k_phi_dot' in params:
             all_other_vehicles[vehicle_it].k_phi_dot = params['k_phi_dot']
+        if 'k_x_dot' in params:
+            all_other_vehicles[vehicle_it].k_x_dot = params['k_x_dot']
+
 
     # Save the vehicles and world for this simulation
     os.makedirs(log_dir, exist_ok=True)
