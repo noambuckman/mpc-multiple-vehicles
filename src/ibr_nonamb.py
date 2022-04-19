@@ -61,6 +61,10 @@ def run_iterative_best_response(vehicles,
             out_file.close()
             ipopt_out_file.close()
             return x_actual, u_actual
+        
+
+        for i in range(len(vehicles)):
+            vehicles[i].update_desired_lane(x0[i])
 
         # Convert all states to VehicleMPCInformation for ease
         vehsinfo_ibr = []
