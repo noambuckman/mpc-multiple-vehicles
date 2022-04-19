@@ -60,6 +60,12 @@ def post_process_experiments(args):
     if args.animate_by_density:
         animate_by_density(experiment_params, all_dirs, all_params)
 
+    if args.animate_by is not None:
+        param_name = args.animate_by
+        assert param_name in experiment_params, "%s not in experiment.json"%param_name
+        assert param_name in all_params[0], "%s not in params.json"%param_name
+
+        animate_by(param_name, experiment_params, all_dirs, all_params)
 
 
 def load_experiment_results(experiment_dir):
@@ -105,6 +111,18 @@ def animate_by_density(experiment_params, all_dirs, all_params):
         output_file_name = concat_vids(vids_to_concat, "all_density%d.mp4"%density)
         print(output_file_name)
 
+
+def animate_by(param_name, experiment_params, all_dirs, all_params):
+    for param_value in experiment_params[param_name]:
+        vids_to_concat = []
+        for i, sim_dir in enumerate(all_dirs):
+            if all_params[i][param_name] == param_value:
+                vid_path = glob.glob(sim_dir + '/vids/*.mp4')
+                if len(vid_path) > 0:
+                    vids_to_concat += [vid_path[0]]
+
+        output_file_name = concat_vids(vids_to_concat, "%s_%s.mp4"%(param_name, param_value))
+        print(output_file_name)
 
 
 
@@ -249,6 +267,7 @@ if __name__ == '__main__':
 
     parser.add_argument("--analyze-collisions", action="store_true", help="Print out parameters for every simulation with collisions")
     parser.add_argument("--animate-by-density", action="store_true", help="animate videos and concatenate by SVO")
+    parser.add_argument("--animate-by", type=str, default=None, help="Paramater to organize animation grid")
     args = parser.parse_args()
 
     post_process_experiments(args)

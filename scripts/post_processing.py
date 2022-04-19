@@ -1,7 +1,7 @@
 import os, pickle, json, glob, argparse
 import numpy as np
 import matplotlib.pyplot as plt
-
+from src.multiagent_mpc import MultiMPC
 from src.utils.plotting.car_plotting import plot_cars, animate, plot_initial_positions
 
 
@@ -24,6 +24,9 @@ def post_process(args):
 
         if args.animate:
             animate_cars(args, params, logdir, x, vehicles, world)
+
+        if args.analyze_costs:
+            analyze_costs(vehicles, x, u, world, params)
 
 
 def load_data_from_logdir(logdir: str):
@@ -161,6 +164,71 @@ def analyze_controls(LOGDIR, u, x):
     plt.savefig(os.path.join(LOGDIR, "plots/", "u1_4.png"))
     return None
 
+def analyze_costs(vehicles, x, u, world, params):
+    import casadi as cas
+    '''Analyze the mpc costs'''
+    mpc = MultiMPC(params["N"], params["dt"], world, 3, 3, params, )
+    cost_lists = []
+    for i in range(len(vehicles)):
+        xi = x[i, :, :]
+        ui = u[i, :, :]
+
+        # Regenerate the desired trajectory
+        # vehicles[i].update_desired_lane_from_x0(world, x0[i])
+        s = xi[-1,:]
+        Fd = vehicles[i].fd.map(s.shape[0])
+        xd = Fd(s)
+        xd = np.array(xd)
+
+        total_costs, cost_list = mpc.generate_veh_costs(xi, ui, xd, vehicles[i])
+
+        print(cost_list)
+        print(total_costs)
+        cost_lists.append(cost_list)
+    bar_chart = cost_bar_chart(cost_lists)
+
+
+def cost_bar_chart(cost_lists):
+    import pandas as pd
+    n_agents = len(cost_lists)
+    n_costs = len(cost_lists[0])
+
+
+    cost_names = [
+            "u_delta_cost", "u_v_cost", "lat_cost", "lon_cost",
+            "phi_error_cost", "phidot_cost", "s_cost", "v_cost",
+            "change_u_v",  "change_u_delta", "final_costs",
+            "x_cost", "on_grass_cost", "x_dot_cost"
+        ]
+
+
+    columns = ["agent_idx"] + [cost_names[cix] for cix in range(n_costs - 1)]
+    print(len(columns))
+    data = []
+    speed_costs = []
+    for idx in range(n_agents):
+
+        row = [idx*2] + list(cost_lists[idx])
+        speed_costs.append(row[-1])
+        row = row[:-1]
+        print(row)
+
+        data.append(row)
+    df = pd.DataFrame( data, 
+        columns=columns)
+
+    ax = df.plot(x="agent_idx", kind='bar', stacked=True, title="Stacked Bar Chart")
+
+    # ax = plot.get_axis()
+    ax.bar([idx*2 + 1 for idx in range(n_agents)], speed_costs)
+    fig = ax.get_figure()
+
+    fig.savefig("cost_hist.png")
+    # x_agentid = [i for i in range(n_agents)]
+    # for cost_i in range(n_costs):
+    #     plt.bar(x_agentid, [cost_lists[idx][cost_i] for idx in range(n_agents)]. )
+
+
 
 
 if __name__ == '__main__':
@@ -170,7 +238,7 @@ if __name__ == '__main__':
     parser.add_argument("--show-initial-positions", action="store_true", help="load controls")
     parser.add_argument("--analyze-controls", action="store_true", help="load controls")
     parser.add_argument("--animate", action="store_true", help="Animate simulation")
-
+    parser.add_argument("--analyze-costs", action="store_true", help="Analyze and plot costs")
 
     parser.add_argument('--end-mpc', type=int, default=-1)
     parser.add_argument('--vehicle-id-track', type=int, default=0)
