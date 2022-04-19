@@ -293,7 +293,7 @@ class Vehicle(object):
 
         return fd
 
-    def update_desired_lane(self, world, x0, right_direction=True):
+    def update_desired_lane_from_x0(self, world, x0, right_direction=True):
         new_lane_number = world.get_lane_from_x0(x0)
         self.fd = self.gen_f_desired_lane(world, new_lane_number, right_direction)
 
