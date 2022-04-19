@@ -503,7 +503,7 @@ class MultiMPC(NonconvexOptimization):
             p_car.k_u_delta * u_delta_cost, p_car.k_u_v * u_v_cost, p_car.k_lat * lat_cost, p_car.k_lon * lon_cost,
             p_car.k_phi_error * phi_error_cost, p_car.k_phi_dot * phidot_cost, p_car.k_s * s_cost, p_car.k_v * v_cost,
             p_car.k_change_u_v * change_u_v, p_car.k_change_u_delta * change_u_delta, p_car.k_final * final_costs,
-            p_car.k_x * x_cost, p_car.k_x_dot * x_dot_cost + p_car.k_on_grass * on_grass_cost
+            p_car.k_x * x_cost, p_car.k_on_grass * on_grass_cost, p_car.k_x_dot * x_dot_cost
         ]
 
         all_costs = np.array(all_costs)
