@@ -31,13 +31,6 @@ class Vehicle(object):
         self.k_u_v = 1.0
 
         ## Derived State Costs Constants
-        self.k_lat = 10.0
-        self.k_lon = 1.0
-        self.k_phi_error = 1.0
-        self.k_phi_dot = 1.0
-
-        self.k_x_dot = 0.0
-
         self.k_change_u_v = 1.0
         self.k_change_u_delta = 1.0
 
