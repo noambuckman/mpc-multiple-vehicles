@@ -2,7 +2,7 @@ import numpy as np
 import casadi as cas
 import copy as cp
 from src.multiagent_mpc import NonconvexOptimization
-from src.best_response import call_mpc_solver, parallel_mpc_solve, generate_solver_params
+from src.best_response import parallel_mpc_solve, generate_solver_params
 from src.vehicle_mpc_information import Trajectory, VehicleMPCInformation
 from src.traffic_world import TrafficWorld
 from typing import List
@@ -61,15 +61,16 @@ def feasible_guess(N, vehicle, x0, params, world,
 
     response_veh_info = VehicleMPCInformation(cp_vehicle, x0)
     print("Solving Vehicle %d"% response_veh_info.vehicle.agent_id)
-    _, _, max_slack, x, x_des, u, _, _, _ = parallel_mpc_solve(
+
+    sol = parallel_mpc_solve(
         warm_traj_dict, response_veh_info, world, solver_params, cp_params,
         ipopt_params, cp_other_vehicle_info, [])
 
     del cp_vehicle, response_veh_info  # needed to fix: TypeError: cannot pickle 'SwigPyObject' object
     del cp_other_vehicle_info, cp_other_vehicles
 
-    if max_slack < np.infty:
-        return u, x, x_des
+    if sol.max_slack < np.infty:
+        return sol.u_ego, sol.x_ego, sol.xd_ego
     else:
         print(
             "Warning...Bad prediction of remaining MPC trajectory before IBR")
@@ -195,14 +196,14 @@ def lane_following_optimizations(N: int, vehicle, x0: np.array, params: dict,
     warm_traj = Trajectory(u=u_warm, x=x_warm, xd=x_des_warm)
 
     warm_start_dict = {"test": warm_traj}
-    _, _, max_slack, x, x_des, u, _, _, _ = parallel_mpc_solve(
+    sol = parallel_mpc_solve(
         warm_start_dict, response_veh_info, world, solver_params, params,
         ipopt_params, [], [])
 
     del response_veh_info, cp_vehicle
 
-    if max_slack < np.infty:
-        return u, x, x_des
+    if sol.max_slack < np.infty:
+        return sol.u_ego, sol.x_ego, sol.xd_ego
     else:
         return u_warm, x_warm, x_des_warm
 

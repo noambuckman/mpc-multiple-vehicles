@@ -22,14 +22,14 @@ ipopt_params = {"print_level": 5, "max_cpu_time":10.0}
 params['slack'] = True
 s_params = generate_solver_params(params, 0, 0)
 
-
+n_coeff_d = 4
 
 params["safety_constraint"] = True
 
-for safety_constraint in [True, False]:
+for safety_constraint in [False]:
     for nc in range(0,3):
-        for nnc in range(0, 9):
-            mpc = MultiMPC(params["N"], params["dt"], world, nc, nnc, params, ipopt_params, safety_constraint)
+        for nnc in range(0, 11):
+            mpc = MultiMPC(params["N"], nc, nnc, n_coeff_d, params, ipopt_params, safety_constraint)
             nlp_solver = mpc.solver
             precompiled_code_dir = "/home/nbuckman/mpc-multiple-vehicles/compiled_code/"
             

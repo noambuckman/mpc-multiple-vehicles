@@ -3,7 +3,6 @@ import numpy as np
 import casadi as cas
 from typing import List
 
-from src.traffic_world import TrafficWorld
 from src.geometry_helper import minkowski_ellipse_collision_distance
 from src.vehicle_parameters import VehicleParameters
 
@@ -98,10 +97,9 @@ class MultiMPC(NonconvexOptimization):
     '''
     def __init__(self,
                  N: int,
-                 dt: float,
-                 world: TrafficWorld,
                  n_vehs_cntrld: int = 0,
                  n_other_vehicles: int = 0,
+                 n_coeff_d: int = 4, 
                  params: dict = None,
                  ipopt_params=None,
                  safety_constraint=True,
@@ -111,6 +109,7 @@ class MultiMPC(NonconvexOptimization):
         ''' Setup an optimization for the response vehicle, shared control vehicles, and surrounding vehicles
             Input: 
                 N:  number of control points in the optimization (N+1 state points)
+                n_coeff_d: the number spline coefficients for desired
                 x0: response vehicle's initial position [np.array(n_state)]
                 x0_other_ctrl:  list of shared control vehicle initial positions List[np.array(n_state)]
                 x0_other:  list of non-responding vehicle initial positions List[np.array(n_state)]
@@ -120,8 +119,6 @@ class MultiMPC(NonconvexOptimization):
 
         self.safety_constraint = safety_constraint
         self.collision_avoidance_checking_distance = collision_avoidance_checking_distance
-        self.world = world
-        self.dt = dt
         self.N = N
         self.n_vehs_cntrld = n_vehs_cntrld
         self.n_other_vehicle = n_other_vehicles
@@ -170,6 +167,7 @@ class MultiMPC(NonconvexOptimization):
                                     self.top_wall_slack_c, self.bottom_wall_slack_c)
 
         # Parameters
+        self.p_dt = cas.MX.sym('dt', 1, 1)
         self.x0_ego = cas.MX.sym('x0_ego', n_state, 1)
         self.p_ego = VehicleParameters(self.n_vehs_cntrld, self.n_other_vehicle, "ego")
         self.p_size = self.p_ego.get_opti_params().shape[0]
@@ -198,9 +196,20 @@ class MultiMPC(NonconvexOptimization):
         self.k_CA = cas.MX.sym('k_CA', 1, 1)
         self.k_CA_power = cas.MX.sym('k_CA_power', 1, 1)
 
-        self._p_list = mpcp_to_nlpp(self.x0_ego, self.p_ego, self.p_theta_i_ego, self.p_theta_ic, self.p_theta_inc,
+        self.n_coeff_d = n_coeff_d
+        self.p_x_coeff_d = cas.MX.sym('xd_coeff', self.n_coeff_d, 1)
+        self.p_y_coeff_d = cas.MX.sym('yd_coeff', self.n_coeff_d, 1)
+        self.p_phi_coeff_d = cas.MX.sym('phid_coeff', self.n_coeff_d, 1)
+        self.p_x_coeff_d_ctrld = [cas.MX.sym('xd_coeff%02d', self.n_coeff_d, 1) for i in range(self.n_vehs_cntrld)]
+        self.p_y_coeff_d_ctrld = [cas.MX.sym('yd_coeff%02d', self.n_coeff_d, 1) for i in range(self.n_vehs_cntrld)]
+        self.p_phi_coeff_d_ctrld = [cas.MX.sym('phid_coeff%02d', self.n_coeff_d, 1) for i in range(self.n_vehs_cntrld)]
+
+
+        self._p_list = mpcp_to_nlpp(self.p_dt, self.x0_ego, self.p_ego, self.p_theta_i_ego, self.p_theta_ic, self.p_theta_inc,
                                     self.x0_cntrld, self.p_cntrld_list, self.x0_allother, self.p_other_vehicle_list,
-                                    self.x_other, self.k_slack, self.k_CA, self.k_CA_power)
+                                    self.x_other, self.k_slack, self.k_CA, self.k_CA_power, 
+                                    self.p_x_coeff_d, self.p_y_coeff_d, self.p_phi_coeff_d, 
+                                    self.p_x_coeff_d_ctrld, self.p_y_coeff_d_ctrld, self.p_phi_coeff_d_ctrld)
 
         if params is None:
             params = {}
@@ -217,36 +226,39 @@ class MultiMPC(NonconvexOptimization):
         self.set_f(self.total_svo_cost)
 
         ###########################3 CONSTRAINTS #########################################
-        self.add_mpc_constraints(self.N, n_vehs_cntrld, self.n_other_vehicle, world, self.x_ego, self.u_ego,
+        self.add_mpc_constraints(self.N, n_vehs_cntrld, self.n_other_vehicle, self.x_ego, self.u_ego,
                                  self.xd_ego, self.x0_ego, self.p_ego, self.x_ctrld, self.u_ctrld, self.xd_ctrld,
-                                 self.x0_cntrld, self.p_cntrld_list, self.x_other, self.p_other_vehicle_list, self.dt,
+                                 self.x0_cntrld, self.p_cntrld_list, self.x_other, self.p_other_vehicle_list, self.p_dt,
                                  self.slack_i_jnc, self.slack_ic_jnc, self.slack_i_jc, self.slack_ic_jc,
                                  self.top_wall_slack, self.bottom_wall_slack, self.top_wall_slack_c,
-                                 self.bottom_wall_slack_c)
+                                 self.bottom_wall_slack_c, 
+                                 self.p_x_coeff_d, self.p_y_coeff_d, self.p_phi_coeff_d, self.p_x_coeff_d_ctrld, self.p_y_coeff_d_ctrld, self.p_phi_coeff_d_ctrld)
         # Total optimization costs
         self.solver, self.solver_prefix = self.get_nlpsol(ipopt_params)
 
-    def add_vehicle_constraints(self, world, p_ego, x_ego, u_ego, xd_ego, x0_ego, dt):
+    def add_vehicle_constraints(self, p_ego, x_ego, u_ego, xd_ego, x0_ego, x_coeff_d, y_coeff_d, phi_coeff_d, dt):
         ego_lane_number = p_ego.desired_lane
-        fd = self.gen_f_desired_lane(world, ego_lane_number, right_direction=True)  # TODO:  This could mess things up
+        # fd = self.gen_f_desired_lane(world, ego_lane_number, right_direction=True)  # TODO:  This could mess things up
+        fd = self.gen_f_desired_lane_poly(x_coeff_d, y_coeff_d, phi_coeff_d)
         f = self.gen_f_vehicle_dynamics(p_ego, model="kinematic_bicycle")
         self.add_dynamics_constraints_g(x_ego, u_ego, xd_ego, x0_ego, f, fd, dt)
         self.add_state_constraints_g(x_ego, u_ego, p_ego)
 
-    def add_mpc_constraints(self, N, n_vehs_cntrld, n_other_vehicle, world, x_ego, u_ego, xd_ego, x0_ego, p_ego,
+    def add_mpc_constraints(self, N, n_vehs_cntrld, n_other_vehicle, x_ego, u_ego, xd_ego, x0_ego, p_ego,
                             x_ctrld, u_ctrld, xd_ctrld, x0_ctrld, p_ctrld_list, x_other, p_other_vehicle_list, dt,
                             slack_i_jnc, slack_ic_jnc, slack_i_jc, slack_ic_jc, top_wall_slack, bottom_wall_slack,
-                            top_wall_slack_c, bottom_wall_slack_c):
+                            top_wall_slack_c, bottom_wall_slack_c, 
+                            p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, p_x_coeff_d_ctrld, p_y_coeff_d_ctrld, p_phi_coeff_d_ctrld):
         ''' Add all the constraints the MPC
             1) vehicle constraints related to their state and dynamics
             2) positive constraints on the slack variables
             3) collision avoidance and velocity safety constraints 
         
         '''
-        self.add_vehicle_constraints(world, p_ego, x_ego, u_ego, xd_ego, x0_ego, dt)
+        self.add_vehicle_constraints(p_ego, x_ego, u_ego, xd_ego, x0_ego,  p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, dt)
 
         for j in range(n_vehs_cntrld):
-            self.add_vehicle_constraints(world, p_ctrld_list[j], x_ctrld[j], u_ctrld[j], xd_ctrld[j], x0_ctrld[j], dt)
+            self.add_vehicle_constraints(p_ctrld_list[j], x_ctrld[j], u_ctrld[j], xd_ctrld[j], x0_ctrld[j], p_x_coeff_d_ctrld[j], p_y_coeff_d_ctrld[j], p_phi_coeff_d_ctrld[j], dt)
 
         self.constrain_slack_positive(n_vehs_cntrld, n_other_vehicle, slack_i_jc, slack_i_jnc, slack_ic_jc,
                                       slack_ic_jnc, top_wall_slack, bottom_wall_slack, top_wall_slack_c,
@@ -431,19 +443,44 @@ class MultiMPC(NonconvexOptimization):
 
         self.add_equal_constraint(X[:, 0], x0)
 
-    def gen_f_desired_lane(self, world, lane_number, right_direction=True):
-        ''' Generates a function the vehicle progression along a desired trajectory '''
-        if right_direction == False:
-            raise Exception("Haven't implemented left lanes")
-        self.desired_lane = lane_number
+    # def gen_f_desired_lane(self, world, lane_number, right_direction=True):
+    #     ''' Generates a function the vehicle progression along a desired trajectory '''
+    #     if right_direction == False:
+    #         raise Exception("Haven't implemented left lanes")
+    #     self.desired_lane = lane_number
+    #     s = cas.MX.sym('s')
+    #     xd = s
+    #     yd = world.get_lane_centerline_y(lane_number, right_direction)
+    #     phid = 0
+    #     des_traj = cas.vertcat(xd, yd, phid)
+    #     fd = cas.Function('fd', [s], [des_traj], ['s'], ['des_traj'])
+
+    #     return fd
+
+    def gen_f_desired_lane_poly(self, x_coeff: List[float], y_coeff: List[float], phi_coeff: List[float]):
+        ''' polynomials: 
+            x(s) = cx0 + cx1*s + cx2*s^2 ... cx3*s^3
+            y(s) = cy0 + cy1*s + cy2*s^2 ... cy3*s^3
+            phi(s) = cphi0 + ... cphi3*s^3
+        '''
         s = cas.MX.sym('s')
-        xd = s
-        yd = world.get_lane_centerline_y(lane_number, right_direction)
-        phid = 0
+
+        assert x_coeff.shape == y_coeff.shape == phi_coeff.shape #For now we require them to be equal
+        n_coeff = x_coeff.shape[0]
+
+        xd = x_coeff[0]
+        yd = y_coeff[0]
+        phid = phi_coeff[0]
+        for ci in range(1, n_coeff):
+            xd += x_coeff[ci] * s**ci
+            yd += y_coeff[ci] * s**ci
+            phid += phi_coeff[ci] * s**ci
+        
         des_traj = cas.vertcat(xd, yd, phid)
         fd = cas.Function('fd', [s], [des_traj], ['s'], ['des_traj'])
-
         return fd
+
+
 
     def gen_f_vehicle_dynamics(self, p_veh, model: str = "kinematic_bicycle"):
         ''' Vehicle dynamics using a kinematic bike model.
@@ -505,7 +542,6 @@ class MultiMPC(NonconvexOptimization):
             p_car.k_change_u_v * change_u_v, p_car.k_change_u_delta * change_u_delta, p_car.k_final * final_costs,
             p_car.k_x * x_cost, p_car.k_on_grass * on_grass_cost, p_car.k_x_dot * x_dot_cost
         ]
-
         all_costs = np.array(all_costs)
         total_cost = np.sum(all_costs)
         return total_cost, all_costs
@@ -1091,11 +1127,13 @@ def get_vehicle_circles(x_state, dx=1.075, r=1.77):
 #     return list_of_xy_centers, radius
 
 
-def mpcp_to_nlpp(x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld, p_cntrld_list, x0_allother,
-                 p_other_vehicle_list, x_other_nc, k_slack, k_CA, k_CA_power):
+def mpcp_to_nlpp(p_dt, x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld, p_cntrld_list, x0_allother,
+                 p_other_vehicle_list, x_other_nc, k_slack, k_CA, k_CA_power,
+                 p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, p_x_coeff_d_ctrld, p_y_coeff_d_ctrld, p_phi_coeff_d_ctrld):
     ''' Converts 3 seperate parameter lists to a single long vector np X 1'''
     # Add ego parameters
     long_list = []
+    long_list.append(p_dt)
     long_list.append(x0_ego)
     long_list.append(p_ego.get_opti_params())
     long_list.append(p_theta_i_ego)
@@ -1127,6 +1165,15 @@ def mpcp_to_nlpp(x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cnt
     long_list.append(k_CA)
     long_list.append(k_CA_power)
 
+    long_list.append(p_x_coeff_d)
+    long_list.append(p_y_coeff_d) 
+    long_list.append(p_phi_coeff_d)
+
+    for i in range(len(x0_cntrld)):
+        long_list.append(p_x_coeff_d_ctrld[i]) 
+        long_list.append(p_y_coeff_d_ctrld[i]) 
+        long_list.append(p_phi_coeff_d_ctrld[i])
+
     nlp_p = cas.vcat(long_list)
     return nlp_p
 
@@ -1139,19 +1186,27 @@ def nlpp_to_mpcp(nlp_p,
                  p_size: int = None,
                  n_state=6,
                  n_ctrl=2,
-                 n_desired=3):
+                 n_desired=3,
+                 n_poly_coeff=4):
     ''' Convert from tall np X 1 vector of all parameters to split up by individual agents '''
     if p_size is None:
         raise Exception("Parameter list size not inputed as argument. Make sure to provide p_size")
 
     # Get ego vehicle parameters
     idx = 0
+    
+    p_dt = nlp_p[idx: idx + 1]
+    idx+=1 
+
     x0_ego = cas.reshape(nlp_p[idx:idx + x0_size], (x0_size, 1))
     idx += x0_size
+    
     p_ego = nlp_p[idx:idx + p_size]
     idx += p_size
+    
     p_theta_i_ego = nlp_p[idx:idx + 1]
     idx += 1
+    
     p_theta_i_c = nlp_p[idx:idx + n_cntrld_vehicles]
     idx += n_cntrld_vehicles
     p_theta_i_nc = nlp_p[idx:idx + n_other_vehicles]
@@ -1198,7 +1253,27 @@ def nlpp_to_mpcp(nlp_p,
     k_CA_power = nlp_p[idx:idx + 1]
     idx += 1
 
-    return x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld_list, p_cntrld_list, x0_other_vehicle, p_other_vehicle_list, x_other_nc, k_slack, k_CA, k_CA_power
+    p_x_coeff_d = nlp_p[idx: idx + n_poly_coeff]
+    idx += n_poly_coeff
+    p_y_coeff_d = nlp_p[idx: idx + n_poly_coeff]
+    idx += n_poly_coeff 
+    p_phi_coeff_d = nlp_p[idx: idx + n_poly_coeff]
+    idx += n_poly_coeff
+
+    p_x_coeff_d_ctrld = []
+    p_y_coeff_d_ctrld = []
+    p_phi_coeff_d_ctrld = []
+    for i in range(n_cntrld_vehicles):
+        p_x_coeff_d_ctrld[i] = nlp_p[idx : idx + n_poly_coeff] 
+        idx += n_poly_coeff
+
+        p_y_coeff_d_ctrld[i] = nlp_p[idx : idx + n_poly_coeff]
+        idx += n_poly_coeff 
+
+        p_phi_coeff_d_ctrld[i] = nlp_p[idx : idx + n_poly_coeff]
+        idx += n_poly_coeff        
+
+    return p_dt, x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld_list, p_cntrld_list, x0_other_vehicle, p_other_vehicle_list, x_other_nc, k_slack, k_CA, k_CA_power, p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, p_x_coeff_d_ctrld, p_y_coeff_d_ctrld, p_phi_coeff_d_ctrld
 
 
 def mpcx_to_nlpx(n_other: int, x_ego, u_ego, xd_ego, x_ctrl: List, u_ctrl: List, xd_ctrl: List, s_i_jnc, s_ic_jnc,

@@ -6,7 +6,7 @@ from typing import List
 
 from src.traffic_world import TrafficWorld
 from src.warm_starts import generate_warmstarts, get_subset_warmstarts
-from src.best_response import parallel_mpc_solve, generate_solver_params
+from src.best_response import parallel_mpc_solve, generate_solver_params, MPCSolverReturn, MPCSolverLogger, MPCSolverLog
 from src.vehicle_mpc_information import VehicleMPCInformation
 
 from src.utils.ibr_argument_parser import IBRParser
@@ -25,11 +25,10 @@ def run_iterative_best_response(vehicles,
     """ 
         Runs iterative best response for a system of ambulance and other vehicles.
     """
-    out_file = open(log_dir + "out.txt", "w")
     ipopt_out_file = open(log_dir + "ipopt_out.txt", "w")
 
     experiment = ExperimentHelper(log_dir, params)
-
+    solution_logger = MPCSolverLogger(log_dir)
     ipopt_params = {"print_level": params["print_level"], "max_cpu_time": params["max_cpu_time"]}
 
     if load_log_dir:
@@ -46,11 +45,11 @@ def run_iterative_best_response(vehicles,
             x0 = [cp.deepcopy(x_executed[i][:, params["number_ctrl_pts_executed"]]) for i in range(len(x_executed))]
         
         # 3) Generate (if needed) the control inputs of other vehicles
+        experiment.print_initializing_trajectories(i_mpc)
         try:
             with redirect_stdout(ipopt_out_file):
-                nv = len(vehicles)
                 if i_mpc == 0:
-                    u_mpc_prev = [np.zeros((2, params["N"])) for _ in range(nv)]
+                    u_mpc_prev = [np.zeros((2, params["N"])) for _ in range(len(vehicles))]
                     u_ibr, x_ibr, xd_ibr = extend_last_mpc_and_follow(u_mpc_prev, params["N"] - 1, vehicles, x0, params,
                                                                       world)
                 else:
@@ -58,7 +57,6 @@ def run_iterative_best_response(vehicles,
                                                                       vehicles, x0, params, world)
         except RuntimeError:
             experiment.print_sim_exited_early("infeasible solution")
-            out_file.close()
             ipopt_out_file.close()
             return x_actual, u_actual
         
@@ -109,22 +107,22 @@ def run_iterative_best_response(vehicles,
                     experiment.print_mpc_ibr_round(i_mpc, i_ibr, params)
                     experiment.print_nc_nnc(ctrld_vehsinfo, obstacle_vehsinfo)
                     with redirect_stdout(ipopt_out_file):
-
-                        _, _, max_slack, x_i, xd_i, u_i, _, _, ctrld_vehs_traj = parallel_mpc_solve(
-                            warmstarts_subset, response_vehinfo, world, s_params, params, ipopt_params,
+                        
+                        sol = parallel_mpc_solve(warmstarts_subset, response_vehinfo, world, s_params, params, ipopt_params,
                             obstacle_vehsinfo, ctrld_vehsinfo)
+                        solution_logger.add_log(MPCSolverLog(sol, i_mpc, i_ibr, response_vehinfo.vehicle.agent_id, solve_number))
 
-                    if max_slack < min(params["k_max_slack"], np.infty):
-                        vehsinfo_ibr[ag_idx].update_state(u_i, x_i, xd_i)
-                        vehsinfo_ibr_pred[ag_idx].update_state(u_i, x_i, xd_i)
+                    if sol.max_slack < min(params["k_max_slack"], np.infty):
+                        vehsinfo_ibr[ag_idx].update_state(sol.u_ego, sol.x_ego, sol.xd_ego)
+                        vehsinfo_ibr_pred[ag_idx].update_state(sol.u_ego, sol.x_ego, sol.xd_ego)
 
                         for cntrld_i_idx, veh_id in enumerate(cntrld_i):
-                            c_veh_traj = ctrld_vehs_traj[cntrld_i_idx]
+                            c_veh_traj = sol.cntrld_vehicle_trajectories[cntrld_i_idx]
                             vehsinfo_ibr_pred[veh_id].update_state_from_traj(c_veh_traj)
                         experiment.print_solved_status(ag_idx, i_mpc, i_ibr, t_start_ipopt)
                         break
                     else:
-                        experiment.print_not_solved_status(ag_idx, i_mpc, i_ibr, max_slack, t_start_ipopt)
+                        experiment.print_not_solved_status(ag_idx, i_mpc, i_ibr, sol.max_slack, t_start_ipopt)
                         solve_number += 1
 
                 if solve_number == params["k_max_solve_number"]:
@@ -135,7 +133,7 @@ def run_iterative_best_response(vehicles,
 
                     vehsinfo_ibr[ag_idx].update_state_from_traj(default_traj)
                     vehsinfo_ibr_pred[ag_idx].update_state_from_traj(default_traj)
-                    experiment.print_max_solved_status(ag_idx, i_mpc, i_ibr, max_slack, t_start_ipopt)
+                    experiment.print_max_solved_status(ag_idx, i_mpc, i_ibr, sol.max_slack, t_start_ipopt)
 
                 experiment.save_ibr(i_mpc, i_ibr, ag_idx, vehsinfo_ibr_pred)
 
@@ -148,14 +146,14 @@ def run_iterative_best_response(vehicles,
             vehsinfo_ibr, all_other_x_ibr_g, t_actual, i_mpc, x_actual, u_actual)
 
         collision = experiment.check_collisions(vehicles, x_executed)
+        experiment.save_trajectory(np.array(x_actual), np.array(u_actual))
+        solution_logger.write()
         if collision:
             experiment.print_sim_exited_early("collision!")
-            out_file.close()
             ipopt_out_file.close()
             return x_actual, u_actual
 
     experiment.print_sim_finished()
-    out_file.close()
     ipopt_out_file.close()
     return x_actual, u_actual
 
