@@ -1,4 +1,4 @@
-import sys, itertools, os, pickle, datetime, json, copy
+import itertools, os, pickle, datetime, json, copy
 import numpy as np
 
 from src.utils.ibr_argument_parser import IBRParser
@@ -6,6 +6,7 @@ from src.utils.log_management import random_date_string
 from src.traffic_world import TrafficWorld
 from src.ibr_nonamb import run_iterative_best_response
 import src.utils.solver_helper as helper
+from src.utils.plotting.car_plotting import plot_initial_positions
 
 
 def run_simulation(log_dir, params):
@@ -20,11 +21,11 @@ def run_simulation(log_dir, params):
     params["pid"] = os.getpid()
 
     # Create the world and vehicle objects
-    world = TrafficWorld(params["n_lanes"], 0, 999999)
+    world = TrafficWorld(params["n_lanes"], 0, 999999, lane_width = params["lane_width"])
 
     # Create the vehicle placement based on a Poisson distribution
-    initial_velocity = 25 * 0.447
-
+    initial_velocity_mph = 25.0
+    initial_velocity = initial_velocity_mph * 0.447
     try:
         position_list = helper.poission_positions(cars_per_hour=params["car_density"],
                                                   total_number_cars=params["n_other"] + 1,
@@ -84,7 +85,7 @@ def run_simulation(log_dir, params):
 
     # Set the max velocity and initial velocity
     for vehicle_it in range(len(all_other_vehicles)):
-        all_other_vehicles[vehicle_it].max_v = setting_rng.uniform(25, 30) * 0.447  #20 to 25 mph
+        all_other_vehicles[vehicle_it].max_v = setting_rng.uniform(initial_velocity_mph + 0.1, 30) * 0.447  #20 to 25 mph
         all_other_x0[vehicle_it][-2] = initial_velocity
 
         if 'k_lat' in params:
@@ -93,6 +94,8 @@ def run_simulation(log_dir, params):
             all_other_vehicles[vehicle_it].k_phi_dot = params['k_phi_dot']
         if 'k_x_dot' in params:
             all_other_vehicles[vehicle_it].k_x_dot = params['k_x_dot']
+        if 'k_on_grass' in params:
+            all_other_vehicles[vehicle_it].k_on_grass = params['k_on_grass']
 
 
     # Save the vehicles and world for this simulation
@@ -101,8 +104,8 @@ def run_simulation(log_dir, params):
     pickle.dump(world, open(log_dir + "/world.p", "wb"))
     pickle.dump(all_other_x0, open(log_dir + "/x0.p", "wb"))
     print("Results saved in log %s:" % log_dir)
-
-    # Initialize the state and control arrays
+    if args.plot_initial_positions:
+        plot_initial_positions(log_dir, world, all_other_vehicles, all_other_x0)
 
     with open(log_dir + "params.json", "w") as fp:
         json.dump(params, fp, indent=2)
