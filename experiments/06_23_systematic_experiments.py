@@ -6,7 +6,6 @@ from src.utils.log_management import random_date_string
 from src.traffic_world import TrafficWorld
 from src.ibr_nonamb import run_iterative_best_response
 import src.utils.solver_helper as helper
-from src.utils.plotting.car_plotting import plot_initial_positions
 
 
 def run_simulation(log_dir, params):
@@ -104,8 +103,8 @@ def run_simulation(log_dir, params):
     pickle.dump(world, open(log_dir + "/world.p", "wb"))
     pickle.dump(all_other_x0, open(log_dir + "/x0.p", "wb"))
     print("Results saved in log %s:" % log_dir)
-    if args.plot_initial_positions:
-        plot_initial_positions(log_dir, world, all_other_vehicles, all_other_x0)
+    # if args.plot_initial_positions:
+    #     plot_initial_positions(log_dir, world, all_other_vehicles, all_other_x0)
 
     with open(log_dir + "params.json", "w") as fp:
         json.dump(params, fp, indent=2)
