@@ -228,9 +228,16 @@ def call_mpc_solver(
     # Try to solve the mpc
     try:
         solution = nlp_solver(x0=nlp_x0, p=nlp_p, lbg=nlp_lbg, ubg=nlp_ubg)
+        
         x_ego, u_ego, xd_ego, cntrld_vehicle_trajectories, max_slack, current_cost = get_trajectories_from_solution(
             solution, params["N"], nc, nnc)
         debug_list = []
+        if -0.00001 < current_cost < 0.00001:
+            # For now, do not use any solutions that reached max cpu
+            print("Cost = 0.000: Max CPU suspected")
+            print(x_ego)
+            print(u_ego)
+            current_cost = 1e7 #we don't know the cost yet, so we'll make it pretty high
         return MPCSolverReturn(True, current_cost, max_slack, x_ego, xd_ego, u_ego, warm_key, debug_list, cntrld_vehicle_trajectories)
     except Exception as e:
         print(e)
