@@ -6,7 +6,7 @@ from src.multiagent_mpc import load_state, save_state
 from shapely.geometry import box
 from shapely.affinity import rotate
 import psutil, time, datetime
-import os
+import os, pickle
 
 
 class ExperimentHelper(object):
@@ -208,11 +208,31 @@ class ExperimentHelper(object):
         print("Simulation Done!  Runtime: %s" %
               (datetime.timedelta(seconds=(time.time() - self.start_time))))
 
+    def print_initializing_trajectories(self, i_mpc):
+        print("Extending Trajectories...Solving MPC for each vehicle:  Rd %d"%i_mpc)
+
     def check_machine_memory(self):
         if psutil.virtual_memory().percent >= 95.0:
             raise Exception(
                 "Virtual Memory is too high, exiting to save computer")
+    
+    def save_trajectory(self, trajectory_array, controls_array):
+        ''' Save the current trajectory, controls'''
 
+        trajectory_dir_path = os.path.join(self.log_dir, "trajectories")
+        os.makedirs(trajectory_dir_path, exist_ok=True)
+
+        trajectory_path = os.path.join(trajectory_dir_path, "trajectory_t.npy")
+        controls_path = os.path.join(trajectory_dir_path, "controls_t.npy")
+
+        with open(trajectory_path, "wb") as fp:
+            np.save(fp, trajectory_array)
+
+        with open(controls_path, 'wb') as fp:
+            np.save(fp, controls_array)
+
+        
+    
 
 def generate_test_scenario(n_other, N, dt, n_lanes=2, car_density=5000):
     from src.traffic_world import TrafficWorld
