@@ -9,7 +9,10 @@ CONV_MS_TO_MPH = 2.23694
 def post_process_experiments(args):
     ''' Load the directory and print the'''
     
+
     all_params, all_trajs, all_vehicles, all_dirs, experiment_params = load_experiment_results(args.experiment_dir)
+
+    describe_experiment_params(experiment_params)
 
     p_coop_array = np.array([all_params[exi]['p_cooperative'] for exi in range(len(all_params))])
     distances_array = np.array([all_trajs[exi][:,0, args.n_mpc_end] - all_trajs[exi][:,0,0] for exi in range(len(all_params))])
@@ -37,8 +40,13 @@ def post_process_experiments(args):
     all_densities = [param["car_density"] for param in all_params]
     all_p_cooperative = [param["p_cooperative"] for param in all_params]
 
-    summarize_sim_params(all_params, all_vehicles)
+    fixed_params, varying_params = summarize_sim_params(all_params, all_vehicles)
+    print("Fixed Params")
+    print(fixed_params)
+    print("Varying Params")
+    print(varying_params)
 
+    
     total_collisions, total_experiments, percentage_collisions_experiments, collisions_per_km, collisions_per_bkm = get_collision_stats(all_trajs)
     print("N_collisions: %d,  N_exp: %d, P_collisions: %.2f,  Collisions/Km: %.3e, Collisions/BKm %.1e"%(
                     total_collisions, total_experiments, percentage_collisions_experiments, collisions_per_km, collisions_per_bkm)) 
@@ -66,6 +74,20 @@ def post_process_experiments(args):
         assert param_name in all_params[0], "%s not in params.json"%param_name
 
         animate_by(param_name, experiment_params, all_dirs, all_params)
+
+
+def describe_experiment_params(experiment_params):
+    ''' Print out a description of experiment params'''
+    fixed_params = {}
+    varying_params = {}
+
+    for param_name, param_values in experiment_params.items():
+        if isinstance(param_values, list) and len(param_values) > 0:
+            varying_params[param_name] = param_values
+        else:
+            fixed_params[param_name] = param_values
+
+    return fixed_params, varying_params
 
 
 def load_experiment_results(experiment_dir):

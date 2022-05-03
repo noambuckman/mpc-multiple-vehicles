@@ -1,14 +1,20 @@
 import os, pickle, json, glob, argparse
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
+
+
 from src.multiagent_mpc import MultiMPC
 from src.utils.plotting.car_plotting import plot_cars, animate, plot_initial_positions
+from src.utils.sim_utils import get_closest_n_obstacle_vehs
+from src.vehicle_mpc_information import VehicleMPCInformation
+from src.best_response import generate_solver_params
 
 
 def post_process(args):
     ''' Load the directory and print the'''
     for logdir in args.logdir:
-        print(logdir)
+    
         try:
             params, vehicles, world, x0, x, u = load_data_from_logdir(logdir)    
         except FileNotFoundError as e:
@@ -17,16 +23,19 @@ def post_process(args):
 
         if args.show_initial_positions:
             plot_initial_positions(logdir, world, vehicles, x0, number_cars_included=10)
-
-        if args.analyze_controls:
-            analyze_controls(logdir, u, x)
+        
+        post_processing_dir_path = os.path.join(logdir, "postprocessing/")
+        os.makedirs(post_processing_dir_path, exist_ok=True)    
 
 
         if args.animate:
             animate_cars(args, params, logdir, x, vehicles, world)
 
+        if args.analyze_controls:
+            analyze_controls(logdir, u, x)
+
         if args.analyze_costs:
-            analyze_costs(vehicles, x, u, world, params)
+            analyze_costs(vehicles, x, u, world, params, post_processing_dir_path)
 
 
 def load_data_from_logdir(logdir: str):
@@ -139,7 +148,8 @@ def animate_cars(args, params, log_directory, trajectories, vehicles, world):
 
 
 def analyze_controls(LOGDIR, u, x):    
-    os.makedirs(os.path.join(LOGDIR, "plots/"), exist_ok=True)
+
+    post_processing_dir_path = os.path.join(LOGDIR, "postprocessing/")
 
     np.set_printoptions(3, suppress=True)
     for ag_i in range(x.shape[0]):
@@ -155,19 +165,109 @@ def analyze_controls(LOGDIR, u, x):
     plt.plot(u[4,0,:])
     plt.ylabel("u0_steering_change")
     plt.xlabel("Timestep")
-    plt.savefig(os.path.join(LOGDIR, "plots/", "u0_4.png"))
+    plt.savefig(os.path.join(post_processing_dir_path, "u0_4.png"))
 
     plt.figure()
     plt.plot(u[4,1,:])
     plt.ylabel("u1_vel_change")
     plt.xlabel("Timestep")
-    plt.savefig(os.path.join(LOGDIR, "plots/", "u1_4.png"))
+    plt.savefig(os.path.join(post_processing_dir_path, "u1_4.png"))
     return None
 
-def analyze_costs(vehicles, x, u, world, params):
-    import casadi as cas
+def analyze_costs(vehicles, x, u, world, params, postprocessing_dir_path):
     '''Analyze the mpc costs'''
-    mpc = MultiMPC(params["N"], params["dt"], world, 3, 3, params, )
+
+
+    create_cost_bar_chart(x, u, vehicles, world, params, postprocessing_dir_path)
+
+    analyze_multicar_costs(vehicles, x, u, world, params, postprocessing_dir_path)
+
+    
+
+def analyze_multicar_costs(vehicles, x, u, world, params, postprocessing_dir_path):
+    ''' Compare Response Costs and Collision Avoidance Costs'''
+    mpc = MultiMPC(params["N"], params["dt"], world, 0, 10, params)
+    cost_lists = []
+    vehsinfo = []
+    for i in range(len(vehicles)):
+        xi = x[i, :, :]
+        ui = u[i, :, :]
+
+        # Regenerate the desired trajectory
+        # vehicles[i].update_desired_lane_from_x0(world, x0[i])
+        s = xi[-1,:]
+        Fd = vehicles[i].fd.map(s.shape[0])
+        xd = Fd(s)
+        xd = np.array(xd)
+        vehicle =  vehicles[i]
+        x0 = xi[:, 0]
+
+        vehsinfo.append(VehicleMPCInformation(vehicle, x0, ui, xi, xd))
+    
+    data = []
+    for i in range(len(vehicles)):
+        response_vehinfo = vehsinfo[i]
+        obstacle_vehsinfo = [vehsinfo[j] for j in range(len(vehicles)) if j!=i]
+        obstacle_vehsinfo = get_closest_n_obstacle_vehs(response_vehinfo, [], obstacle_vehsinfo, max_num_obstacles=10, min_num_obstacles_ego=3)
+
+        x = response_vehinfo.x
+        u = response_vehinfo.u
+        xd = response_vehinfo.xd
+        vehicle = response_vehinfo.vehicle 
+        response_costs, _ = mpc.generate_veh_costs(x, u, xd, vehicle)
+
+        response_svo_cost = np.cos(vehicle.theta_i) * response_costs
+        other_svo_cost = 0
+
+        # Generate Slack Variables used as part of collision avoidance
+        # slack_cost = self.compute_quadratic_slack_cost(n_other_vehicle, n_vehs_cntrld, slack_i_jnc, slack_ic_jnc,
+        #                                                slack_i_jc, slack_ic_jc) + self.compute_wall_slack_costs(self.N, n_vehs_cntrld, top_wall_slack, bottom_wall_slack,
+        #                                             top_wall_slack_c, bottom_wall_slack_c)
+
+        slack_cost = 0
+        other_vehicles = [vinfo.vehicle for vinfo in obstacle_vehsinfo]
+        x_other = [vinfo.x for vinfo in obstacle_vehsinfo]
+        n_other = len(other_vehicles)
+
+        solver_params = generate_solver_params(params, 0, 0)
+
+        k_slack = solver_params["k_slack"]
+        k_CA = solver_params["k_CA"]
+        k_CA_power = solver_params["k_CA_power"]
+
+
+        collision_cost = mpc.compute_collision_avoidance_costs(mpc.N, n_other, 0, vehicle,
+                                                                other_vehicles, [], xi, x_other,
+                                                                [], params, mpc.k_ca2, k_CA_power)
+
+
+        collision_cost = float(collision_cost)
+        weighted_collision_cost = k_CA * collision_cost
+
+        data.append([i, response_costs, collision_cost, weighted_collision_cost])
+    
+    print(data)
+    columns = ["agent_idx", "response_costs", "collision_cost", "weighted_collision_cost"]
+
+    df = pd.DataFrame( data, columns=columns)
+    fig, axs = plt.subplots(2, 1, figsize=(8,10))
+    df0 = df[["agent_idx", "response_costs", "collision_cost"]]
+    df0.plot(x="agent_idx", kind='bar', stacked=True, title="Cost w/Collision Cost", ax=axs[0], colormap='tab20')
+    axs[0].legend(bbox_to_anchor=(1.04,1), borderaxespad=0)
+    
+    df1 = df[["agent_idx", "response_costs", "weighted_collision_cost"]]
+    df1.plot(x="agent_idx", kind='bar', stacked=True, title="Cost w/Weighted Cost", ax=axs[1], colormap='tab20')
+    axs[1].legend(bbox_to_anchor=(1.04,1), borderaxespad=0)
+    
+    
+    fig_path = os.path.join(postprocessing_dir_path, "collision_cost_hist.png")
+    fig.savefig(fig_path, bbox_inches='tight')
+
+
+
+def create_cost_bar_chart(x, u, vehicles, world, params, postprocessing_dir_path):
+    
+    mpc = MultiMPC(params["N"], params["dt"], world, 1, 1, params)
     cost_lists = []
     for i in range(len(vehicles)):
         xi = x[i, :, :]
@@ -182,17 +282,12 @@ def analyze_costs(vehicles, x, u, world, params):
 
         total_costs, cost_list = mpc.generate_veh_costs(xi, ui, xd, vehicles[i])
 
-        print(cost_list)
-        print(total_costs)
         cost_lists.append(cost_list)
-    bar_chart = cost_bar_chart(cost_lists)
 
 
-def cost_bar_chart(cost_lists):
-    import pandas as pd
+
     n_agents = len(cost_lists)
     n_costs = len(cost_lists[0])
-
 
     cost_names = [
             "u_delta_cost", "u_v_cost", "lat_cost", "lon_cost",
@@ -201,32 +296,29 @@ def cost_bar_chart(cost_lists):
             "x_cost", "on_grass_cost", "x_dot_cost"
         ]
 
+    columns = ["agent_idx"] + cost_names[:-1] #remove x_dot_cost for dataframe
 
-    columns = ["agent_idx"] + [cost_names[cix] for cix in range(n_costs - 1)]
-    print(len(columns))
     data = []
     speed_costs = []
     for idx in range(n_agents):
 
-        row = [idx*2] + list(cost_lists[idx])
+        row = [idx*1] + list(cost_lists[idx])
         speed_costs.append(row[-1])
-        row = row[:-1]
-        print(row)
-
+        row = row[:-1] # Remove x_dot_cost
         data.append(row)
-    df = pd.DataFrame( data, 
-        columns=columns)
 
-    ax = df.plot(x="agent_idx", kind='bar', stacked=True, title="Stacked Bar Chart")
+    positive_costs_df = pd.DataFrame(data, columns=columns)
 
-    # ax = plot.get_axis()
-    ax.bar([idx*2 + 1 for idx in range(n_agents)], speed_costs)
-    fig = ax.get_figure()
+    fig, axs = plt.subplots(2, 1, figsize=(8,10))
+    positive_costs_df.plot(x="agent_idx", kind='bar', stacked=True, title="Stacked Bar Chart", ax=axs[0], colormap='tab20')
+    axs[0].bar([idx*1 + 0 for idx in range(n_agents)], speed_costs, color='purple', label='x_dot_cost')
+    axs[0].legend(bbox_to_anchor=(1.04,1), borderaxespad=0)
 
-    fig.savefig("cost_hist.png")
-    # x_agentid = [i for i in range(n_agents)]
-    # for cost_i in range(n_costs):
-    #     plt.bar(x_agentid, [cost_lists[idx][cost_i] for idx in range(n_agents)]. )
+    positive_costs_df.plot(x="agent_idx", kind='bar', stacked=True, title="Stacked Bar Chart", ax=axs[1], colormap='tab20')
+    axs[1].legend(bbox_to_anchor=(1.04,1), borderaxespad=0)
+
+    fig_path = os.path.join(postprocessing_dir_path, "cost_hist.png")
+    fig.savefig(fig_path, bbox_inches='tight')
 
 
 
