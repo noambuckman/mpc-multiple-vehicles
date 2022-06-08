@@ -18,7 +18,8 @@ params["number_ctrl_pts_executed"] = max(1, int(np.floor(params["N"] * params["p
 world = TrafficWorld(params["n_lanes"], 0, 999999)
 
 # Create the
-ipopt_params = {"print_level": 5, "max_cpu_time":10.0}
+# ipopt_params = {"print_level": 5, "max_cpu_time":10.0}
+ipopt_params = {"print_level": 5}
 params['slack'] = True
 s_params = generate_solver_params(params, 0, 0)
 
@@ -26,7 +27,7 @@ n_coeff_d = 4
 
 params["safety_constraint"] = True
 
-for safety_constraint in [False]:
+for safety_constraint in [True]:
     for nc in range(0,3):
         for nnc in range(0, 11):
             mpc = MultiMPC(params["N"], nc, nnc, n_coeff_d, params, ipopt_params, safety_constraint)
