@@ -1,3 +1,4 @@
+import itertools
 import os, pickle, json, glob, argparse
 import numpy as np
 import matplotlib.pyplot as plt
@@ -40,7 +41,8 @@ def post_process_experiments(args):
     all_densities = [param["car_density"] for param in all_params]
     all_p_cooperative = [param["p_cooperative"] for param in all_params]
 
-    fixed_params, varying_params = summarize_sim_params(all_params, all_vehicles)
+    summarize_sim_params(all_params, all_vehicles)
+    fixed_params, varying_params = describe_experiment_params(experiment_params)
     print("Fixed Params")
     print(fixed_params)
     print("Varying Params")
@@ -75,6 +77,8 @@ def post_process_experiments(args):
 
         animate_by(param_name, experiment_params, all_dirs, all_params)
 
+    if args.animate_all:
+        animate_by_all(experiment_params, all_dirs, all_params)
 
 def describe_experiment_params(experiment_params):
     ''' Print out a description of experiment params'''
@@ -82,7 +86,7 @@ def describe_experiment_params(experiment_params):
     varying_params = {}
 
     for param_name, param_values in experiment_params.items():
-        if isinstance(param_values, list) and len(param_values) > 0:
+        if isinstance(param_values, list) and len(param_values) > 1:
             varying_params[param_name] = param_values
         else:
             fixed_params[param_name] = param_values
@@ -146,6 +150,57 @@ def animate_by(param_name, experiment_params, all_dirs, all_params):
         output_file_name = concat_vids(vids_to_concat, "%s_%s.mp4"%(param_name, param_value))
         print(output_file_name)
 
+def animate_by_all(experiment_params, all_dirs, all_params):
+    _, varying_params = describe_experiment_params(experiment_params)
+
+    os.makedirs("post_processing", exist_ok=True)
+    varying_param_keys = list(varying_params.keys())
+    list_of_param_values = [experiment_params[param] for param in varying_param_keys]
+    print(varying_param_keys)
+
+    grid_counter = 0
+    for param_product in itertools.product(*list_of_param_values):
+        vids_to_concat = []
+        grid_params = {}
+        for exp_i in range(len(all_dirs)):
+            exp_dir = all_dirs[exp_i]
+            exp_params = all_params[exp_i]
+            experiment_matches = True
+
+            for param_ix in range(len(varying_param_keys)):
+                param_key = varying_param_keys[param_ix]
+                param_value = param_product[param_ix]
+                grid_params[param_key] = param_value    
+                if float(exp_params[param_key]) != float(param_value):
+                    experiment_matches = False
+            
+            if experiment_matches:
+                vid_path = glob.glob(os.path.join(exp_dir, "vids/", "*.mp4"))
+                print(vid_path)
+                if len(vid_path) > 0:
+                    vids_to_concat += [vid_path[0]]
+                    
+
+        print(param_product)
+        print(vids_to_concat)
+        
+        if len(vids_to_concat) > 0:
+            # grid_params = {k:exp_params[k] for k in varying_param_keys}
+            
+            grid_name = "%03d"%grid_counter
+            json_path = os.path.join("post_processing", '%s.json'%grid_name)
+            with open(json_path, 'w') as fp:
+                json.dump(grid_params, fp)
+            grid_counter += 1
+            print(vids_to_concat)
+            video_name = os.path.join("post_processing", "%s.mp4"%grid_name)
+            print(vids_to_concat)
+            output_file_name = concat_vids(vids_to_concat, video_name)
+            # print(video_name)
+
+
+
+        
 
 
 
@@ -290,6 +345,10 @@ if __name__ == '__main__':
     parser.add_argument("--analyze-collisions", action="store_true", help="Print out parameters for every simulation with collisions")
     parser.add_argument("--animate-by-density", action="store_true", help="animate videos and concatenate by SVO")
     parser.add_argument("--animate-by", type=str, default=None, help="Paramater to organize animation grid")
+    parser.add_argument("--animate-all", action="store_true", help="Animation grid by all the parameters varied")
     args = parser.parse_args()
+
+    if args.experiment_dir == ".":
+        args.experiment_dir = os.getcwd()
 
     post_process_experiments(args)
