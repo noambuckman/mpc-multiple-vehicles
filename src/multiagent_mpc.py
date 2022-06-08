@@ -16,6 +16,7 @@ class NonconvexOptimization(object):
         self._ubg_list = []
         self._x_list = []  # Decision Variables
         self._p_list = []  # Parameters
+        self.callback = IpoptCallback()
 
     def add_X(self, *x):
         self._x_list.extend(x)
@@ -79,6 +80,7 @@ class NonconvexOptimization(object):
         else:
             prob = {'f': self._f, 'g': self._g_list, 'x': self._x_list, 'p': self._p_list}
 
+        # solver = cas.nlpsol('solver', 'ipopt', prob, {'ipopt': ipopt_params, 'iteration_callback': self.callback})
         solver = cas.nlpsol('solver', 'ipopt', prob, {'ipopt': ipopt_params})
 
         solver_name_prefix = self.get_solver_name()
@@ -87,6 +89,22 @@ class NonconvexOptimization(object):
     def get_solver_name(self):
         return "opt"
 
+class IpoptCallback(cas.Callback):
+    def __init__(self):
+        cas.Callback.__init__(self)
+
+        self.sols = []
+        self.values = []
+
+    def eval(self, arg):
+        darg = {}
+        for (i,s) in enumerate(cas.nlpsol_out()): darg[s] = arg[i]
+        
+        sol = darg['x']
+        value = darg['f']
+
+        self.sols.append(sol)
+        self.values.append(value)
 
 class MultiMPC(NonconvexOptimization):
     ''' Optimization class contains all the object related to a best response optimization.
