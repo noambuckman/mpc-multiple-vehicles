@@ -1,5 +1,11 @@
 import numpy as np
 
+class Trajectory:
+    def __init__(self, u:np.array, x:np.array, xd:np.array):
+        self.x = x
+        self.u = u
+        self.xd = xd
+
 
 class VehicleMPCInformation:
     ''' Helper class that holds the state of each vehicle and vehicle information'''
@@ -11,7 +17,15 @@ class VehicleMPCInformation:
         self.x = x
         self.xd = xd
 
-    def update_state(self, u, x, xd):
+    def update_state(self, u:np.array, x:np.array, xd:np.array):
         self.u = u
         self.x = x
         self.xd = xd
+
+    def update_state_from_traj(self, traj: Trajectory):
+        self.u = traj.u
+        self.x = traj.x
+        self.xd = traj.xd
+
+
+

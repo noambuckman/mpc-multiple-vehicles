@@ -1,13 +1,11 @@
 import numpy as np
-import random
 import copy as cp
 from collections import deque
 from typing import List, Tuple
 
 from src.vehicle_mpc_information import VehicleMPCInformation
 import src.vehicle as vehicle
-from src.simple_optimizations import feasible_guess
-from src.best_response import solve_best_response
+from src.simple_optimizations import feasible_guess, lane_following_optimizations
 
 
 def nonresponse_subset(list_of_veh_idxs, all_other_x0, all_other_vehicles, all_other_u, all_other_x, all_other_x_des):
@@ -32,24 +30,6 @@ def nonresponse_slice(i, all_other_x0, all_other_vehicles, all_other_u, all_othe
     nonresponse_xd_list = all_other_x_des[:i] + all_other_x_des[i + 1:]
 
     return nonresponse_x0_list, nonresponse_vehicle_list, nonresponse_u_list, nonresponse_x_list, nonresponse_xd_list
-
-
-def warm_profiles_subset(n_warm_keys: int, ux_warm_profiles):
-    '''choose randomly n_warm_keys keys from ux_warm_profiles and return the subset'''
-
-    priority_warm_keys = []
-    if n_warm_keys >= 1 and "previous_mpc_hold" in ux_warm_profiles:
-        priority_warm_keys += ["previous_mpc_hold"]
-    if n_warm_keys >= 2 and "previous_ibr" in ux_warm_profiles:
-        priority_warm_keys += ["previous_ibr"]
-    remaining_n_keys = n_warm_keys - len(priority_warm_keys)
-    remaining_keys = [k for k in ux_warm_profiles.keys() if k not in priority_warm_keys]
-    random.shuffle(remaining_keys)
-
-    warm_subset_keys = priority_warm_keys + remaining_keys[:remaining_n_keys]
-    ux_warm_profiles_subset = dict((k, ux_warm_profiles[k]) for k in warm_subset_keys)
-
-    return ux_warm_profiles_subset
 
 
 def get_min_dist_i(ambulance_x0, all_other_x0, restrict_greater=False):
@@ -120,8 +100,11 @@ def extend_last_mpc_and_follow_i(previous_u_mpc,
 
 
 def extend_last_mpc_and_follow(previous_u_mpc, number_ctrl_pts_executed, all_other_vehicles, all_other_x0, params,
-                               world):
-    '''Copy the previous mpc and extend the last values with lane following control'''
+                               world, extend_strategy = "Feasible"):
+    '''Copy the previous mpc and extend the last values with lane following control
+        Two types of extend strategy. Either try hard to find a feasible solution. 
+        Or just try to lane follow. 
+    '''
     N = previous_u_mpc[0].shape[1]
     n_vehs = len(all_other_vehicles)
 
@@ -145,7 +128,6 @@ def extend_last_mpc_and_follow(previous_u_mpc, number_ctrl_pts_executed, all_oth
         initial_pt = prev_trajs[i][:, -1]
 
         other_vehicle_info_subset = temp_extended_veh_info[:i] + temp_extended_veh_info[i + 1:]
-        extend_strategy = "Feasible"
         if extend_strategy == "LaneFollowOnly":
             lane_following_ctrl, lane_following_traj, lane_following_traj_des = lane_following_optimizations(
                 number_ctrl_pts_executed + 1, all_other_vehicles[i], initial_pt, params, world)
@@ -222,12 +204,13 @@ def initialize_cars(n_other,
         x1_MPC.k_phi_error = 0.001
         x1_MPC.k_phi_dot = 0.01
 
-        x1_MPC.min_y = world.y_min
-        x1_MPC.max_y = world.y_max
+        x1_MPC.min_y = world.y_min + x1_MPC.W/2.0
+        x1_MPC.max_y = world.y_max - x1_MPC.W/2.0
         if no_grass:
             x1_MPC.min_y += world.grass_width
             x1_MPC.max_y -= world.grass_width
         x1_MPC.strict_wall_constraint = True
+        
 
         # Vehicle Initial Conditions
         lane_offset = np.random.uniform(0, 1) * x_variance * 2 * x1_MPC.min_dist
@@ -271,11 +254,12 @@ def initialize_cars(n_other,
     amb_MPC.max_v = 30 * 0.447  # m/s
     amb_MPC.k_phi_error = 0.1
     amb_MPC.k_phi_dot = 0.01
-    amb_MPC.min_y = world.y_min
-    amb_MPC.max_y = world.y_max
+    amb_MPC.min_y = world.y_min + amb_MPC.W/2.0
+    amb_MPC.max_y = world.y_max - amb_MPC.W/2.0
     if no_grass:
         amb_MPC.min_y += world.grass_width
         amb_MPC.max_y -= world.grass_width
+    
     amb_MPC.fd = amb_MPC.gen_f_desired_lane(world, 0, True)
     x0_amb = np.array([0, 0, 0, 0, initial_speed, 0]).T
 
@@ -308,18 +292,20 @@ def initialize_cars_from_positions(N, dt, world, no_grass=False, list_of_positio
         x1_MPC.k_change_u_delta = 0.001
         x1_MPC.k_s = 0
         x1_MPC.k_x = 0
-        x1_MPC.k_x_dot = -1.0 / 100.0
+        x1_MPC.k_x_dot = -0.01
         x1_MPC.k_lat = 0.001
         x1_MPC.k_lon = 0.0
         x1_MPC.k_phi_error = 0.001
         x1_MPC.k_phi_dot = 0.01
 
-        x1_MPC.min_y = world.y_min
-        x1_MPC.max_y = world.y_max
-        if no_grass:
-            x1_MPC.min_y += world.grass_width
-            x1_MPC.max_y -= world.grass_width
-        x1_MPC.strict_wall_constraint = False
+        
+        # x1_MPC.min_y = world.y_min + x1_MPC.W/2.0
+        # x1_MPC.max_y = world.y_max - x1_MPC.W/2.0
+        # if no_grass:
+        #     x1_MPC.min_y += world.grass_width
+        #     x1_MPC.max_y -= world.grass_width
+        
+        # x1_MPC.strict_wall_constraint = False
 
         lane_number, next_x0 = list_of_positions[i + 1]  #index off by one since ambulance is index 0
 
@@ -350,12 +336,9 @@ def initialize_cars_from_positions(N, dt, world, no_grass=False, list_of_positio
     amb_MPC.max_v = 30 * 0.447  # m/s
     amb_MPC.k_phi_error = 0.1
     amb_MPC.k_phi_dot = 0.01
-    amb_MPC.min_y = world.y_min
-    amb_MPC.max_y = world.y_max
-    amb_MPC.strict_wall_constraint = True
-    if no_grass:
-        amb_MPC.min_y += world.grass_width
-        amb_MPC.max_y -= world.grass_width
+    amb_MPC.min_y = world.y_min + amb_MPC.W/2.0
+    amb_MPC.max_y = world.y_max - amb_MPC.W/2.0
+
 
     lane_number, next_x0 = list_of_positions[0]
     amb_MPC.fd = amb_MPC.gen_f_desired_lane(world, lane_number, True)
@@ -499,38 +482,3 @@ def poission_positions_multiple(cars_per_hour_list,
         segment_start_x = x
 
     return initial_vehicle_positions
-
-
-def lane_following_optimizations(N, vehicle, x0, params, world):
-    cp_vehicle = cp.deepcopy(vehicle)
-    cp_params = cp.deepcopy(params)
-    cp_params["N"] = N
-
-    # Try not to change the velocity of the car (i.e. assume velocity zero)
-    cp_vehicle.k_u_v = 1000
-    cp_vehicle.strict_wall_constraint = False
-
-    # TODO:  Allow for default values for this. Distinguish between solver, params, and ipopt params
-    solver_params = {}
-    solver_params["slack"] = True
-    solver_params["k_CA"] = params["k_CA_d"]
-    solver_params["k_CA_power"] = params["k_CA_power"]
-    solver_params["k_slack"] = params["k_slack_d"]
-
-    ipopt_params = {'print_level': 0}
-
-    # warm start with no control inputs
-    u_warm = np.zeros((2, N))
-    x_warm, x_des_warm = cp_vehicle.forward_simulate_all(x0.reshape(6, 1), u_warm)
-
-    warm_traj = u_warm, x_warm, x_des_warm
-
-    _, _, max_slack, x, x_des, u, _, _, _ = solve_best_response("test", warm_traj, cp_vehicle, [], [], x0, [], [],
-                                                                world, solver_params, cp_params, ipopt_params, [], [],
-                                                                [])
-    del cp_vehicle
-
-    if max_slack < np.infty:
-        return u, x, x_des
-    else:
-        return u_warm, x_warm, x_des_warm

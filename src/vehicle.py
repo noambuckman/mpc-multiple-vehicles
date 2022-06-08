@@ -31,13 +31,6 @@ class Vehicle(object):
         self.k_u_v = 1.0
 
         ## Derived State Costs Constants
-        self.k_lat = 10.0
-        self.k_lon = 1.0
-        self.k_phi_error = 1.0
-        self.k_phi_dot = 1.0
-
-        self.k_x_dot = 0.0
-
         self.k_change_u_v = 1.0
         self.k_change_u_delta = 1.0
 
@@ -58,6 +51,8 @@ class Vehicle(object):
 
         self.k_phi_error = 0.001
         self.k_phi_dot = 0.0
+
+        self.k_on_grass = 0.1
         ####
 
         # Constraints
@@ -75,9 +70,11 @@ class Vehicle(object):
         self.min_v = 0.0
 
         # Spatial constraints
-        self.max_y = np.infty
-        self.min_y = -np.infty
-        self.strict_wall_constraint = True
+        self.max_y = 9999999
+        self.min_y = -9999999
+
+        self.grass_max_y = 9999999
+        self.grass_min_y = -999999
 
         self.max_X_dev = np.infty
         self.max_Y_dev = np.infty
@@ -92,6 +89,10 @@ class Vehicle(object):
         self.radius = None
 
         self.ax, self.by = self.get_ellipse(self.L, self.W)  # if you change L, W after construction
+        
+        self.theta_i_ego = 0
+        self.theta_i_jc = [0 for j in range(10)] #TODO:  Change this
+        self.theta_i_jnc = [0 for j in range(10)]
         # then it will need to be recalculated
 
     def generate_lateral_cost(self, X, X_desired):
@@ -184,8 +185,9 @@ class Vehicle(object):
         ''' Construct vehicle specific constraints that only rely on
         the ego vehicle's own state '''
 
-        if self.strict_wall_constraint:  #TODO, change this to when creating min_y and max_y
-            opti.subject_to(opti.bounded(self.min_y + self.W / 2.0, X[1, :], self.max_y - self.W / 2.0))
+        # if self.strict_wall_constraint:  #TODO, change this to when creating min_y and max_y
+            # opti.subject_to(opti.bounded(self.min_y + self.W / 2.0, X[1, :], self.max_y - self.W / 2.0))
+
         opti.subject_to(opti.bounded(-np.pi / 2, X[2, :], np.pi / 2))  #no crazy angle
         opti.subject_to(opti.bounded(self.min_v, X[4, :], self.max_v))
 
@@ -283,6 +285,11 @@ class Vehicle(object):
         fd = cas.Function('fd', [s], [des_traj], ['s'], ['des_traj'])
 
         return fd
+
+    def update_desired_lane_from_x0(self, world, x0, right_direction=True):
+        new_lane_number = world.get_lane_from_x0(x0)
+        self.fd = self.gen_f_desired_lane(world, new_lane_number, right_direction)
+
 
     def get_ellipse(self, L, W):
         '''Solve for the minimal inscribing ellipse.

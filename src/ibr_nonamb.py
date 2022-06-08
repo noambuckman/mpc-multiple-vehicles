@@ -1,364 +1,161 @@
-import time, datetime, os, pickle, psutil, json, string, random
+import time, datetime, os, pickle, json, string, random
 import numpy as np
 import copy as cp
 from contextlib import redirect_stdout
 from typing import List
-from shapely.geometry import box
-from shapely.affinity import rotate
 
 from src.traffic_world import TrafficWorld
-from src.vehicle import Vehicle
-from src.multiagent_mpc import load_state, save_state
-from src.warm_starts import generate_warm_starts
-from src.utils.ibr_argument_parser import IBRParser
-from src.best_response import solve_warm_starts
-from src.utils.solver_helper import warm_profiles_subset, poission_positions, extend_last_mpc_and_follow, initialize_cars_from_positions
+from src.warm_starts import generate_warmstarts, get_subset_warmstarts
+from src.best_response import parallel_mpc_solve, generate_solver_params, MPCSolverReturn, MPCSolverLogger, MPCSolverLog
 from src.vehicle_mpc_information import VehicleMPCInformation
 
-
-def convert_to_global_units(x_reference_global: np.array, x: np.array):
-    """ During solving, the x-dimension is normalized to the ambulance initial position x_reference_global """
-    if x_reference_global is None:
-        return x
-
-    x_global = cp.deepcopy(x)
-    x_global[0, :] += x_reference_global[0]
-
-    return x_global
+from src.utils.ibr_argument_parser import IBRParser
+from src.utils.solver_helper import poission_positions, extend_last_mpc_and_follow, initialize_cars_from_positions
+from src.utils.plotting.car_plotting import plot_initial_positions
+from src.utils.sim_utils import ExperimentHelper, get_closest_n_obstacle_vehs, get_obstacle_vehs_closeby, get_max_dist_traveled, get_ibr_vehs_idxs, assign_shared_control, get_within_range_other_vehicle_idxs
 
 
-def run_iterative_best_response(other_vehicles,
+def run_iterative_best_response(vehicles,
                                 world: TrafficWorld,
-                                other_x0: List[np.array],
+                                x0: List[np.array],
                                 params: dict,
                                 log_dir: str = None,
                                 load_log_dir: bool = False,
                                 i_mpc_start: int = 0):
     """ 
         Runs iterative best response for a system of ambulance and other vehicles.
-        TODO:  Add something that checks required params.  Or has default params somewhere.
     """
-    out_file = open(log_dir + "out.txt", "w")
-    if params["save_ibr"]:
-        os.makedirs(log_dir + "data/", exist_ok=True)
-    # Initialize all state and control arrays for entire simulation
-    t_start_time = time.time()
-    actual_t = 0
-    n_ctrl_total = params["n_mpc"] * params["number_ctrl_pts_executed"]
-    xothers_actual = [np.zeros((6, n_ctrl_total + 1)) for _ in range(params["n_other"])]
-    uothers_actual = [np.zeros((2, n_ctrl_total)) for _ in range(params["n_other"])]
+    ipopt_out_file = open(log_dir + "ipopt_out.txt", "w")
 
-    if load_log_dir:  # TODO:  This could use some cleanup
-        previous_mpc_file = log_dir + "data/mpc_%03d" % (i_mpc_start - 1)
-        print("Loaded initial positions from %s" % (previous_mpc_file))
-        _, _, _, all_other_x_executed, all_other_u_executed, _ = load_state(previous_mpc_file, params["n_other"])
-        all_other_u_mpc = all_other_u_executed
+    experiment = ExperimentHelper(log_dir, params)
+    solution_logger = MPCSolverLogger(log_dir)
+    ipopt_params = {"print_level": params["print_level"], "max_cpu_time": params["max_cpu_time"]}
 
-        previous_all_file = log_dir + "data/all_%03d" % (i_mpc_start - 1)
-        _, _, _, xothers_actual_prev, uothers_actual_prev, _, = load_state(previous_all_file,
-                                                                           params["n_other"],
-                                                                           ignore_des=True)
-        t_end = xothers_actual_prev[0].shape[1]
-
-        for i in range(len(xothers_actual_prev)):
-            xothers_actual[i][:, :t_end] = xothers_actual_prev[i][:, :t_end]
-            uothers_actual[i][:, :t_end] = uothers_actual_prev[i][:, :t_end]
-        actual_t = i_mpc_start * params["number_ctrl_pts_executed"]
+    if load_log_dir:
+        x_executed, u_mpc, x_actual, u_actual, t_actual = experiment.load_log_data(i_mpc_start)
     else:
-        all_other_x_executed = [None for i in range(params["n_other"])]
-        all_other_u_mpc = [None for i in range(params["n_other"])]
+        x_executed, u_mpc, x_actual, u_actual, t_actual = experiment.initialize_states()
 
     # Run the simulation and solve mpc for all vehicles for each round of MPC
     for i_mpc in range(i_mpc_start, params["n_mpc"]):
 
-        # 1) Update the initial conditions for all vehicles and normalize wrt ambulance position
+        # 1) Update the initial conditions for all
+        #    vehicles and normalize wrt ambulance position
         if i_mpc > 0:
-            all_other_x0_g = [
-                cp.deepcopy(all_other_x_executed[i][:, params["number_ctrl_pts_executed"]])
-                for i in range(len(all_other_x_executed))
-            ]
-            other_x0 = cp.deepcopy(all_other_x0_g)
-
+            x0 = [cp.deepcopy(x_executed[i][:, params["number_ctrl_pts_executed"]]) for i in range(len(x_executed))]
+        
         # 3) Generate (if needed) the control inputs of other vehicles
-        with redirect_stdout(out_file):
-            try:
+        experiment.print_initializing_trajectories(i_mpc)
+        try:
+            with redirect_stdout(ipopt_out_file):
                 if i_mpc == 0:
-                    previous_all_other_u_mpc = [np.zeros((2, params["N"])) for i in range(len(other_vehicles))]
-                    other_u_ibr_initial, other_x_ibr_initial, other_x_des_ibr_initial = extend_last_mpc_and_follow(
-                        previous_all_other_u_mpc, params["N"] - 1, other_vehicles, other_x0, params, world)
+                    u_mpc_prev = [np.zeros((2, params["N"])) for _ in range(len(vehicles))]
+                    u_ibr, x_ibr, xd_ibr = extend_last_mpc_and_follow(u_mpc_prev, params["N"] - 1, vehicles, x0, params,
+                                                                      world)
                 else:
-                    other_u_ibr_initial, other_x_ibr_initial, other_x_des_ibr_initial = extend_last_mpc_and_follow(
-                        all_other_u_mpc, params["number_ctrl_pts_executed"], other_vehicles, other_x0, params, world)
-            except RuntimeError as e:
-                print(e)
-                print("Simulation Ended Early due to infeasible solution!  Runtime: %s" %
-                      (datetime.timedelta(seconds=(time.time() - t_start_time))))
-                return xothers_actual, uothers_actual
+                    u_ibr, x_ibr, xd_ibr = extend_last_mpc_and_follow(u_mpc, params["number_ctrl_pts_executed"],
+                                                                      vehicles, x0, params, world)
+        except RuntimeError:
+            experiment.print_sim_exited_early("infeasible solution")
+            ipopt_out_file.close()
+            return x_actual, u_actual
+        
 
-        othervehs_ibr_info = []
-        for i in range(len(other_vehicles)):
-            othervehs_ibr_info.append(
-                VehicleMPCInformation(other_vehicles[i], other_x0[i], other_u_ibr_initial[i], other_x_ibr_initial[i],
-                                      other_x_des_ibr_initial[i]))
+        for i in range(len(vehicles)):
+            vehicles[i].update_desired_lane_from_x0(world, x0[i])
 
-        vehs_ibr_info_predicted = cp.deepcopy(othervehs_ibr_info)
+        # Convert all states to VehicleMPCInformation for ease
+        vehsinfo_ibr = []
+        for i in range(len(vehicles)):
+            vehsinfo_ibr.append(VehicleMPCInformation(vehicles[i], x0[i], u_ibr[i], x_ibr[i], xd_ibr[i]))
+        vehsinfo_ibr_pred = cp.deepcopy(vehsinfo_ibr)
 
-        for i_rounds_ibr in range(params["n_ibr"]):
-            print("MPC %d, IBR %d / %d" % (i_mpc, i_rounds_ibr, params["n_ibr"] - 1))
-            # Solve the Best Response for the other vehicles
+        # Run Iterative Best Response
+        for i_ibr in range(params["n_ibr"]):
+            experiment.print_mpc_ibr_round(i_mpc, i_ibr, params)
 
-            # TODO:  Vehicle selections for best response calculation. default = All vehicles
-            vehicles_index_best_responders = range(len(other_vehicles))
+            vehicles_idx_best_responders = get_ibr_vehs_idxs(vehicles)
+            for ag_idx in vehicles_idx_best_responders:
+                        
+                response_vehinfo = vehsinfo_ibr[ag_idx]
 
-            for response_i in vehicles_index_best_responders:
+                max_dist_traveled = get_max_dist_traveled(response_vehinfo, params)
+                veh_idxs_in_mpc = get_within_range_other_vehicle_idxs(ag_idx, vehsinfo_ibr, max_dist_traveled)
 
-                response_veh_info = othervehs_ibr_info[response_i]
-                #TODO: Shift response and all other vehicles participating in optimization
+                ctrld_vehsinfo, obstacle_vehsinfo, cntrld_i = assign_shared_control(params, i_ibr, veh_idxs_in_mpc,
+                                                                                    vehicles_idx_best_responders,
+                                                                                    response_vehinfo, vehsinfo_ibr_pred)
 
-                # Select which vehicles should be included in the ado's MPC (3 cars ahead and 2 car behind)
-                veh_idxs_in_mpc = [
-                    j for j in range(len(other_x0)) if j != response_i and (-20 * response_veh_info.vehicle.L <= (
-                        other_x0[j][0] - response_veh_info.x0[0]) <= 20 * response_veh_info.vehicle.L)
-                ]
+                obstacle_vehsinfo = get_obstacle_vehs_closeby(response_vehinfo, ctrld_vehsinfo, obstacle_vehsinfo, distance_threshold=40.0)
+                obstacle_vehsinfo = get_closest_n_obstacle_vehs(response_vehinfo, ctrld_vehsinfo, obstacle_vehsinfo, max_num_obstacles=10,
+                                                                min_num_obstacles_ego=3)
 
-                # Choose which vehicles should be in the shared control
-                cntrld_vehicle_info = []
-                cntrld_i = []
+                warmstarts_dict = generate_warmstarts(response_vehinfo, world, vehsinfo_ibr_pred, params, u_mpc[ag_idx],
+                                                      vehsinfo_ibr[ag_idx].u)
 
-                cntrld_scheduler = params["shrd_cntrl_scheduler"]
-                if cntrld_scheduler == "constant":
-                    if i_rounds_ibr >= params["rnds_shrd_cntrl"]:
-                        n_cntrld = 0
-                    else:
-                        n_cntrld = params["n_cntrld"]
-                elif cntrld_scheduler == "linear":
-                    n_cntrld = max(0, params["n_cntrld"] - i_rounds_ibr)
-                else:
-                    raise Exception("Shrd Controller Not Specified")
-
-                if n_cntrld > 0:
-                    delta_x = [response_veh_info.x0[0] - x[0] for x in other_x0]
-                    sorted_i = [
-                        i for i in np.argsort(delta_x)
-                        if (delta_x[i] > 0 and i in veh_idxs_in_mpc and i in vehicles_index_best_responders)
-                    ]  # This necessary but could limit fringe best response interactions with outside best response
-                    cntrld_i = sorted_i[:params["n_cntrld"] - 1]
-                    if len(cntrld_i) > 0:
-                        cntrld_vehicle_info = [
-                            vehs_ibr_info_predicted[i] for i in range(len(vehs_ibr_info_predicted)) if i in cntrld_i
-                        ]
-
-                    veh_idxs_in_mpc = [idx for idx in veh_idxs_in_mpc if idx not in cntrld_i]
-
-                nonresponse_veh_info = [vehs_ibr_info_predicted[i] for i in veh_idxs_in_mpc]
-
-                warm_starts = generate_warm_starts(response_veh_info.vehicle, world, response_veh_info.x0,
-                                                   vehs_ibr_info_predicted, params, all_other_u_mpc[response_i],
-                                                   othervehs_ibr_info[response_i].u)
-
-                solve_again, solve_number, max_slack_ibr, debug_flag, = (True, 0, np.infty, False)
-
-                #TODO 11/23/21:  We should also warm start the trajectories for controlled vehicle by cp.copy cntrld_veh_info and updating trajectory
-
-                # 6/9/21:  Wha are these ambulance parameters? Will they matter anymore?
-                params["k_solve_amb_min_distance"] = 50
-                solver_params = {}
-                solver_params["solve_amb"] = (True if (i_rounds_ibr < params["k_solve_amb_max_ibr"]) else False)
-                solver_params["slack"] = (True if i_rounds_ibr <= params["k_max_round_with_slack"] else False)
-                solver_params["n_warm_starts"] = params["default_n_warm_starts"]
-                solver_params["k_CA"] = params["k_CA_d"]
-                solver_params["k_CA_power"] = params["k_CA_power"]
-
-                # TODO:  Some response vehicles are not being solved for and we can just set them to constant velocity
-                # if (response_i not in veh_idxs_in_amb_mpc):
-                #     solver_params["constant_v"] = True
-
-                print("...Veh %02d Solver:" % response_i)
+                experiment.print_vehicle_id(ag_idx)
+                # Try to solve MPC multiple times
+                # each time increasing # warmstarts and slack cost
+                solve_number = 0
                 while solve_number < params["k_max_solve_number"]:
-                    solver_params["k_slack"] = (params["k_slack_d"] * 10**solve_number)
-                    solver_params["n_warm_starts"] = (solver_params["n_warm_starts"] + 5 * solve_number)
-                    if solve_number > 2:
-                        debug_flag = True
-                    warmstarts_subset = warm_profiles_subset(solver_params["n_warm_starts"], warm_starts)
+                    s_params = generate_solver_params(params, i_ibr, solve_number)
+                    warmstarts_subset = get_subset_warmstarts(s_params["n_warm_starts"], warmstarts_dict)
 
-                    if psutil.virtual_memory().percent >= 95.0:
-                        raise Exception("Virtual Memory is too high, exiting to save computer")
-                    start_ipopt_time = time.time()
+                    experiment.check_machine_memory()
 
-                    ipopt_params = {"print_level": params["print_level"]}
+                    t_start_ipopt = time.time()
+                    experiment.print_mpc_ibr_round(i_mpc, i_ibr, params)
+                    experiment.print_nc_nnc(ctrld_vehsinfo, obstacle_vehsinfo)
+                    with redirect_stdout(ipopt_out_file):
+                        
+                        sol = parallel_mpc_solve(warmstarts_subset, response_vehinfo, world, s_params, params, ipopt_params,
+                            obstacle_vehsinfo, ctrld_vehsinfo)
+                        solution_logger.add_log(MPCSolverLog(sol, i_mpc, i_ibr, response_vehinfo.vehicle.agent_id, solve_number))
 
-                    with redirect_stdout(out_file):
-                        print("MPC %d, IBR %d / %d" % (i_mpc, i_rounds_ibr, params["n_ibr"] - 1))
-                        print("....# Cntrld Vehicles: %d # Non-Response: %d " %
-                              (len(cntrld_vehicle_info), len(nonresponse_veh_info)))
-                        solved, min_cost_ibr, max_slack_ibr, x_ibr, x_des_ibr, u_ibr, key_ibr, debug_list, cntrld_vehicle_trajectories = solve_warm_starts(
-                            warmstarts_subset, response_veh_info, world, solver_params, params, ipopt_params,
-                            nonresponse_veh_info, cntrld_vehicle_info, debug_flag)
-                    end_ipopt_time = time.time()
+                    if sol.max_slack < min(params["k_max_slack"], np.infty):
+                        vehsinfo_ibr[ag_idx].update_state(sol.u_ego, sol.x_ego, sol.xd_ego)
+                        vehsinfo_ibr_pred[ag_idx].update_state(sol.u_ego, sol.x_ego, sol.xd_ego)
 
-                    if max_slack_ibr <= params["k_max_slack"] and max_slack_ibr < np.infty:
-                        othervehs_ibr_info[response_i].update_state(u_ibr, x_ibr, x_des_ibr)
-                        vehs_ibr_info_predicted[response_i].update_state(u_ibr, x_ibr, x_des_ibr)
-                        # New 11/18: Also update the controlled veh info within the predicted positions
-                        for cntrld_i_idx, vehicle_id in enumerate(cntrld_i):
-                            x_jc, x_des_jc, u_jc = cntrld_vehicle_trajectories[cntrld_i_idx]
-                            vehs_ibr_info_predicted[vehicle_id].update_state(u_jc, x_jc, x_des_jc)
-
-                        print("......Solved.  veh: %02d | mpc: %d | ibr: %d | solver time: %0.1f s" %
-                              (response_i, i_mpc, i_rounds_ibr, end_ipopt_time - start_ipopt_time))
+                        for cntrld_i_idx, veh_id in enumerate(cntrld_i):
+                            c_veh_traj = sol.cntrld_vehicle_trajectories[cntrld_i_idx]
+                            vehsinfo_ibr_pred[veh_id].update_state_from_traj(c_veh_traj)
+                        experiment.print_solved_status(ag_idx, i_mpc, i_ibr, t_start_ipopt)
                         break
                     else:
-                        print(
-                            "......Re-solve. veh: %02d | mpc: %d | ibr: %d | Slack %.05f > thresh %.05f  | solver time: %0.1f"
-                            % (response_i, i_mpc, i_rounds_ibr, max_slack_ibr, params["k_max_slack"],
-                               end_ipopt_time - start_ipopt_time))
+                        experiment.print_not_solved_status(ag_idx, i_mpc, i_ibr, sol.max_slack, t_start_ipopt)
                         solve_number += 1
-                        if (solve_number == params["k_max_solve_number"]) and solver_params["solve_amb"]:
-                            print("Re-solving without ambulance")
-                            solve_number = 0
-                            solver_params["solve_amb"] = False
 
                 if solve_number == params["k_max_solve_number"]:
-                    if i_rounds_ibr > 0:
-                        u_ibr, x_ibr, x_des_ibr = warm_starts['previous_ibr']
+                    if i_ibr > 0:
+                        default_traj = warmstarts_dict['previous_ibr']
                     else:
-                        u_ibr, x_ibr, x_des_ibr = warm_starts['previous_mpc_hold']
+                        default_traj = warmstarts_dict['previous_mpc_hold']
 
-                    othervehs_ibr_info[response_i].update_state(u_ibr, x_ibr, x_des_ibr)
-                    vehs_ibr_info_predicted[response_i].update_state(u_ibr, x_ibr, x_des_ibr)
+                    vehsinfo_ibr[ag_idx].update_state_from_traj(default_traj)
+                    vehsinfo_ibr_pred[ag_idx].update_state_from_traj(default_traj)
+                    experiment.print_max_solved_status(ag_idx, i_mpc, i_ibr, sol.max_slack, t_start_ipopt)
 
-                    print(
-                        "......Reached max # resolves. veh: %02d | mpc: %d | ibr: %d | Slack %.05f > thresh %.05f  | solver time: %0.1f"
-                        % (response_i, i_mpc, i_rounds_ibr, max_slack_ibr, params["k_max_slack"],
-                           end_ipopt_time - start_ipopt_time))
+                experiment.save_ibr(i_mpc, i_ibr, ag_idx, vehsinfo_ibr_pred)
 
-                if params["save_ibr"]:
-                    other_x_ibr_temp = np.array([veh.x for veh in vehs_ibr_info_predicted])
-                    other_u_ibr_temp = np.array([veh.u for veh in vehs_ibr_info_predicted])
-                    other_xd_ibr_temp = np.array([veh.xd for veh in vehs_ibr_info_predicted])
-                    file_prefix = log_dir + "data/" + "ibr_m%03di%03da%03d" % (i_mpc, i_rounds_ibr, response_i)
-                    np.save(open(file_prefix + "x.npy", 'wb'), other_x_ibr_temp)
-                    np.save(open(file_prefix + "u.npy", 'wb'), other_u_ibr_temp)
-                    np.save(open(file_prefix + "xd.npy", 'wb'), other_xd_ibr_temp)
-
-            # TODO: Scale the units to a region of interest so that xj is always in reference to xi
-            other_x_ibr_temp = np.array([veh.x for veh in othervehs_ibr_info])
-            other_u_ibr_temp = np.array([veh.u for veh in othervehs_ibr_info])
-            other_xd_ibr_temp = np.array([veh.xd for veh in othervehs_ibr_info])
-
-            #TODO: Convert back to global units
+            other_x_ibr_temp = np.stack([veh.x for veh in vehsinfo_ibr])
             all_other_x_ibr_g = [x for x in other_x_ibr_temp]
 
-            if params["save_ibr"]:
-                file_prefix = log_dir + "data/" + "ibr_m%03di%03d" % (i_mpc, i_rounds_ibr)
-                np.save(open(file_prefix + "x.npy", 'wb'), other_x_ibr_temp)
-                np.save(open(file_prefix + "u.npy", 'wb'), other_u_ibr_temp)
-                np.save(open(file_prefix + "xd.npy", 'wb'), other_xd_ibr_temp)
-                # save_state(log_dir + "data/" + "ibr_m%03di%03d" % (i_mpc, i_rounds_ibr), None, None, None,
-                #            all_other_x_ibr_g, other_u_ibr_temp, other_xd_ibr_temp)
+            experiment.save_ibr(i_mpc, i_ibr, None, vehsinfo_ibr_pred)
 
-        actual_t, all_other_u_mpc, all_other_x_executed, all_other_u_executed, xothers_actual, uothers_actual, = update_sim_states(
-            othervehs_ibr_info, all_other_x_ibr_g, params, actual_t, log_dir, i_mpc, xothers_actual, uothers_actual)
+        t_actual, u_mpc, x_executed, _, x_actual, u_actual, = experiment.update_sim_states(
+            vehsinfo_ibr, all_other_x_ibr_g, t_actual, i_mpc, x_actual, u_actual)
 
-        collision = check_collisions(other_vehicles, all_other_x_executed)
+        collision = experiment.check_collisions(vehicles, x_executed)
+        experiment.save_trajectory(np.array(x_actual), np.array(u_actual))
+        solution_logger.write()
         if collision:
-            out_file.close()
-            print("Simulation Ended Early due to collision!  Runtime: %s" %
-                  (datetime.timedelta(seconds=(time.time() - t_start_time))))
-            return xothers_actual, uothers_actual
+            experiment.print_sim_exited_early("collision!")
+            ipopt_out_file.close()
+            return x_actual, u_actual
 
-    out_file.close()
-
-    print("Simulation Done!  Runtime: %s" % (datetime.timedelta(seconds=(time.time() - t_start_time))))
-
-    return xothers_actual, uothers_actual
-
-
-def get_collision_pairs(all_other_vehicles: List[Vehicle], all_other_x_executed: List[np.array]) -> List[tuple]:
-    car_collisions = []
-    for i in range(len(all_other_vehicles)):
-        for j in range(len(all_other_vehicles)):
-            if i >= j:
-                continue
-            else:
-                collision = check_collision(all_other_vehicles[i], all_other_vehicles[j], all_other_x_executed[i],
-                                            all_other_x_executed[j])
-                if collision:
-                    car_collisions += [(i, j)]
-    return car_collisions
-
-
-def check_collisions(all_other_vehicles: List[Vehicle], all_other_x_executed: List[np.array]) -> bool:
-    car_collisions = get_collision_pairs(all_other_vehicles, all_other_x_executed)
-    if len(car_collisions) > 0:
-        return True
-    else:
-        return False
-
-
-def check_collision(vehicle_a: Vehicle, vehicle_b: Vehicle, X_a: np.array, X_b: np.array) -> bool:
-    for t in range(X_a.shape[1]):
-        x_a, y_a, theta_a = X_a[0, t], X_a[1, t], X_a[2, t]
-        x_b, y_b, theta_b = X_b[0, t], X_b[1, t], X_b[2, t]
-        box_a = box(x_a - vehicle_a.L / 2.0, y_a - vehicle_a.W / 2.0, x_a + vehicle_a.L / 2.0, y_a + vehicle_a.W / 2.0)
-        rotated_box_a = rotate(box_a, theta_a, origin='center', use_radians=True)
-
-        box_b = box(x_b - vehicle_b.L / 2.0, y_b - vehicle_b.W / 2.0, x_b + vehicle_b.L / 2.0, y_b + vehicle_b.W / 2.0)
-        rotated_box_b = rotate(box_b, theta_b, origin='center', use_radians=True)
-
-        if rotated_box_a.intersects(rotated_box_b):
-            return True
-
-    return False
-
-
-def vehicles_within_range(other_x0, amb_x0, distance_from_ambulance):
-
-    veh_idxs = [i for i in range(len(other_x0)) if abs(other_x0[i][0] - amb_x0[0]) <= distance_from_ambulance]
-
-    return veh_idxs
-
-
-def update_sim_states(othervehs_ibr_info, all_other_x_ibr_g, params, actual_t, log_dir, i_mpc, xothers_actual,
-                      uothers_actual):
-    ''' Update the simulation states with the solutions from Iterative Best Response / MPC round 
-        We update multiple sim steps at a time (params["number_cntrl_pts_executed"])    
-    '''
-
-    all_other_u_mpc = [cp.deepcopy(veh.u) for veh in othervehs_ibr_info]
-    all_other_x_executed = [
-        all_other_x_ibr_g[i][:, :params["number_ctrl_pts_executed"] + 1] for i in range(params["n_other"])
-    ]
-    all_other_u_executed = [
-        othervehs_ibr_info[i].u[:, :params["number_ctrl_pts_executed"]] for i in range(params["n_other"])
-    ]
-
-    # Append to the executed trajectories history of x
-    for i in range(params["n_other"]):
-        xothers_actual[i][:, actual_t:actual_t + params["number_ctrl_pts_executed"] + 1] = all_other_x_executed[i]
-        uothers_actual[i][:, actual_t:actual_t + params["number_ctrl_pts_executed"]] = all_other_u_executed[i]
-
-    # SAVE STATES AND PLOT
-    file_name = log_dir + "data/" + "mpc_%03d" % (i_mpc)
-    print("Saving MPC Rd %03d / %03d to ... %s" % (i_mpc, params["n_mpc"] - 1, file_name))
-
-    if params["save_state"]:
-        other_u_ibr_temp = [veh.u for veh in othervehs_ibr_info]
-        other_xd_ibr_temp = [veh.xd for veh in othervehs_ibr_info]
-
-        save_state(file_name, None, None, None, all_other_x_ibr_g, other_u_ibr_temp, other_xd_ibr_temp)
-        save_state(log_dir + "data/" + "all_%03d" % (i_mpc),
-                   None,
-                   None,
-                   None,
-                   xothers_actual,
-                   uothers_actual,
-                   None,
-                   end_t=actual_t + params["number_ctrl_pts_executed"] + 1)
-
-    actual_t += params["number_ctrl_pts_executed"]
-
-    return actual_t, all_other_u_mpc, all_other_x_executed, all_other_u_executed, xothers_actual, uothers_actual
+    experiment.print_sim_finished()
+    ipopt_out_file.close()
+    return x_actual, u_actual
 
 
 if __name__ == "__main__":
@@ -425,6 +222,10 @@ if __name__ == "__main__":
         # Save the vehicles and world for this simulation
         pickle.dump(all_other_vehicles, open(log_dir + "/other_vehicles.p", "wb"))
         pickle.dump(world, open(log_dir + "/world.p", "wb"))
+        pickle.dump(all_other_x0, open(log_dir + "/x0.p", "wb"))
+        if args.plot_initial_positions:
+            plot_initial_positions(log_dir, world, all_other_vehicles, all_other_x0)
+
         print("Results saved in log %s:" % log_dir)
     else:
         print("Preloading settings from log %s" % args.load_log_dir)

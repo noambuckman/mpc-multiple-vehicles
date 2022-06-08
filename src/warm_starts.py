@@ -1,7 +1,8 @@
 import numpy as np
 from src.traffic_world import TrafficWorld
-
-# from simple_optimizations import spatial_only_optimization
+from src.vehicle_mpc_information import Trajectory
+import random
+from typing import Dict
 
 
 def generate_warm_x(car_mpc, world: TrafficWorld, x0: np.array, average_v=None):
@@ -171,17 +172,19 @@ def generate_warm_u(N: int, car_mpc, car_x0):
     return u_warm_profiles, ux_warm_profiles
 
 
-def generate_warm_starts(vehicle,
+def generate_warmstarts(response_vehicle_info,
                          world: TrafficWorld,
-                         x0: np.array,
                          other_veh_info,
                          params: dict,
-                         u_mpc_previous=None,
-                         u_ibr_previous=None):
+                         u_mpc_previous: np.array =None,
+                         u_ibr_previous: np.array=None):
     """ Generate a dictionary of warm starts for the solver.  
     
         Returns:  Dictionary with warm_start_name: (state, control, desired_state)
     """
+    vehicle = response_vehicle_info.vehicle
+    x0 = response_vehicle_info.x0
+
     other_x0 = [veh_info.x0 for veh_info in other_veh_info]
 
     u_warm_profiles, ux_warm_profiles = generate_warm_u(params["N"], vehicle, x0)
@@ -231,20 +234,28 @@ def generate_warm_starts(vehicle,
             x_des_warm,
         ]
 
-    return ux_warm_profiles
+    warm_start_trajectories = {}
+    for key, (u, x, xd) in ux_warm_profiles.items():
+
+        warm_start_trajectories[key] = Trajectory(u=u, x=x, xd=xd)
+
+    return warm_start_trajectories
 
 
-# def generate_warm_starts_advanced(x_initial, u_initial, xd_initial, x_cntrld_initial, x_non_response, response_veh,
-#                                   cntrld_veh, non_response_veh, distance_threshold):
-#     ''' Generate warm_starts that first solve an initial relaxed optimization
-#     '''
+def get_subset_warmstarts(n_warm_keys: int, ux_warm_profiles: Dict[str, Trajectory]):
+    '''choose randomly n_warm_keys keys from ux_warm_profiles and return the subset'''
 
-#     ux_warm_profiles = {}
+    priority_warm_keys = []
+    if n_warm_keys >= 1 and "previous_mpc_hold" in ux_warm_profiles:
+        priority_warm_keys += ["previous_mpc_hold"]
+    if n_warm_keys >= 2 and "previous_ibr" in ux_warm_profiles:
+        priority_warm_keys += ["previous_ibr"]
+    remaining_n_keys = n_warm_keys - len(priority_warm_keys)
+    remaining_keys = [k for k in ux_warm_profiles.keys() if k not in priority_warm_keys]
+    random.shuffle(remaining_keys)
 
-#     x_response_warm, x_cntrld_warm = spatial_only_optimization(x_initial, x_cntrld_initial, x_non_response,
-#                                                                response_veh, cntrld_veh, non_response_veh,
-#                                                                distance_threshold)
+    warm_subset_keys = priority_warm_keys + remaining_keys[:remaining_n_keys]
 
-#     ux_warm_profiles["previous_mpc_spatial"] = [u_initial, x_response_warm, xd_initial]
+    ux_warm_profiles_subset = dict((k, ux_warm_profiles[k]) for k in warm_subset_keys)
 
-#     return ux_warm_profiles
+    return ux_warm_profiles_subset

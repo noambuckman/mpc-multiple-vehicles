@@ -37,7 +37,7 @@ class IBRParser(ArgumentParser):
         self.add_argument('--print-flag', action='store_true')
 
         # MPC Settings
-        self.add_argument('--T', type=int, default=5, help="Planning horizon for MPC")
+        self.add_argument('--T', type=float, default=5.0, help="Planning horizon for MPC")
         self.add_argument('--dt', type=float, default=0.2, help="Time discretization for MPC")
         self.add_argument('--p-exec',
                           type=float,
@@ -49,7 +49,7 @@ class IBRParser(ArgumentParser):
                           type=int,
                           default=3,
                           help="Number of rounds of iterative best response before excuting mpc")
-        self.add_argument('--n-cntrld', type=int, default=2, help="How many cars does the response control in planning")
+        self.add_argument('--n-cntrld', type=int, default=1, help="How many cars does the response control in planning")
         self.add_argument('--rnds-shrd-cntrl', type=int, default=2)
         self.add_argument('--shrd-cntrl-scheduler', type=str, default="constant")
 
@@ -88,14 +88,18 @@ class IBRParser(ArgumentParser):
         self.add_argument('--k-slack-d', type=float, default=1000, help="Default constant for slack collision costs")
         self.add_argument('--k-CA-d', type=float, default=0.05, help="Default collision avoidance cost")
         self.add_argument('--k-CA-power', type=float, default=1.0, help="Default collision avoidance power")
-        self.add_argument('--wall-CA', type=int, default=1, help="Add collision avoidance cost for approaching walls")
+        self.add_argument('--wall-CA', type=str2bool, default=True, help="Add collision avoidance cost for approaching walls")
         self.add_argument('--print-level', type=int, default=0, help="Print level for IPOPT solver")
         self.add_argument('--k-lat', type=float, default=None, help="lateral cost for vehicles")
 
         self.add_argument('--k-politeness', type=float, default=None, help="parameter for IDM")
-
+        self.add_argument('--strict-wall-constraint', type=str2bool, default=False, help="Turn on a strict grass constraint")
         self.add_argument('--safety-constraint', type=str2bool, default=False, help="Stopping constraint")
-
+        self.add_argument('--plot-initial-positions', type=str2bool, default=True, help="Plot & save initial conditions")
+        self.add_argument('--max-cpu-time', type=float, default=10.0, help="Maximum solve time for IPOPT")
+        self.add_argument('--solver-mode', type=str, default="pickled", help="Use a pre-pickled solver for the mpc")
+        self.add_argument('--precompiled-solver-dir', type=str, default="/home/nbuckman/mpc-multiple-vehicles/src/compiled_code/", help="Location of any precompiled solver")
+        self.add_argument('--lane-width', type=float, default=4.0, help="Lane width")
 
 def str2bool(v):
     if isinstance(v, bool):
