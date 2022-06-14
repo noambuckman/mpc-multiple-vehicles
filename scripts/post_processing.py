@@ -126,6 +126,8 @@ def animate_cars(args, params, log_directory, trajectories, vehicles, world):
 
     # log_string = log_directory.split('/')[-2]
     log_string = log_directory
+    if log_string[-1] == "/":
+        log_string = log_string[:-1]
     vid_dir = os.path.join(log_directory, 'vids/')
     os.makedirs(vid_dir, exist_ok=True)
     print("Video directory", vid_dir)
