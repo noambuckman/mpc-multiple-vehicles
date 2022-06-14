@@ -2,7 +2,7 @@ import numpy as np
 import casadi as cas
 import scipy.optimize as optimize
 from typing import Tuple
-
+from src.desired_trajectories import LaneChangeManueverPiecewise
 
 class Vehicle(object):
     def __init__(self, dt):
@@ -244,7 +244,7 @@ class Vehicle(object):
 
         x_des = np.zeros(shape=(3, N + 1))
         for k in range(N + 1):
-            x_des[:, k:k + 1] = self.fd(x[-1, k])
+            x_des[:, k:k + 1] = self.fd(x[-1, k]) + x_0[0:3]
 
         return x, x_des
 
@@ -289,6 +289,17 @@ class Vehicle(object):
     def update_desired_lane_from_x0(self, world, x0, right_direction=True):
         new_lane_number = world.get_lane_from_x0(x0)
         self.fd = self.gen_f_desired_lane(world, new_lane_number, right_direction)
+
+
+    def update_default_desired_lane_traj(self, world, x0):
+        ''' '''
+        new_lane_number = world.get_lane_from_x0(x0)
+        desired_y = world.get_lane_centerline_y(new_lane_number, right_direction=True)
+        delta_y = desired_y - x0[1]
+        
+        self.piecewise_desired = LaneChangeManueverPiecewise(5.0, 5.0, 9999999, delta_y)
+        self.fd = self.piecewise_desired.gen_f_desired_3piecewise_poly()
+
 
 
     def get_ellipse(self, L, W):
