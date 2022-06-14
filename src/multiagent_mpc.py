@@ -5,7 +5,7 @@ from typing import List
 
 from src.geometry_helper import minkowski_ellipse_collision_distance
 from src.vehicle_parameters import VehicleParameters
-
+from src.desired_trajectories import PiecewiseDesiredTrajectory
 
 class NonconvexOptimization(object):
     def __init__(self):
@@ -215,19 +215,23 @@ class MultiMPC(NonconvexOptimization):
         self.k_CA_power = cas.MX.sym('k_CA_power', 1, 1)
 
         self.n_coeff_d = n_coeff_d
-        self.p_x_coeff_d = cas.MX.sym('xd_coeff', self.n_coeff_d, 1)
-        self.p_y_coeff_d = cas.MX.sym('yd_coeff', self.n_coeff_d, 1)
-        self.p_phi_coeff_d = cas.MX.sym('phid_coeff', self.n_coeff_d, 1)
-        self.p_x_coeff_d_ctrld = [cas.MX.sym('xd_coeff%02d', self.n_coeff_d, 1) for i in range(self.n_vehs_cntrld)]
-        self.p_y_coeff_d_ctrld = [cas.MX.sym('yd_coeff%02d', self.n_coeff_d, 1) for i in range(self.n_vehs_cntrld)]
-        self.p_phi_coeff_d_ctrld = [cas.MX.sym('phid_coeff%02d', self.n_coeff_d, 1) for i in range(self.n_vehs_cntrld)]
+        self.n_piecewise_splines = 3 # Hardcoded, number of splines allowed
+        self.p_x_coeff_d = cas.MX.sym('xd_coeff', self.n_coeff_d, self.n_piecewise_splines)
+        self.p_y_coeff_d = cas.MX.sym('yd_coeff', self.n_coeff_d, self.n_piecewise_splines)
+        self.p_phi_coeff_d = cas.MX.sym('phid_coeff', self.n_coeff_d, self.n_piecewise_splines)
+        self.p_spline_lengths = cas.MX.sym('spline_lengths', self.n_piecewise_splines, 1)
+
+        self.p_x_coeff_d_ctrld = [cas.MX.sym('xd_coeff%02d'%i, self.n_coeff_d, self.n_piecewise_splines) for i in range(self.n_vehs_cntrld)]
+        self.p_y_coeff_d_ctrld = [cas.MX.sym('yd_coeff%02d'%i, self.n_coeff_d, self.n_piecewise_splines) for i in range(self.n_vehs_cntrld)]
+        self.p_phi_coeff_d_ctrld = [cas.MX.sym('phid_coeff%02d'%i, self.n_coeff_d, self.n_piecewise_splines) for i in range(self.n_vehs_cntrld)]
+        self.p_spline_lengths_ctrld = [cas.MX.sym('spline_lengths%02d'%i, self.n_piecewise_splines, 1) for i in range(self.n_vehs_cntrld)]
 
 
         self._p_list = mpcp_to_nlpp(self.p_dt, self.x0_ego, self.p_ego, self.p_theta_i_ego, self.p_theta_ic, self.p_theta_inc,
                                     self.x0_cntrld, self.p_cntrld_list, self.x0_allother, self.p_other_vehicle_list,
                                     self.x_other, self.k_slack, self.k_CA, self.k_CA_power, 
-                                    self.p_x_coeff_d, self.p_y_coeff_d, self.p_phi_coeff_d, 
-                                    self.p_x_coeff_d_ctrld, self.p_y_coeff_d_ctrld, self.p_phi_coeff_d_ctrld)
+                                    self.p_x_coeff_d, self.p_y_coeff_d, self.p_phi_coeff_d, self.p_spline_lengths,
+                                    self.p_x_coeff_d_ctrld, self.p_y_coeff_d_ctrld, self.p_phi_coeff_d_ctrld, self.p_spline_lengths_ctrld)
 
         if params is None:
             params = {}
@@ -250,14 +254,19 @@ class MultiMPC(NonconvexOptimization):
                                  self.slack_i_jnc, self.slack_ic_jnc, self.slack_i_jc, self.slack_ic_jc,
                                  self.top_wall_slack, self.bottom_wall_slack, self.top_wall_slack_c,
                                  self.bottom_wall_slack_c, 
-                                 self.p_x_coeff_d, self.p_y_coeff_d, self.p_phi_coeff_d, self.p_x_coeff_d_ctrld, self.p_y_coeff_d_ctrld, self.p_phi_coeff_d_ctrld)
+                                 self.p_x_coeff_d, self.p_y_coeff_d, self.p_phi_coeff_d, self.p_spline_lengths,
+                                 self.p_x_coeff_d_ctrld, self.p_y_coeff_d_ctrld, self.p_phi_coeff_d_ctrld, self.p_spline_lengths_ctrld)
         # Total optimization costs
         self.solver, self.solver_prefix = self.get_nlpsol(ipopt_params)
 
-    def add_vehicle_constraints(self, p_ego, x_ego, u_ego, xd_ego, x0_ego, x_coeff_d, y_coeff_d, phi_coeff_d, dt):
-        ego_lane_number = p_ego.desired_lane
+    def add_vehicle_constraints(self, p_ego, x_ego, u_ego, xd_ego, x0_ego, x_coeff_d, y_coeff_d, phi_coeff_d, spline_lengths, dt):
+        # ego_lane_number = p_ego.desired_lane
         # fd = self.gen_f_desired_lane(world, ego_lane_number, right_direction=True)  # TODO:  This could mess things up
-        fd = self.gen_f_desired_lane_poly(x_coeff_d, y_coeff_d, phi_coeff_d)
+
+        desired_traj = PiecewiseDesiredTrajectory().from_array(x_coeff_d, y_coeff_d, phi_coeff_d, spline_lengths)
+
+        fd = desired_traj.gen_f_desired_3piecewise_poly()
+        # fd = gen_f_desired_3piecewise_coeff(x_coeff_d, y_coeff_d, phi_coeff_d, spline_lengths)
         f = self.gen_f_vehicle_dynamics(p_ego, model="kinematic_bicycle")
         self.add_dynamics_constraints_g(x_ego, u_ego, xd_ego, x0_ego, f, fd, dt)
         self.add_state_constraints_g(x_ego, u_ego, p_ego)
@@ -266,17 +275,18 @@ class MultiMPC(NonconvexOptimization):
                             x_ctrld, u_ctrld, xd_ctrld, x0_ctrld, p_ctrld_list, x_other, p_other_vehicle_list, dt,
                             slack_i_jnc, slack_ic_jnc, slack_i_jc, slack_ic_jc, top_wall_slack, bottom_wall_slack,
                             top_wall_slack_c, bottom_wall_slack_c, 
-                            p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, p_x_coeff_d_ctrld, p_y_coeff_d_ctrld, p_phi_coeff_d_ctrld):
+                            p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, p_spline_lengths,
+                            p_x_coeff_d_ctrld, p_y_coeff_d_ctrld, p_phi_coeff_d_ctrld, p_spline_lengths_ctrld):
         ''' Add all the constraints the MPC
             1) vehicle constraints related to their state and dynamics
             2) positive constraints on the slack variables
             3) collision avoidance and velocity safety constraints 
         
         '''
-        self.add_vehicle_constraints(p_ego, x_ego, u_ego, xd_ego, x0_ego,  p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, dt)
+        self.add_vehicle_constraints(p_ego, x_ego, u_ego, xd_ego, x0_ego,  p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, p_spline_lengths, dt)
 
         for j in range(n_vehs_cntrld):
-            self.add_vehicle_constraints(p_ctrld_list[j], x_ctrld[j], u_ctrld[j], xd_ctrld[j], x0_ctrld[j], p_x_coeff_d_ctrld[j], p_y_coeff_d_ctrld[j], p_phi_coeff_d_ctrld[j], dt)
+            self.add_vehicle_constraints(p_ctrld_list[j], x_ctrld[j], u_ctrld[j], xd_ctrld[j], x0_ctrld[j], p_x_coeff_d_ctrld[j], p_y_coeff_d_ctrld[j], p_phi_coeff_d_ctrld[j], p_spline_lengths_ctrld[j], dt)
 
         self.constrain_slack_positive(n_vehs_cntrld, n_other_vehicle, slack_i_jc, slack_i_jnc, slack_ic_jc,
                                       slack_ic_jnc, top_wall_slack, bottom_wall_slack, top_wall_slack_c,
@@ -457,7 +467,7 @@ class MultiMPC(NonconvexOptimization):
             self.add_equal_constraint(X[:, k + 1], self.F_kutta(f, X[:, k], U[:, k], dt))
 
         for k in range(N + 1):
-            self.add_equal_constraint(X_desired[:, k], fd(X[-1, k]))
+            self.add_equal_constraint(X_desired[:, k], fd(X[-1, k]) + x0[0:3])
 
         self.add_equal_constraint(X[:, 0], x0)
 
@@ -498,6 +508,16 @@ class MultiMPC(NonconvexOptimization):
         fd = cas.Function('fd', [s], [des_traj], ['s'], ['des_traj'])
         return fd
 
+
+    def gen_f_desired_3piecewise_poly(self, poly1, poly2, poly3, L1, L2, L3):
+        ''' Generate a piecewise function consisting of polynomials'''
+
+        
+        s = cas.MX.sym('s')
+
+        fd_piecewise = poly1 * cas.fmax(cas.fmin(s - 0, L1), 0)  + poly2 * cas.fmax(cas.fmin(s - L1, L2), 0) + poly3 * cas.fmax(cas.fmin(s - L1 - L2, L3), 0)
+
+        return cas.Function('fd', [s], [fd_piecewise], ['s'], ['des_traj'])
 
 
     def gen_f_vehicle_dynamics(self, p_veh, model: str = "kinematic_bicycle"):
@@ -1147,7 +1167,8 @@ def get_vehicle_circles(x_state, dx=1.075, r=1.77):
 
 def mpcp_to_nlpp(p_dt, x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld, p_cntrld_list, x0_allother,
                  p_other_vehicle_list, x_other_nc, k_slack, k_CA, k_CA_power,
-                 p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, p_x_coeff_d_ctrld, p_y_coeff_d_ctrld, p_phi_coeff_d_ctrld):
+                 p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, spline_lengths,
+                 p_x_coeff_d_ctrld, p_y_coeff_d_ctrld, p_phi_coeff_d_ctrld, spline_lengths_ctrld):
     ''' Converts 3 seperate parameter lists to a single long vector np X 1'''
     # Add ego parameters
     long_list = []
@@ -1183,14 +1204,19 @@ def mpcp_to_nlpp(p_dt, x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, 
     long_list.append(k_CA)
     long_list.append(k_CA_power)
 
-    long_list.append(p_x_coeff_d)
-    long_list.append(p_y_coeff_d) 
-    long_list.append(p_phi_coeff_d)
+    n_coeff_d = p_x_coeff_d.shape[0]
+    n_splines = p_x_coeff_d.shape[1]
+
+    long_list.append(cas.reshape(p_x_coeff_d, (n_coeff_d * n_splines, 1)))
+    long_list.append(cas.reshape(p_y_coeff_d, (n_coeff_d * n_splines, 1)))
+    long_list.append(cas.reshape(p_phi_coeff_d, (n_coeff_d * n_splines, 1)))
+    long_list.append(spline_lengths)
 
     for i in range(len(x0_cntrld)):
-        long_list.append(p_x_coeff_d_ctrld[i]) 
-        long_list.append(p_y_coeff_d_ctrld[i]) 
-        long_list.append(p_phi_coeff_d_ctrld[i])
+        long_list.append(cas.reshape(p_x_coeff_d_ctrld[i], (n_coeff_d * n_splines, 1)))
+        long_list.append(cas.reshape(p_y_coeff_d_ctrld[i], (n_coeff_d * n_splines, 1)))
+        long_list.append(cas.reshape(p_phi_coeff_d_ctrld[i], (n_coeff_d * n_splines, 1)))
+        long_list.append(spline_lengths_ctrld[i])
 
     nlp_p = cas.vcat(long_list)
     return nlp_p
@@ -1205,7 +1231,8 @@ def nlpp_to_mpcp(nlp_p,
                  n_state=6,
                  n_ctrl=2,
                  n_desired=3,
-                 n_poly_coeff=4):
+                 n_poly_coeff=4,
+                 n_splines=3):
     ''' Convert from tall np X 1 vector of all parameters to split up by individual agents '''
     if p_size is None:
         raise Exception("Parameter list size not inputed as argument. Make sure to provide p_size")
@@ -1271,27 +1298,36 @@ def nlpp_to_mpcp(nlp_p,
     k_CA_power = nlp_p[idx:idx + 1]
     idx += 1
 
-    p_x_coeff_d = nlp_p[idx: idx + n_poly_coeff]
-    idx += n_poly_coeff
-    p_y_coeff_d = nlp_p[idx: idx + n_poly_coeff]
-    idx += n_poly_coeff 
-    p_phi_coeff_d = nlp_p[idx: idx + n_poly_coeff]
-    idx += n_poly_coeff
+    p_x_coeff_d = cas.reshape(nlp_p[idx : idx + n_poly_coeff*n_splines], (n_poly_coeff, n_splines))
+    idx += n_poly_coeff*n_splines
+    p_y_coeff_d = cas.reshape(nlp_p[idx : idx + n_poly_coeff*n_splines], (n_poly_coeff, n_splines))
+    idx += n_poly_coeff*n_splines 
+    p_phi_coeff_d = cas.reshape(nlp_p[idx : idx + n_poly_coeff*n_splines], (n_poly_coeff, n_splines))
+    idx += n_poly_coeff*n_splines
+    p_spline_lengths = nlp_p[idx: idx + n_splines]
+    idx += n_splines
+
 
     p_x_coeff_d_ctrld = []
     p_y_coeff_d_ctrld = []
     p_phi_coeff_d_ctrld = []
+    p_spline_lengths_ctrld = []
     for i in range(n_cntrld_vehicles):
-        p_x_coeff_d_ctrld[i] = nlp_p[idx : idx + n_poly_coeff] 
-        idx += n_poly_coeff
+        p_x_coeff_d_ctrld.append(cas.reshape(nlp_p[idx : idx + n_poly_coeff*n_splines], (n_poly_coeff, n_splines)))
+        idx += n_poly_coeff*n_splines
 
-        p_y_coeff_d_ctrld[i] = nlp_p[idx : idx + n_poly_coeff]
-        idx += n_poly_coeff 
+        p_y_coeff_d_ctrld.append(cas.reshape(nlp_p[idx : idx + n_poly_coeff*n_splines], (n_poly_coeff, n_splines)))
+        idx += n_poly_coeff*n_splines 
 
-        p_phi_coeff_d_ctrld[i] = nlp_p[idx : idx + n_poly_coeff]
-        idx += n_poly_coeff        
+        p_phi_coeff_d_ctrld.append(cas.reshape(nlp_p[idx : idx + n_poly_coeff*n_splines], (n_poly_coeff, n_splines)))
+        idx += n_poly_coeff*n_splines
 
-    return p_dt, x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld_list, p_cntrld_list, x0_other_vehicle, p_other_vehicle_list, x_other_nc, k_slack, k_CA, k_CA_power, p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, p_x_coeff_d_ctrld, p_y_coeff_d_ctrld, p_phi_coeff_d_ctrld
+        p_spline_lengths_ctrld.append(nlp_p[idx: idx + n_splines])
+        idx += n_splines
+
+                
+
+    return p_dt, x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld_list, p_cntrld_list, x0_other_vehicle, p_other_vehicle_list, x_other_nc, k_slack, k_CA, k_CA_power, p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, p_spline_lengths, p_x_coeff_d_ctrld, p_y_coeff_d_ctrld, p_phi_coeff_d_ctrld, p_spline_lengths_ctrld
 
 
 def mpcx_to_nlpx(n_other: int, x_ego, u_ego, xd_ego, x_ctrl: List, u_ctrl: List, xd_ctrl: List, s_i_jnc, s_ic_jnc,

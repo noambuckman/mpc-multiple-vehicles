@@ -8,23 +8,21 @@ from src.vehicle_parameters import VehicleParameters
 from src.traffic_world import TrafficWorld
 from src.vehicle import Vehicle
 from src.vehicle_mpc_information import VehicleMPCInformation, Trajectory
-
+from src.desired_trajectories import LaneChangeManueverPiecewise, PiecewiseDesiredTrajectory, LaneFollowingPiecewiseTrajectory
 
 class MPCSolverReturn(object):
-    def __init__(self, solved_status:bool, current_cost:float, max_slack:float, x_ego: np.array, xd_ego: np.array, u_ego: np.array, warm_key: str, debug_list: List, cntrld_vehicle_trajectories: List[np.array]):
+    def __init__(self, solved_status:bool, current_cost:float, max_slack:float, trajectory: Trajectory, warm_key: str, debug_list: List, cntrld_vehicle_trajectories: List[np.array]):
         self.solved_status = solved_status
         self.current_cost = current_cost 
         self.max_slack = max_slack
-        self.x_ego = x_ego 
-        self.xd_ego = xd_ego 
-        self.u_ego = u_ego
+        self.trajectory = trajectory
         self.warm_key = warm_key
         self.debug_list = debug_list
         self.cntrld_vehicle_trajectories = cntrld_vehicle_trajectories
 
 class MPCSolverReturnException(MPCSolverReturn):
     def __init__(self):
-        MPCSolverReturn.__init__(self, False, np.infty, np.infty, None, None, None, None, [], None)
+        MPCSolverReturn.__init__(self, False, np.infty, np.infty, None, None, [], None)
 
 class MPCSolverLog(object):
     def __init__(self, solver_return:MPCSolverReturn, i_mpc:int, i_ibr:int, agent_id:int, solve_i:int):
@@ -60,13 +58,31 @@ class MPCSolverLogger(object):
         return self.logs_indexed[(i_mpc, i_ibr, agent_id, solve_i)]
 
     
+# def parallel_mpc_solve(warmstart_dict: Dict[str, Trajectory],
+#                        response_veh_info: VehicleMPCInformation,
+#                        world: TrafficWorld, solver_params: dict, params: dict,
+#                        ipopt_params: dict,
+#                        nonresponse_veh_info: List[VehicleMPCInformation],
+#                        cntrl_veh_info: List[VehicleMPCInformation]) -> MPCSolverReturn:
 
-def parallel_mpc_solve(warmstart_dict: Dict[str, Trajectory],
-                       response_veh_info: VehicleMPCInformation,
-                       world: TrafficWorld, solver_params: dict, params: dict,
-                       ipopt_params: dict,
-                       nonresponse_veh_info: List[VehicleMPCInformation],
-                       cntrl_veh_info: List[VehicleMPCInformation]) -> MPCSolverReturn:
+#     ''' Only allow a single desired trajectory. This is the same before as before'''
+#     response_vehicle = response_veh_info.vehicle
+
+#     # desired_trajectories = LaneFollowingPiecewiseTrajectory(response_vehicle, world)
+
+#     # Generate dictionary with the single x_coeff_d
+#     warmstart_w_traj_dict = {}
+#     for warm_key, warm_traj in warmstart_dict.items():
+#         warmstart_w_traj_dict[warm_key] = (warm_traj, desired_trajectories)
+
+#     return parallel_mpc_solve_w_trajs(warmstart_w_traj_dict, response_veh_info, world, solver_params, params, ipopt_params, nonresponse_veh_info, cntrl_veh_info)
+
+def parallel_mpc_solve_w_trajs(warmstart_traj_dict: Dict[str, Tuple[Trajectory, PiecewiseDesiredTrajectory]],
+                                response_veh_info: VehicleMPCInformation,
+                                world: TrafficWorld, solver_params: dict, params: dict,
+                                ipopt_params: dict,
+                                nonresponse_veh_info: List[VehicleMPCInformation],
+                                cntrl_veh_info: List[VehicleMPCInformation]) -> MPCSolverReturn:
     ''' 1. Generate and reformat some variables to be fed into the call_mpc_solver method
         2. Parallelize and call the MPC solver for the dictionary of warm starts for the ego vehicle
     '''
@@ -94,14 +110,20 @@ def parallel_mpc_solve(warmstart_dict: Dict[str, Trajectory],
     theta_ego_i, theta_ic, theta_i_nc = get_svo_values(response_vehicle, cntrld_vehicles, nonresponse_vehicles)
 
 
-    x_coeff_d, y_coeff_d, phi_coeff_d = generate_desired_polynomial_coeff(response_vehicle, world)
-    print("ego coeff x, y, phi", x_coeff_d, y_coeff_d, phi_coeff_d)
+    # ego_desired_traj = generate_desired_polynomial_coeff(response_vehicle, world)
+    # x_coeff_d, y_coeff_d, phi_coeff_d = ego_desired_traj.x_coeff, ego_desired_traj.y_coeff, ego_desired_traj.phi_coeff
+    # print("ego coeff x, y, phi", x_coeff_d, y_coeff_d, phi_coeff_d)
 
+
+    # Generate lane following trajectories for ctrld vehicles 
     x_coeff_d_ctrld = [None for i in range(len(cntrld_vehicles))]
     y_coeff_d_ctrld = [None for i in range(len(cntrld_vehicles))]
     phi_coeff_d_ctrld = [None for i in range(len(cntrld_vehicles))]
+    spline_lengths_ctrld = [None for i in range(len(cntrld_vehicles))]
     for i, ctrld_vehicle in enumerate(cntrld_vehicles):
-        x_coeff_d_ctrld[i], y_coeff_d_ctrld[i], phi_coeff_d_ctrld[i] = generate_desired_polynomial_coeff(ctrld_vehicle, world)
+        cntrld_veh_desired_traj = LaneFollowingPiecewiseTrajectory(ctrld_vehicle, world)
+
+        x_coeff_d_ctrld[i], y_coeff_d_ctrld[i], phi_coeff_d_ctrld[i], spline_lengths_ctrld[i] = cntrld_veh_desired_traj.to_array()
         print("cntrld coeff %d"%i)
         print(x_coeff_d_ctrld[i], y_coeff_d_ctrld[i], phi_coeff_d_ctrld[i])
 
@@ -109,8 +131,8 @@ def parallel_mpc_solve(warmstart_dict: Dict[str, Trajectory],
     precompiled_code_dir = params["precompiled_solver_dir"]
     solver_mode = params["solver_mode"]
 
-    call_mpc_solver_on_warm = functools.partial(
-        call_mpc_solver,
+    call_mpc_solver_on_warm_and_desired = functools.partial(
+        call_mpc_solver,   
         solver_mode=solver_mode,
         precompiled_code_dir=precompiled_code_dir,
         cntrld_u_warm=cntrld_u_warm,
@@ -128,26 +150,28 @@ def parallel_mpc_solve(warmstart_dict: Dict[str, Trajectory],
         cntrld_x0=cntrld_x0,
         nonresponse_x0_list=nonresponse_x0_list,
         nonresponse_x_list=nonresponse_x_list,
-        x_coeff_d = x_coeff_d,
-        y_coeff_d = y_coeff_d,
-        phi_coeff_d = phi_coeff_d,
         x_coeff_d_ctrld = x_coeff_d_ctrld,
         y_coeff_d_ctrld = y_coeff_d_ctrld,
-        phi_coeff_d_ctrld = phi_coeff_d_ctrld,       
+        phi_coeff_d_ctrld = phi_coeff_d_ctrld,
+        spline_lengths_ctrld = spline_lengths_ctrld,       
         params=params,
         solver_params=solver_params,
         ipopt_params=ipopt_params)
 
     if params["n_processors"] > 1:
         pool = multiprocessing.Pool(processes=params['n_processors'])
-        solve_costs_solutions = pool.starmap(call_mpc_solver_on_warm,
-                                             warmstart_dict.items())
+        list_of_args = []
+        for warm_key, (warm_traj, traj_coeff) in warmstart_traj_dict.items():
+            list_of_args += [(warm_key, warm_traj, traj_coeff)]
+
+        solve_costs_solutions = pool.starmap(call_mpc_solver_on_warm_and_desired,
+                                             list_of_args)
         pool.terminate()
     else:
         solve_costs_solutions = []
-        for warm_key, warm_trajectory in warmstart_dict.items():
+        for warm_key, (warm_trajectory, traj_coeff) in warmstart_traj_dict.items():
             solve_costs_solutions += [
-                call_mpc_solver_on_warm(warm_key, warm_trajectory)
+                call_mpc_solver_on_warm_and_desired(warm_key, warm_trajectory, traj_coeff)
             ]
 
     below_max_slack_sols = [
@@ -170,6 +194,7 @@ def parallel_mpc_solve(warmstart_dict: Dict[str, Trajectory],
 def call_mpc_solver(
     warm_key: str,
     warm_trajectory: Trajectory,
+    desired_traj_coeff: PiecewiseDesiredTrajectory,
     precompiled_code_dir: str,
     solver_mode: str,
     cntrld_u_warm: np.array,
@@ -187,12 +212,10 @@ def call_mpc_solver(
     cntrld_x0: List[np.array],
     nonresponse_x0_list: List[np.array],
     nonresponse_x_list: List[np.array],
-    x_coeff_d: List[float],
-    y_coeff_d: List[float],
-    phi_coeff_d: List[float],
     x_coeff_d_ctrld: List[List[float]],
     y_coeff_d_ctrld: List[List[float]],
     phi_coeff_d_ctrld: List[List[float]],
+    spline_lengths_ctrld, 
     params: dict,
     solver_params: dict,
     ipopt_params: dict,
@@ -204,11 +227,18 @@ def call_mpc_solver(
     k_CA = solver_params["k_CA"]
     k_CA_power = solver_params["k_CA_power"]
     dt = params["dt"]
-    n_coeff_d = len(x_coeff_d) #NOTE THIS MUST BE THE SAME AS THE PREPICKLED CODE
+
+
+    x_coeff_d, y_coeff_d, phi_coeff_d, spline_lengths_d = desired_traj_coeff.to_array()
+    n_coeff_d = desired_traj_coeff.polynomial1.n_coeff
+
+
 
     nlp_p = mpcp_to_nlpp(dt, response_x0, p_ego, theta_ego_i, theta_ic, theta_i_nc,
                          cntrld_x0, p_cntrld, nonresponse_x0_list, p_nc,
-                         nonresponse_x_list, k_slack, k_CA, k_CA_power, x_coeff_d, y_coeff_d, phi_coeff_d, x_coeff_d_ctrld, y_coeff_d_ctrld, phi_coeff_d_ctrld)
+                         nonresponse_x_list, k_slack, k_CA, k_CA_power, 
+                         x_coeff_d, y_coeff_d, phi_coeff_d, spline_lengths_d, 
+                         x_coeff_d_ctrld, y_coeff_d_ctrld, phi_coeff_d_ctrld, spline_lengths_ctrld)
     nlp_x0 = get_warm_start_x0(nc, nnc, warm_trajectory, cntrld_x_warm,
                                cntrld_u_warm, cntrld_xd_warm)
     
@@ -231,6 +261,8 @@ def call_mpc_solver(
         
         x_ego, u_ego, xd_ego, cntrld_vehicle_trajectories, max_slack, current_cost = get_trajectories_from_solution(
             solution, params["N"], nc, nnc)
+        trajectory = Trajectory(u=u_ego, x=x_ego, xd=xd_ego)
+
         debug_list = []
         if -0.00001 < current_cost < 0.00001:
             # For now, do not use any solutions that reached max cpu
@@ -238,7 +270,7 @@ def call_mpc_solver(
             print(x_ego)
             print(u_ego)
             current_cost = 1e7 #we don't know the cost yet, so we'll make it pretty high
-        return MPCSolverReturn(True, current_cost, max_slack, x_ego, xd_ego, u_ego, warm_key, debug_list, cntrld_vehicle_trajectories)
+        return MPCSolverReturn(True, current_cost, max_slack, trajectory, warm_key, debug_list, cntrld_vehicle_trajectories)
     except Exception as e:
         print(e)
         return MPCSolverReturnException()
@@ -396,13 +428,3 @@ def generate_solver_params(params, i_ibr, solve_number):
     return solver_params
 
 
-def generate_desired_polynomial_coeff(vehicle: Vehicle, world: TrafficWorld):
-    ''' For now we assume the desired coefficients are a straight line along the center of the lane''' 
-    desired_lane_number = vehicle.desired_lane
-    yd = world.get_lane_centerline_y(desired_lane_number, right_direction=True)
-
-    x_coeff = [0, 1, 0, 0] # equiv to x(s) = s
-    y_coeff = [yd, 0, 0, 0] # equiv to y(s) = yd
-    phi_coeff = [0, 0, 0, 0] # equiv to phi(s) = 0
-
-    return x_coeff, y_coeff, phi_coeff

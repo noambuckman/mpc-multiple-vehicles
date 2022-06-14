@@ -6,14 +6,14 @@ from typing import List
 
 from src.traffic_world import TrafficWorld
 from src.warm_starts import generate_warmstarts, get_subset_warmstarts
-from src.best_response import parallel_mpc_solve, generate_solver_params, MPCSolverReturn, MPCSolverLogger, MPCSolverLog
-from src.vehicle_mpc_information import VehicleMPCInformation
+from src.best_response import generate_solver_params, MPCSolverReturn, MPCSolverLogger, MPCSolverLog, parallel_mpc_solve_w_trajs
+from src.vehicle_mpc_information import Trajectory, VehicleMPCInformation
 
 from src.utils.ibr_argument_parser import IBRParser
 from src.utils.solver_helper import poission_positions, extend_last_mpc_and_follow, initialize_cars_from_positions
 from src.utils.plotting.car_plotting import plot_initial_positions
 from src.utils.sim_utils import ExperimentHelper, get_closest_n_obstacle_vehs, get_obstacle_vehs_closeby, get_max_dist_traveled, get_ibr_vehs_idxs, assign_shared_control, get_within_range_other_vehicle_idxs
-
+from src.desired_trajectories import LaneChangeManueverPiecewise
 
 def run_iterative_best_response(vehicles,
                                 world: TrafficWorld,
@@ -43,9 +43,14 @@ def run_iterative_best_response(vehicles,
         #    vehicles and normalize wrt ambulance position
         if i_mpc > 0:
             x0 = [cp.deepcopy(x_executed[i][:, params["number_ctrl_pts_executed"]]) for i in range(len(x_executed))]
+            for i in range(len(x_executed)): # set the s variable to zero each round of mpc
+                x0[i][-1] = 0
         
         # 3) Generate (if needed) the control inputs of other vehicles
         experiment.print_initializing_trajectories(i_mpc)
+        for i in range(len(vehicles)):
+            vehicles[i].update_default_desired_lane_traj(world, x0[i])     
+
         try:
             with redirect_stdout(ipopt_out_file):
                 if i_mpc == 0:
@@ -62,7 +67,8 @@ def run_iterative_best_response(vehicles,
         
 
         for i in range(len(vehicles)):
-            vehicles[i].update_desired_lane_from_x0(world, x0[i])
+            # vehicles[i].update_desired_lane_from_x0(world, x0[i])
+            vehicles[i].update_default_desired_lane_traj(world, x0[i])
 
         # Convert all states to VehicleMPCInformation for ease
         vehsinfo_ibr = []
@@ -76,22 +82,35 @@ def run_iterative_best_response(vehicles,
 
             vehicles_idx_best_responders = get_ibr_vehs_idxs(vehicles)
             for ag_idx in vehicles_idx_best_responders:
-                        
-                response_vehinfo = vehsinfo_ibr[ag_idx]
 
-                max_dist_traveled = get_max_dist_traveled(response_vehinfo, params)
-                veh_idxs_in_mpc = get_within_range_other_vehicle_idxs(ag_idx, vehsinfo_ibr, max_dist_traveled)
+                # Convert all positions into local frame of best responding (ego) vehicle
+                ego_x0 = vehsinfo_ibr[ag_idx].x0
 
-                ctrld_vehsinfo, obstacle_vehsinfo, cntrld_i = assign_shared_control(params, i_ibr, veh_idxs_in_mpc,
+                delta_y_following = vehsinfo_ibr[ag_idx].vehicle.desired_lane - ego_x0[1]
+                desired_trajectories = [LaneChangeManueverPiecewise(5, 5, 9999, delta_y_following)]
+                fake_ego_x0_transforming = np.zeros(shape=(6,))
+                vehsinfo_ibr_egoframe = [vi.transform_to_local(fake_ego_x0_transforming) for vi in vehsinfo_ibr]
+                vehsinfo_ibr_pred_egoframe = [vi.transform_to_local(fake_ego_x0_transforming) for vi in vehsinfo_ibr_pred]
+
+                response_vehinfo_egoframe = vehsinfo_ibr_egoframe[ag_idx]
+
+                max_dist_traveled = get_max_dist_traveled(response_vehinfo_egoframe, params)
+                veh_idxs_in_mpc = get_within_range_other_vehicle_idxs(ag_idx, vehsinfo_ibr_egoframe, max_dist_traveled)
+
+                ctrld_vehsinfo_egoframe, obstacle_vehsinfo_egoframe, cntrld_i = assign_shared_control(params, i_ibr, veh_idxs_in_mpc,
                                                                                     vehicles_idx_best_responders,
-                                                                                    response_vehinfo, vehsinfo_ibr_pred)
+                                                                                    response_vehinfo_egoframe, vehsinfo_ibr_pred_egoframe)
 
-                obstacle_vehsinfo = get_obstacle_vehs_closeby(response_vehinfo, ctrld_vehsinfo, obstacle_vehsinfo, distance_threshold=40.0)
-                obstacle_vehsinfo = get_closest_n_obstacle_vehs(response_vehinfo, ctrld_vehsinfo, obstacle_vehsinfo, max_num_obstacles=10,
+
+
+                obstacle_vehsinfo_egoframe = get_obstacle_vehs_closeby(response_vehinfo_egoframe, ctrld_vehsinfo_egoframe, obstacle_vehsinfo_egoframe, distance_threshold=40.0)
+                obstacle_vehsinfo_egoframe = get_closest_n_obstacle_vehs(response_vehinfo_egoframe, ctrld_vehsinfo_egoframe, obstacle_vehsinfo_egoframe, max_num_obstacles=10,
                                                                 min_num_obstacles_ego=3)
 
-                warmstarts_dict = generate_warmstarts(response_vehinfo, world, vehsinfo_ibr_pred, params, u_mpc[ag_idx],
-                                                      vehsinfo_ibr[ag_idx].u)
+
+
+                warmstarts_dict = generate_warmstarts(response_vehinfo_egoframe, world, vehsinfo_ibr_pred_egoframe, params, u_mpc[ag_idx],
+                                                      vehsinfo_ibr_egoframe[ag_idx].u)
 
                 experiment.print_vehicle_id(ag_idx)
                 # Try to solve MPC multiple times
@@ -105,20 +124,45 @@ def run_iterative_best_response(vehicles,
 
                     t_start_ipopt = time.time()
                     experiment.print_mpc_ibr_round(i_mpc, i_ibr, params)
-                    experiment.print_nc_nnc(ctrld_vehsinfo, obstacle_vehsinfo)
+                    experiment.print_nc_nnc(ctrld_vehsinfo_egoframe, obstacle_vehsinfo_egoframe)
+                    # print("Trying to solve...")
+                    # print("X_ego", response_vehinfo_egoframe.x[0:,:], "...")
+                    # print("Xd_ego", response_vehinfo_egoframe.xd[0:,:], "...")
+
+                    # print("X_ctrl_egoframe", [vi.x[:,:] for vi in ctrld_vehsinfo_egoframe], "...")
+                    # print("Xd_ctrl_egoframe", [vi.xd[:,:] for vi in ctrld_vehsinfo_egoframe], "...")
+
+                    # print("X_Obst_egoframe", [vi.x[:,:] for vi in obstacle_vehsinfo_egoframe], "...")
+                    # print("Xd_Obst_egoframe", [vi.xd[:,:] for vi in obstacle_vehsinfo_egoframe], "...")
+
+                    warmstart_w_traj_dict = {}
+                    for warm_key, warm_traj in warmstarts_subset.items():
+                        for desired_trajectory in desired_trajectories:
+                            warmstart_w_traj_dict[warm_key] = (warm_traj, desired_trajectory)
+
                     with redirect_stdout(ipopt_out_file):
-                        
-                        sol = parallel_mpc_solve(warmstarts_subset, response_vehinfo, world, s_params, params, ipopt_params,
-                            obstacle_vehsinfo, ctrld_vehsinfo)
-                        solution_logger.add_log(MPCSolverLog(sol, i_mpc, i_ibr, response_vehinfo.vehicle.agent_id, solve_number))
+                        sol = parallel_mpc_solve_w_trajs(warmstart_w_traj_dict, response_vehinfo_egoframe, world, s_params, params, ipopt_params,
+                            obstacle_vehsinfo_egoframe, ctrld_vehsinfo_egoframe)
+                        solution_logger.add_log(MPCSolverLog(sol, i_mpc, i_ibr, response_vehinfo_egoframe.vehicle.agent_id, solve_number))
 
                     if sol.max_slack < min(params["k_max_slack"], np.infty):
-                        vehsinfo_ibr[ag_idx].update_state(sol.u_ego, sol.x_ego, sol.xd_ego)
-                        vehsinfo_ibr_pred[ag_idx].update_state(sol.u_ego, sol.x_ego, sol.xd_ego)
+                        # print("Local Ego Solution")
+                        # print("X", sol.trajectory.x[0:2,:5], "...")
+                        # print("Xd", sol.trajectory.xd[0:2,:5], "...")
+
+                        # Convert the units back to the world frame
+
+                        solution_traj_world = sol.trajectory.transform_to_global(fake_ego_x0_transforming)
+
+                        # print("Saving Ego Veh Traj to Pred", solution_traj_world.x[0:2,:5], "...")
+                        vehsinfo_ibr[ag_idx].update_state_from_traj(solution_traj_world)
+                        vehsinfo_ibr_pred[ag_idx].update_state_from_traj(solution_traj_world)
 
                         for cntrld_i_idx, veh_id in enumerate(cntrld_i):
                             c_veh_traj = sol.cntrld_vehicle_trajectories[cntrld_i_idx]
-                            vehsinfo_ibr_pred[veh_id].update_state_from_traj(c_veh_traj)
+                            c_veh_traj_world = c_veh_traj.transform_to_global(fake_ego_x0_transforming)
+                            # print("Saving Control Veh Traj to Pred", c_veh_traj.x[0:2,:5], "...")
+                            vehsinfo_ibr_pred[veh_id].update_state_from_traj(c_veh_traj_world)
                         experiment.print_solved_status(ag_idx, i_mpc, i_ibr, t_start_ipopt)
                         break
                     else:
@@ -131,8 +175,10 @@ def run_iterative_best_response(vehicles,
                     else:
                         default_traj = warmstarts_dict['previous_mpc_hold']
 
-                    vehsinfo_ibr[ag_idx].update_state_from_traj(default_traj)
-                    vehsinfo_ibr_pred[ag_idx].update_state_from_traj(default_traj)
+                    default_traj_world = default_traj.transform_to_global(fake_ego_x0_transforming)
+
+                    vehsinfo_ibr[ag_idx].update_state_from_traj(default_traj_world)
+                    vehsinfo_ibr_pred[ag_idx].update_state_from_traj(default_traj_world)
                     experiment.print_max_solved_status(ag_idx, i_mpc, i_ibr, sol.max_slack, t_start_ipopt)
 
                 experiment.save_ibr(i_mpc, i_ibr, ag_idx, vehsinfo_ibr_pred)
