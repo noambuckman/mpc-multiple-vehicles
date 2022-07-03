@@ -161,17 +161,17 @@ def parallel_mpc_solve_w_trajs(warmstart_traj_dict: Dict[str, Tuple[Trajectory, 
     if params["n_processors"] > 1:
         pool = multiprocessing.Pool(processes=params['n_processors'])
         list_of_args = []
-        for warm_key, (warm_traj, traj_coeff) in warmstart_traj_dict.items():
-            list_of_args += [(warm_key, warm_traj, traj_coeff)]
+        for warm_key, (warm_traj, desired_traj) in warmstart_traj_dict.items():
+            list_of_args += [(warm_key, warm_traj, desired_traj)]
 
         solve_costs_solutions = pool.starmap(call_mpc_solver_on_warm_and_desired,
                                              list_of_args)
         pool.terminate()
     else:
         solve_costs_solutions = []
-        for warm_key, (warm_trajectory, traj_coeff) in warmstart_traj_dict.items():
+        for warm_key, (warm_trajectory, desired_traj) in warmstart_traj_dict.items():
             solve_costs_solutions += [
-                call_mpc_solver_on_warm_and_desired(warm_key, warm_trajectory, traj_coeff)
+                call_mpc_solver_on_warm_and_desired(warm_key, warm_trajectory, desired_traj)
             ]
 
     below_max_slack_sols = [

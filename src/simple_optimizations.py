@@ -54,9 +54,10 @@ def feasible_guess(N, vehicle, x0, params, world,
                                           3 * cp_vehicle.L)
     print("Spatial Only Optimization Solution", x_warm)
     # warm start with feasible x (not dynamically feasible)
+    cp_vehicle.update_default_desired_lane_traj(world, x0)
     warm_traj_dict = {
         'mix spatial none':
-        (Trajectory(u=u_warm_intial, x=x_warm, xd=x_des_warm_initial), cp_vehicle.piecewise_desired)
+        (Trajectory(u=u_warm_intial, x=x_warm, xd=x_des_warm_initial), cp_vehicle.desired_traj)
     }
 
     response_veh_info = VehicleMPCInformation(cp_vehicle, x0)

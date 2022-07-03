@@ -4,6 +4,8 @@ import copy as cp
 from contextlib import redirect_stdout
 from typing import List
 
+
+
 from src.traffic_world import TrafficWorld
 from src.warm_starts import generate_warmstarts, get_subset_warmstarts
 from src.best_response import generate_solver_params, MPCSolverReturn, MPCSolverLogger, MPCSolverLog, parallel_mpc_solve_w_trajs
@@ -13,7 +15,7 @@ from src.utils.ibr_argument_parser import IBRParser
 from src.utils.solver_helper import poission_positions, extend_last_mpc_and_follow, initialize_cars_from_positions
 from src.utils.plotting.car_plotting import plot_initial_positions
 from src.utils.sim_utils import ExperimentHelper, get_closest_n_obstacle_vehs, get_obstacle_vehs_closeby, get_max_dist_traveled, get_ibr_vehs_idxs, assign_shared_control, get_within_range_other_vehicle_idxs
-from src.desired_trajectories import LaneChangeManueverPiecewise
+from src.desired_trajectories import LaneChangeManueverPiecewise, generate_lane_changing_desired_trajectories
 
 def run_iterative_best_response(vehicles,
                                 world: TrafficWorld,
@@ -56,10 +58,10 @@ def run_iterative_best_response(vehicles,
                 if i_mpc == 0:
                     u_mpc_prev = [np.zeros((2, params["N"])) for _ in range(len(vehicles))]
                     u_ibr, x_ibr, xd_ibr = extend_last_mpc_and_follow(u_mpc_prev, params["N"] - 1, vehicles, x0, params,
-                                                                      world)
+                                                                        world)
                 else:
                     u_ibr, x_ibr, xd_ibr = extend_last_mpc_and_follow(u_mpc, params["number_ctrl_pts_executed"],
-                                                                      vehicles, x0, params, world)
+                                                                    vehicles, x0, params, world)
         except RuntimeError:
             experiment.print_sim_exited_early("infeasible solution")
             ipopt_out_file.close()
@@ -83,11 +85,14 @@ def run_iterative_best_response(vehicles,
             vehicles_idx_best_responders = get_ibr_vehs_idxs(vehicles)
             for ag_idx in vehicles_idx_best_responders:
 
-                # Convert all positions into local frame of best responding (ego) vehicle
                 ego_x0 = vehsinfo_ibr[ag_idx].x0
 
-                delta_y_following = vehsinfo_ibr[ag_idx].vehicle.desired_lane - ego_x0[1]
-                desired_trajectories = [LaneChangeManueverPiecewise(5, 5, 9999, delta_y_following)]
+                # delta_y_following = vehsinfo_ibr[ag_idx].vehicle.desired_lane - ego_x0[1]
+                # desired_trajectories = [LaneChangeManueverPiecewise(5, 5, 999999, delta_y_following)]
+
+                desired_trajectories = generate_lane_changing_desired_trajectories(world, ego_x0, params["T"], n_speed_increments=3)
+
+                # Convert all positions into local frame of best responding (ego) vehicle
                 fake_ego_x0_transforming = np.zeros(shape=(6,))
                 vehsinfo_ibr_egoframe = [vi.transform_to_local(fake_ego_x0_transforming) for vi in vehsinfo_ibr]
                 vehsinfo_ibr_pred_egoframe = [vi.transform_to_local(fake_ego_x0_transforming) for vi in vehsinfo_ibr_pred]
@@ -137,8 +142,9 @@ def run_iterative_best_response(vehicles,
 
                     warmstart_w_traj_dict = {}
                     for warm_key, warm_traj in warmstarts_subset.items():
-                        for desired_trajectory in desired_trajectories:
-                            warmstart_w_traj_dict[warm_key] = (warm_traj, desired_trajectory)
+                        for traj_idx, desired_trajectory in enumerate(desired_trajectories):
+                            warm_traj_key = warm_key + "%d"%traj_idx
+                            warmstart_w_traj_dict[warm_traj_key] = (warm_traj, desired_trajectory)
 
                     with redirect_stdout(ipopt_out_file):
                         sol = parallel_mpc_solve_w_trajs(warmstart_w_traj_dict, response_vehinfo_egoframe, world, s_params, params, ipopt_params,
@@ -164,6 +170,7 @@ def run_iterative_best_response(vehicles,
                             # print("Saving Control Veh Traj to Pred", c_veh_traj.x[0:2,:5], "...")
                             vehsinfo_ibr_pred[veh_id].update_state_from_traj(c_veh_traj_world)
                         experiment.print_solved_status(ag_idx, i_mpc, i_ibr, t_start_ipopt)
+                        experiment.save_plot(sol)
                         break
                     else:
                         experiment.print_not_solved_status(ag_idx, i_mpc, i_ibr, sol.max_slack, t_start_ipopt)
@@ -186,7 +193,7 @@ def run_iterative_best_response(vehicles,
             other_x_ibr_temp = np.stack([veh.x for veh in vehsinfo_ibr])
             all_other_x_ibr_g = [x for x in other_x_ibr_temp]
 
-            experiment.save_ibr(i_mpc, i_ibr, None, vehsinfo_ibr_pred)
+            experiment.save_ibr(i_mpc, i_ibr, None, vehsinfo_ibr)
 
         t_actual, u_mpc, x_executed, _, x_actual, u_actual, = experiment.update_sim_states(
             vehsinfo_ibr, all_other_x_ibr_g, t_actual, i_mpc, x_actual, u_actual)

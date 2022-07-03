@@ -7,7 +7,10 @@ from shapely.geometry import box
 from shapely.affinity import rotate
 import psutil, time, datetime
 import os, pickle
-
+try:
+    import matplotlib.pyplot as plt
+except Exception:
+    print("Warning...running on server so no plotting")
 
 class ExperimentHelper(object):
     ''' Helper for logging various things and keeping track of experiment start time'''
@@ -17,6 +20,7 @@ class ExperimentHelper(object):
         assert "k_max_slack" in params
         self.log_dir = log_dir
         self.params = params
+        self.plot_counter = 0
 
         if params["save_ibr"]:
             os.makedirs(log_dir + "data/", exist_ok=True)
@@ -169,6 +173,16 @@ class ExperimentHelper(object):
                 return True
 
         return False
+
+    def save_plot(self, sol):
+        self.plot_counter += 1
+        ''' Save a quick plot'''
+        traj = sol.trajectory
+        plt.plot(traj.x[0,:], traj.x[1,:], 'o-', color='red', label="X")
+        plt.plot(traj.xd[0,:], traj.xd[1,:], 'x', color='green', label="Xd")
+        os.makedirs(os.path.join(self.log_dir, "figs/"), exist_ok=True)
+        plt.savefig(os.path.join(self.log_dir, "figs/", "debug%06d.png"%self.plot_counter))
+        plt.close()
 
     def print_vehicle_id(self, response_i):
         print("...Veh %02d Solver:" % response_i)

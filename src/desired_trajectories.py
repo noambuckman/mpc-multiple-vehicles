@@ -2,8 +2,49 @@ import numpy as np
 from src.traffic_world import TrafficWorld
 from typing import List, Tuple
 import casadi as cas
+from numpy.polynomial import Polynomial
+
+class CubicSpline:
+    def __init__(self, a = None, b = None, c = None, d = None):
+        ''' f(s) = a + b*s + c*s^3 + d*c^3'''
+        self.a = a
+        self.b = b
+        self.c = c
+        self.d = d
 
 
+    def from_2pts(self, s0, value0, valuedot0, s1, value1, valuedot1):
+        ''' Derive the coefficients from two points along the spline (s0, s1).  
+            Needed are the values and 1st deriv at s0 and s1
+        '''
+        A_matrix = np.array([[1, s0, s0**2, s0**3], [0, 1, 2*s0, 3*s0**2],[1, s1, s1**2, s1**3], [0, 1, 2*s1, 3*s1**2]])
+        b_array = np.array([[value0, valuedot0, value1, valuedot1]]).T
+        [a, b, c, d] = np.matmul(np.linalg.inv(A_matrix), b_array)
+
+        return CubicSpline(float(a), float(b), float(c), float(d))
+
+    def as_array(self):
+        return np.array([self.a, self.b, self.c, self.d])        
+
+class QuadraticSpline(CubicSpline):
+    def __init__(self, a = None, b = None, c = None):
+        CubicSpline.__init__(self, a, b, c, 0)    
+    
+    def from_3pts(self, s0, value0, s1, value1, s2, value2):
+        ''' Derive the coefficients from three points along the spline'''
+
+        A_array = np.array([[1, s0, s0**2], [1, s1, s1**2], [1, s2, s2**2]])
+        b_array = np.array([[value0, value1, value2]]).T
+        [a, b, c] = np.matmul(np.linalg.inv(A_array), b_array)
+        return QuadraticSpline(float(a), float(b), float(c))
+
+class LinearSpline(CubicSpline):
+    def __init__(self, a = 0.0, b = 1.0):
+        ''' y = a + b*s'''
+        CubicSpline.__init__(self, a, b, 0.0, 0.0)
+
+
+####################################################################################################
 class DesiredTrajectoryCoefficients:
     def __init__(self, x_coeff: List[float], y_coeff: List[float], phi_coeff: List[float]):
         # coeff [a, b, c, d] corresponds to a + b*s + c*s^2 + d*b*s^3
@@ -34,8 +75,61 @@ class DesiredTrajectoryCoefficients:
             phid += self.phi_coeff[ci] * s**ci
         
         des_traj = cas.vertcat(xd, yd, phid)
-        fd = cas.Function('fd', [s], [des_traj], ['s'], ['des_traj'])
+        fd = cas.Function('fd', [s, self.x_coeff, self.y_coeff, self.phi_coeff], [des_traj], ['s', 'x_coeff', 'y_coeff', 'phi_coeff'], ['des_traj'])
         return fd
+
+
+def cubic_function(n_coeff=4):
+    s = cas.MX.sym('s')
+    coeff = cas.MX.sym('coeff', n_coeff, 1)
+
+    val = coeff[0]
+    for ci in range(1, n_coeff):
+        val += coeff[ci] * s**ci
+
+    f = cas.Function("cubic", [s, coeff], [val], ['s','coeff'], ['value'])
+
+    return f
+
+
+def spline_function(n_coeff=4):
+    s = cas.MX.sym('s')
+    x_coeff = cas.MX.sym('x_coeff', n_coeff, 1)
+    y_coeff = cas.MX.sym('y_coeff', n_coeff, 1)
+    phi_coeff = cas.MX.sym('phi_coeff', n_coeff, 1)
+
+    cube = cubic_function(n_coeff)
+
+    f_x_val = cube(s, x_coeff)
+    f_y_val = cube(s, y_coeff)
+    f_phi_val = cube(s, phi_coeff)
+
+    vec_value = cas.vertcat(f_x_val, f_y_val, f_phi_val)
+
+    fd = cas.Function('fd_vec', [s, x_coeff, y_coeff, phi_coeff], [vec_value], ['s', 'x_coeff', 'y_coeff', 'phi_coeff'], ['vec_value'])
+    
+    return fd
+
+def piecewise_function(n_splines=3, n_coeff=4):
+    s = cas.MX.sym('s')
+    x_coeffs = cas.MX.sym('x_coeffs', n_splines, n_coeff)
+    y_coeffs = cas.MX.sym('y_coeffs', n_splines, n_coeff)
+    phi_coeffs = cas.MX.sym('phi_coeffs', n_splines, n_coeff)
+    lengths = cas.MX.sym('lengths', n_splines, 1)
+
+    s0 = cas.fmax(cas.fmin(s - 0, lengths[0]), 0)
+    s1 = cas.fmax(cas.fmin(s - lengths[0], lengths[1]), 0)
+    s2 = cas.fmax(cas.fmin(s - lengths[0] - lengths[1], lengths[2]), 0)
+
+    fspline = spline_function()
+    fd_piecewise_value = fspline(s0, x_coeffs[0,:], y_coeffs[0,:], phi_coeffs[0,:]) + \
+                        fspline(s1, x_coeffs[1,:], y_coeffs[1,:], phi_coeffs[1,:]) + \
+                        fspline(s2, x_coeffs[2,:], y_coeffs[2,:], phi_coeffs[2,:])
+
+    fd = cas.Function('fd_piecewise', [s, x_coeffs, y_coeffs, phi_coeffs, lengths], [fd_piecewise_value], 
+                                    ['s', 'x_coeffs', 'y_coeffs', 'phi_coeffs', 'lengths'], ['fd_piecewise_value']   )
+    
+    return fd
 
 
 class LaneFollowingPolynomial(DesiredTrajectoryCoefficients):
@@ -50,6 +144,22 @@ class LaneFollowingPolynomial(DesiredTrajectoryCoefficients):
 
         DesiredTrajectoryCoefficients.__init__(self, x_coeff, y_coeff, phi_coeff)
 
+def phi_from_xy_splines(x_coeff, y_coeff, traj_length):
+    ''' Generate a spline where phi is approx parallel the x, y curve'''
+    x_poly = Polynomial(x_coeff)
+    y_poly = Polynomial(y_coeff)
+    s = np.linspace(0, traj_length, 25)
+    ys = y_poly(s)
+    xs = x_poly(s)
+
+    dy = np.gradient(ys)
+    dx = np.gradient(xs)
+    phix = np.arctan2(dy, dx)
+
+    cubic_spline = Polynomial.fit(s, phix, 3)
+
+    return cubic_spline.coef
+
 
 class LaneChangeTrajectoryCoefficients(DesiredTrajectoryCoefficients):
     ''' Generate a smooth cubic spline for changing lanes over a traj_length
@@ -57,7 +167,7 @@ class LaneChangeTrajectoryCoefficients(DesiredTrajectoryCoefficients):
         y(s=L)=delta_y,  y(s=0)=y'(0)=y'(L)=0
         phi(0) = phi(L) = 0,   phi(L/2) = max_angle = 2*atan2(delta_y, traj_length)
     '''
-    def __init__(self, traj_length, delta_y):
+    def __init__(self, traj_length, delta_y, delta_phi):
 
         x_coeff = np.array([0, 1, 0, 0]) # Linearly vary over length of traj
         y_coeff = np.array([0, 0, 3*delta_y/traj_length**2, -2*delta_y/traj_length**3])  ## Cubic varying over length of trajectory
@@ -66,9 +176,24 @@ class LaneChangeTrajectoryCoefficients(DesiredTrajectoryCoefficients):
         avg_angle = np.arctan2(delta_y, traj_length)
         max_angle = 2*avg_angle
         constant_multiplier = max_angle * 4.0 / traj_length**2  
-        phi_coeff = np.array([0.0, traj_length*constant_multiplier, -constant_multiplier, 0.0])  # phi = constant * s * (traj_lengh - s)
+        # phi_coeff = np.array([0.0, traj_length*constant_multiplier, -constant_multiplier, 0.0])  # phi = constant * s * (traj_lengh - s)
 
-        DesiredTrajectoryCoefficients.__init__(self, x_coeff, y_coeff, phi_coeff)        
+        phi_coeff = QuadraticSpline().from_3pts(0, 0, traj_length/2.0, max_angle, traj_length, delta_phi).as_array()
+
+        # phi_coeff = phi_from_xy_splines(x_coeff, y_coeff, traj_length, phi0)
+        DesiredTrajectoryCoefficients.__init__(self, x_coeff, y_coeff, phi_coeff) 
+
+
+class TrajectorySplineFromPoints(DesiredTrajectoryCoefficients):
+    def __init__(self, s0, s1, y0, y1, y0dot, y1dot, s2, phi0, phi1, phi2):
+
+        y_spline = CubicSpline().from_2pts(s0, y0, y0dot, s1, y1, y1dot)
+        phi_spline = QuadraticSpline().from_3pts(s0, phi0, s1, phi1, s2, phi2)
+        x_spline = LinearSpline()
+
+        DesiredTrajectoryCoefficients.__init__(x_spline.as_array(), y_spline.as_array(), phi_spline.as_array())
+
+
 
 #######################################################################################################################                
 
@@ -92,6 +217,7 @@ class PiecewiseDesiredTrajectory:
         self.length3 = length3
 
         self.n_splines = 3
+        self.x_coeff_array, self.y_coeff_array, self.phi_coeff_array, self.lengths_array = self.to_array()
 
 
     def to_array(self)-> Tuple[np.array, np.array, np.array, np.array]: 
@@ -142,9 +268,18 @@ class PiecewiseDesiredTrajectory:
         s1 = cas.fmax(cas.fmin(s - 0, self.length1), 0)
         s2 = cas.fmax(cas.fmin(s - self.length1, self.length2), 0)
         s3 = cas.fmax(cas.fmin(s - self.length1 - self.length2, self.length3), 0)
-        fd_piecewise = fd1(s1)   + fd2(s2) + fd3(s3)
+        fd_piecewise = fd1(s1, self.polynomial1.x_coeff, self.polynomial1.y_coeff, self.polynomial1.phi_coeff) + \
+                fd2(s2, self.polynomial2.x_coeff, self.polynomial2.y_coeff, self.polynomial2.phi_coeff) + \
+                fd3(s3, self.polynomial3.x_coeff, self.polynomial3.y_coeff, self.polynomial3.phi_coeff)
 
-        return cas.Function('fd', [s], [fd_piecewise], ['s'], ['des_traj'])
+        
+        vars = [s, self.polynomial1.x_coeff, self.polynomial1.y_coeff, self.polynomial1.phi_coeff, 
+                self.polynomial2.x_coeff, self.polynomial2.y_coeff, self.polynomial2.phi_coeff,
+                self.polynomial3.x_coeff, self.polynomial3.y_coeff, self.polynomial3.phi_coeff,
+                self.length1, self.length2, self.length3
+                ]
+
+        return cas.Function('fd', vars, [fd_piecewise], ['s'], ['des_traj'])
 
 
 
@@ -160,7 +295,7 @@ class LaneFollowingPiecewiseTrajectory(PiecewiseDesiredTrajectory):
 
 
 class LaneChangeManueverPiecewise(PiecewiseDesiredTrajectory):
-    def __init__(self, traj_length_1, traj_length_2, traj_length_3, delta_y):
+    def __init__(self, traj_length_1, traj_length_2, traj_length_3, delta_y, delta_phi):
         ''' Lane changing equation based on distances for each segment
                 _____(s3)____
                 /   
@@ -168,179 +303,96 @@ class LaneChangeManueverPiecewise(PiecewiseDesiredTrajectory):
         __(s1)__/      
         '''
 
-        traj1 = LaneChangeTrajectoryCoefficients(traj_length_1, 0.0) #straight away
-        traj2 = LaneChangeTrajectoryCoefficients(traj_length_2, delta_y) #lane change part
-        traj3 = LaneChangeTrajectoryCoefficients(traj_length_3, 0.0) #straight away
+        traj1 = LaneChangeTrajectoryCoefficients(traj_length_1, 0.0, 0.0) #straight away
+        traj2 = LaneChangeTrajectoryCoefficients(traj_length_2, delta_y, delta_phi) #lane change part
+        traj3 = LaneChangeTrajectoryCoefficients(traj_length_3, 0.0, 0.0) #straight away
+
+        PiecewiseDesiredTrajectory.__init__(self, traj1, traj2, traj3, traj_length_1, traj_length_2, traj_length_3)
+
+class InitialFinalManeuver(PiecewiseDesiredTrajectory):
+    def __init__(self, traj_length_1, traj_length_2, traj_length_3, delta_y, delta_phi):
+
+        traj1 = LaneChangeTrajectoryCoefficients(traj_length_1, 0.0, 0.0) #straight away
+        traj2 = LaneChangeTrajectoryCoefficients(traj_length_2, delta_y, delta_phi) #lane change part
+        traj3 = LaneChangeTrajectoryCoefficients(traj_length_3, 0.0, 0.0) #straight away
 
         PiecewiseDesiredTrajectory.__init__(self, traj1, traj2, traj3, traj_length_1, traj_length_2, traj_length_3)
 
 
 
+def complete_original_lane_shift(y_start, y_end, traj_length, y_current, phi_current):
+    # Original Lane Change
+    delta_phi = 0 - phi_current
+    full_lane_change_up = LaneChangeTrajectoryCoefficients(traj_length, y_end - y_start, delta_phi)
 
-# def gen_f_desired_3piecewise_coeff(x_coeff, y_coeff, phi_coeff, spline_lengths):
-#     ''' 
-#         x_coeff:  n_coeff x n_splines  where the coefficients correspond 
-    
-#             polynomials: 
-#                 x(s) = cx0 + cx1*s + cx2*s^2 ... cx3*s^3
-#                 y(s) = cy0 + cy1*s + cy2*s^2 ... cy3*s^3
-#                 phi(s) = cphi0 + ... cphi3*s^3
-#     '''
+    cy = full_lane_change_up.y_coeff
+    p = Polynomial(cy)
 
-#     assert x_coeff.shape[0] == y_coeff.shape[0] == phi_coeff.shape[0] #For now we require them to be equal
-#     assert x_coeff.shape[1] == y_coeff.shape[1] == phi_coeff.shape[1] == spline_lengths.shape[0] == 3
+    # Find where we are on the original trajectory by solving roots
 
-#     n_splines = spline_lengths.shape[0]
+    roots = (p - y_current).roots()
+    roots = roots[(roots>0.0) & (roots<traj_length)]
+    s_current = roots[0]
 
-#     # Generate each polynomial spline
-#     polynomial_functions = []
-#     for idx in range(n_splines):
-#         fd = gen_f_desired_lane_poly(x_coeff[:, idx], y_coeff[:, idx], phi_coeff[:, idx])
-#         polynomial_functions.append(fd)
+    # Return a new polynomial f(s) = f(s+s_current) - f(s_current)
+    new_shifted_spline = p + p.deriv(1)*s_current + p.deriv(2)*s_current**2/2 + p.deriv(3)*s_current**3/6 - p(s_current)
+    new_coef = new_shifted_spline.coef
+    if new_coef.shape[0] < 4:
+        new_coef = np.pad(new_coef, (0, 4-new_coef.shape[0]))
 
-#     # Combine into one piecewise function. Right now we only allow 3 polynomial functions
-
-#     poly1 = polynomial_functions[0]
-#     poly2 = polynomial_functions[1]
-#     poly3 = polynomial_functions[2]
-#     L1 = spline_lengths[0]
-#     L2 = spline_lengths[1]
-#     L3 = spline_lengths[2]
-
-#     piecewise_fd = gen_f_desired_3piecewise_poly(poly1, poly2, poly3, L1, L2, L3)
-    
-#     return piecewise_fd
-
-
-
-
-
-# def gen_f_desired_3piecewise_coeff(x_coeff, y_coeff, phi_coeff, spline_lengths):
-#     ''' 
-#         x_coeff:  n_coeff x n_splines  where the coefficients correspond 
-    
-#             polynomials: 
-#                 x(s) = cx0 + cx1*s + cx2*s^2 ... cx3*s^3
-#                 y(s) = cy0 + cy1*s + cy2*s^2 ... cy3*s^3
-#                 phi(s) = cphi0 + ... cphi3*s^3
-#     '''
-
-#     assert x_coeff.shape[0] == y_coeff.shape[0] == phi_coeff.shape[0] #For now we require them to be equal
-#     assert x_coeff.shape[1] == y_coeff.shape[1] == phi_coeff.shape[1] == spline_lengths.shape[0] == 3
-
-#     n_splines = spline_lengths.shape[0]
-
-#     # Generate each polynomial spline
-#     polynomial_functions = []
-#     for idx in range(n_splines):
-#         fd = gen_f_desired_lane_poly(x_coeff[:, idx], y_coeff[:, idx], phi_coeff[:, idx])
-#         polynomial_functions.append(fd)
-
-#     # Combine into one piecewise function. Right now we only allow 3 polynomial functions
-
-#     poly1 = polynomial_functions[0]
-#     poly2 = polynomial_functions[1]
-#     poly3 = polynomial_functions[2]
-#     L1 = spline_lengths[0]
-#     L2 = spline_lengths[1]
-#     L3 = spline_lengths[2]
-
-#     piecewise_fd = gen_f_desired_3piecewise_poly(poly1, poly2, poly3, L1, L2, L3)
-    
-#     return piecewise_fd
-
-           
-
-# def generate_desired_polynomial_coeff(vehicle: Vehicle, world: TrafficWorld) -> DesiredTrajectoryCoefficients: 
-#     ''' For now we assume the desired coefficients are a straight line along the center of the lane''' 
-#     desired_lane_number = vehicle.desired_lane
-#     yd = world.get_lane_centerline_y(desired_lane_number, right_direction=True)
-
-#     x_coeff = [0, 1, 0, 0] # equiv to x(s) = s
-#     y_coeff = [yd, 0, 0, 0] # equiv to y(s) = yd
-#     phi_coeff = [0, 0, 0, 0] # equiv to phi(s) = 0
-
-#     return DesiredTrajectoryCoefficients(x_coeff, y_coeff, phi_coeff)
-
-
-# def generate_desired_piecewise_coeff(vehicle: Vehicle, world: TrafficWorld) -> PiecewiseDesiredTrajectory:
-#     ''' Generate a lane keeping trajectory. It is piecewise but repeates'''
-
-#     poly1 = generate_desired_polynomial_coeff(vehicle, world)
-#     l1 = 9999
-
-#     piecewise_traj = PiecewiseDesiredTrajectory(poly1, poly1, poly1, l1, l1, l1)
-
-#     return piecewise_traj
-
-
-
-
-
-# def generate_desired_polynomial_coeff_constant_lane(vehicle: Vehicle, world: TrafficWorld) -> DesiredTrajectoryCoefficients: 
-#     ''' For now we assume the desired coefficients are a straight line along the center of the lane''' 
-#     desired_lane_number = vehicle.desired_lane
-#     yd = world.get_lane_centerline_y(desired_lane_number, right_direction=True)
-
-#     x_coeff = [0, 1, 0, 0] # equiv to x(s) = s
-#     y_coeff = [yd, 0, 0, 0] # equiv to y(s) = yd
-#     phi_coeff = [0, 0, 0, 0] # equiv to phi(s) = 0
-
-#     return DesiredTrajectoryCoefficients(x_coeff, y_coeff, phi_coeff)
-
-# def generate_lane_change_coeff(traj_length, delta_y) -> DesiredTrajectoryCoefficients:
-#     ''' Generate a smooth cubic spline for changing lanes over a traj_length
-#         x(s) = s
-#         y(s=L)=delta_y,  y(s=0)=y'(0)=y'(L)=0
-#         phi(0) = phi(L) = 0,   phi(L/2) = max_angle = 2*atan2(delta_y, traj_length)
-#     '''
-#     x_coeff = [0, 1, 0, 0] # Linearly vary over length of traj
-#     y_coeff = [0, 0, 3*delta_y/traj_length**2, -2*delta_y/traj_length**3]  ## Cubic varying over length of trajectory
-
-
-#     avg_angle = np.arctan2(delta_y, traj_length)
-#     max_angle = 2*avg_angle
-#     constant_multiplier = max_angle * 4.0 / traj_length**2  
-#     phi_coeff = [0.0, traj_length*constant_multiplier, -constant_multiplier, 0.0]  # phi = constant * s * (traj_lengh - s)
-
-#     return DesiredTrajectoryCoefficients(x_coeff, y_coeff, phi_coeff)
-
-
-
-
-
-
-
-
-# def generate_piecewise_lane_change_maneuver_coeff(s1, s2, s3, delta_y) -> DesiredTrajectoryCoefficients:
-#     ''' Lane changing equation based on distances for each segment
-#                _____(s3)____
-#               /   
-#              /     <---(s2)
-#     __(s1)__/      
-#     '''
-
-#     traj1 = generate_lane_change_coeff(s1, 0.0) # straight away
-#     traj2 = generate_lane_change_coeff(s2, delta_y) # lane change part
-#     traj3 = generate_lane_change_coeff(s3, 0.0) # straight_away
-#     fd1 = gen_f_desired_lane_poly(np.array(traj1.x_coeff), np.array(traj1.y_coeff), np.array(traj1.phi_coeff))
-#     fd2 = gen_f_desired_lane_poly(np.array(traj2.x_coeff), np.array(traj2.y_coeff), np.array(traj2.phi_coeff))
-#     fd3 = gen_f_desired_lane_poly(np.array(traj3.x_coeff), np.array(traj3.y_coeff), np.array(traj3.phi_coeff))
-
-#     fd = gen_f_desired_3piecewise_poly(fd1, fd2, fd3, s1, s2, s3)
-    
-#     return fd
+    return new_coef, s_current, new_shifted_spline
     
 
 
-def generate_lane_changing_desired_trajectories(vehicle, world: TrafficWorld, x0: np.array, T: float, v_mph_range: float = 10.0, n_speed_increments: int = 5) -> List[LaneChangeManueverPiecewise]:
+def find_s_on_spline(coeff, value, s_max):
+    ''' Find how far have you traversed on spline'''
+    p = Polynomial(coeff)
+    
+    roots = (p - value).roots()
+    roots = roots[(roots>0.0) & (roots<s_max)]
+    try:
+        s_current = roots[0]
+    except IndexError as e:
+        roots = (p - value).roots()
+        print(roots)
+        print(roots[(roots>0.0) & (roots<s_max)])
+        raise e
+
+    return s_current
+
+def shift_polynomial(coeff, s_current):
+    ''' Assume that s_min = 0'''
+    p = Polynomial(coeff)
+    assert p.degree() <= 3
+
+    # Return a new polynomial f(s) = f(s+s_current) - f(s_current)
+    new_shifted_spline = p + p.deriv(1)*s_current + p.deriv(2)*s_current**2/2 + p.deriv(3)*s_current**3/6 - p(s_current)
+    new_coef = new_shifted_spline.coef
+    if new_coef.shape[0] < 4:
+        new_coef = np.pad(new_coef, (0, 4-new_coef.shape[0]))
+    return new_coef
+
+
+def shift_desired_trajectory(desired_trajectory: DesiredTrajectoryCoefficients, y_current, trajectory_length):
+    ''' Shift the desired trajectory so s=0 corresponds to the point x,y,phi'''
+
+    s_current = find_s_on_spline(desired_trajectory.y_coeff, y_current, trajectory_length)
+
+    x_coeff = shift_polynomial(desired_trajectory.x_coeff, s_current)
+    y_coeff = shift_polynomial(desired_trajectory.y_coeff, s_current)
+    phi_coeff = shift_polynomial(desired_trajectory.phi_coeff, s_current)
+    
+    new_traj = DesiredTrajectoryCoefficients(x_coeff, y_coeff, phi_coeff)
+    new_traj_length = trajectory_length - s_current
+    return new_traj, new_traj_length
+
+def generate_lane_changing_desired_trajectories(world: TrafficWorld, x0: np.array, T: float, v_mph_range: float = 10.0, n_speed_increments: int = 5) -> List[LaneChangeManueverPiecewise]:
     ''' Generate a few possible desired trajectories based on a lane change or lane following maneuver'''
 
-    x_start = x0[0]
     y_start = x0[1]
     phi_start = x0[2]
-
     v_start = x0[4]
+
 
     MPH_TO_MS = 0.447
     lower_speed = v_start - v_mph_range / 2.0 * MPH_TO_MS
@@ -350,18 +402,72 @@ def generate_lane_changing_desired_trajectories(vehicle, world: TrafficWorld, x0
     trajectory_lengths = np.linspace(start=lower_traj_length, stop=upper_traj_length, num=n_speed_increments, endpoint=True)
     
     delta_ys = [world.get_lane_centerline_y(lane_i) - y_start for lane_i in range(world.n_lanes)]
+    delta_phi = 0 - phi_start # We want to get to phi=0 by end of trajectory
     
     desired_trajectories = []
     for trajectory_length in trajectory_lengths:
 
         s1 = 0.25*trajectory_length
         s2 = 0.50*trajectory_length
-        s3 = 0.25*trajectory_length
+        s3 = 0.25*trajectory_length + 999999 #This ensures that it doesn't end abruptly
 
         for delta_y in delta_ys:
-            desired_trajectories += [LaneChangeManueverPiecewise(s1, s2, s3, delta_y)]
 
-    
+            desired_trajectories += [LaneChangeManueverPiecewise(s1, s2, s3, delta_y, delta_phi)]
+
+        if world.n_lanes != 2:
+            raise Exception("Error,desired trajectories assumes only two lanes")
+            
+        top_lane_centerline_y = world.get_lane_centerline_y(1)
+        bottom_lane_centerline_y = world.get_lane_centerline_y(0)
+        bottom_grass_centerline_y = bottom_lane_centerline_y - world.lane_width
+        top_grass_centerline_y = top_lane_centerline_y + world.lane_width
+        
+        INFTY = 9999999999
+        y_splits = sorted([top_lane_centerline_y, bottom_lane_centerline_y, bottom_grass_centerline_y, top_grass_centerline_y, INFTY])
+        idx_y = np.searchsorted(y_splits, y_start)
+        bottom_line = y_splits[idx_y-1]
+        top_line = y_splits[idx_y]
+        straight_ahead = LaneChangeTrajectoryCoefficients(9999999, 0, delta_phi)
+
+        EPSILON = 0.001 # needed since we're extrapoliting and thuse current_delta_y needs to be greater than zero
+        if y_start > top_lane_centerline_y + EPSILON:
+            top_line = max(top_grass_centerline_y, y_start + EPSILON)
+            bottom_line = top_lane_centerline_y
+            print(top_line, bottom_line)
+            full_lane_change_down = LaneChangeTrajectoryCoefficients(trajectory_length, bottom_line - top_line, 0.0)
+            current_delta_y = y_start - top_line
+            shifted_lane_change_down, new_traj_length = shift_desired_trajectory(full_lane_change_down, current_delta_y, trajectory_length)
+            shifted_lane_change_down_piecewise = PiecewiseDesiredTrajectory(shifted_lane_change_down, straight_ahead, straight_ahead, new_traj_length, 99999, 99999)
+            desired_trajectories += [shifted_lane_change_down_piecewise]
+        elif y_start < bottom_lane_centerline_y - EPSILON:
+            top_line = bottom_lane_centerline_y
+            bottom_line = min(bottom_grass_centerline_y, y_start - EPSILON)
+            full_lane_change_up = LaneChangeTrajectoryCoefficients(trajectory_length, top_line - bottom_line, 0.0)
+            current_delta_y = y_start - bottom_line
+            shifted_lane_change_up, new_traj_length = shift_desired_trajectory(full_lane_change_up, current_delta_y, trajectory_length)
+            shifted_lane_change_up_piecewise = PiecewiseDesiredTrajectory(shifted_lane_change_up, straight_ahead, straight_ahead, new_traj_length, 99999, 99999)
+            desired_trajectories += [shifted_lane_change_up_piecewise]            
+        elif (bottom_lane_centerline_y + EPSILON < y_start < top_lane_centerline_y - EPSILON):
+        # Trajectories for continuing a lane change
+            bottom_line = bottom_lane_centerline_y
+            top_line = top_lane_centerline_y
+            
+            full_lane_change_up = LaneChangeTrajectoryCoefficients(trajectory_length, top_line - bottom_line, 0.0)
+            current_delta_y = y_start - bottom_line
+            shifted_lane_change_up, new_traj_length = shift_desired_trajectory(full_lane_change_up, current_delta_y, trajectory_length)
+            shifted_lane_change_up_piecewise = PiecewiseDesiredTrajectory(shifted_lane_change_up, straight_ahead, straight_ahead, new_traj_length, 99999, 99999)
+            desired_trajectories += [shifted_lane_change_up_piecewise]
+
+            
+            full_lane_change_down = LaneChangeTrajectoryCoefficients(trajectory_length, bottom_line - top_line, 0.0)
+            current_delta_y = y_start - top_line
+            shifted_lane_change_down, new_traj_length = shift_desired_trajectory(full_lane_change_down, current_delta_y, trajectory_length)
+            shifted_lane_change_down_piecewise = PiecewiseDesiredTrajectory(shifted_lane_change_down, straight_ahead, straight_ahead, new_traj_length, 99999, 99999)
+            desired_trajectories += [shifted_lane_change_down_piecewise]
+
+        # desired_trajectories += [PiecewiseDesiredTrajectory(straight_ahead, straight_ahead, straight_ahead, 99999, 99999, 99999)]
+
     # desired_trajectories += [generate_desired_polynomial_coeff_constant_lane(vehicle, world)]
 
 
