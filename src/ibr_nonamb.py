@@ -170,7 +170,7 @@ def run_iterative_best_response(vehicles,
                             # print("Saving Control Veh Traj to Pred", c_veh_traj.x[0:2,:5], "...")
                             vehsinfo_ibr_pred[veh_id].update_state_from_traj(c_veh_traj_world)
                         experiment.print_solved_status(ag_idx, i_mpc, i_ibr, t_start_ipopt)
-                        experiment.save_plot(sol)
+                        # experiment.save_plot(sol)
                         break
                     else:
                         experiment.print_not_solved_status(ag_idx, i_mpc, i_ibr, sol.max_slack, t_start_ipopt)
