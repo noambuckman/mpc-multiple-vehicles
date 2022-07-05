@@ -120,8 +120,8 @@ def run_simulation(log_dir, params):
 
 if __name__ == "__main__":
     parser = IBRParser()
-    parser.add_argument("my_task_id", type=int)
-    parser.add_argument("num_tasks", type=int)
+    parser.add_argument("my_task_id", default=0, type=int)
+    parser.add_argument("num_tasks", default=1, type=int)
     parser.add_argument("--experiment-random-seed", type=int, default="0719")
     parser.add_argument("--input-params", type=str, default="experiments/experiment.json", help="Path to jason")
     parser.add_argument("--results-dir", type=str, default=None)
