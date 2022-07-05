@@ -96,7 +96,7 @@ class IBRParser(ArgumentParser):
         self.add_argument('--strict-wall-constraint', type=str2bool, default=False, help="Turn on a strict grass constraint")
         self.add_argument('--safety-constraint', type=str2bool, default=False, help="Stopping constraint")
         self.add_argument('--plot-initial-positions', type=str2bool, default=True, help="Plot & save initial conditions")
-        self.add_argument('--max-cpu-time', type=float, default=10.0, help="Maximum solve time for IPOPT")
+        self.add_argument('--max-cpu-time', type=float, default=99999999.0, help="Maximum solve time for IPOPT")
         self.add_argument('--solver-mode', type=str, default="pickled", help="Use a pre-pickled solver for the mpc")
         self.add_argument('--precompiled-solver-dir', type=str, default="/home/nbuckman/mpc-multiple-vehicles/src/compiled_code/", help="Location of any precompiled solver")
         self.add_argument('--lane-width', type=float, default=4.0, help="Lane width")
