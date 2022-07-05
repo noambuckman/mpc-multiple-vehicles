@@ -38,7 +38,7 @@ def feasible_guess(N, vehicle, x0, params, world,
     cp_params["solver_mode"] = "regenerate"
     solver_params = generate_solver_params(params, 0, 0)
 
-    ipopt_params = {'print_level': 5, 'max_cpu_time': 20}
+    ipopt_params = {'print_level': 5}
 
 
     # warm start with no control inputs
