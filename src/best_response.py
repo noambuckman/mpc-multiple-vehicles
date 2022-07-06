@@ -8,21 +8,22 @@ from src.vehicle_parameters import VehicleParameters
 from src.traffic_world import TrafficWorld
 from src.vehicle import Vehicle
 from src.vehicle_mpc_information import VehicleMPCInformation, Trajectory
-from src.desired_trajectories import LaneChangeManueverPiecewise, PiecewiseDesiredTrajectory, LaneFollowingPiecewiseTrajectory
+from src.desired_trajectories import PiecewiseDesiredTrajectory
 
 class MPCSolverReturn(object):
-    def __init__(self, solved_status:bool, current_cost:float, max_slack:float, trajectory: Trajectory, warm_key: str, debug_list: List, cntrld_vehicle_trajectories: List[np.array]):
+    def __init__(self, solved_status:bool, current_cost:float, max_slack:float, trajectory: Trajectory, warm_key: str, desired_traj: PiecewiseDesiredTrajectory, debug_list: List, cntrld_vehicle_trajectories: List[np.array]):
         self.solved_status = solved_status
         self.current_cost = current_cost 
         self.max_slack = max_slack
         self.trajectory = trajectory
         self.warm_key = warm_key
+        self.desired_traj = desired_traj
         self.debug_list = debug_list
         self.cntrld_vehicle_trajectories = cntrld_vehicle_trajectories
 
 class MPCSolverReturnException(MPCSolverReturn):
     def __init__(self):
-        MPCSolverReturn.__init__(self, False, np.infty, np.infty, None, None, [], None)
+        MPCSolverReturn.__init__(self, False, np.infty, np.infty, None, None, None, [], None)
 
 class MPCSolverLog(object):
     def __init__(self, solver_return:MPCSolverReturn, i_mpc:int, i_ibr:int, agent_id:int, solve_i:int):
@@ -121,11 +122,10 @@ def parallel_mpc_solve_w_trajs(warmstart_traj_dict: Dict[str, Tuple[Trajectory, 
     phi_coeff_d_ctrld = [None for i in range(len(cntrld_vehicles))]
     spline_lengths_ctrld = [None for i in range(len(cntrld_vehicles))]
     for i, ctrld_vehicle in enumerate(cntrld_vehicles):
-        cntrld_veh_desired_traj = LaneFollowingPiecewiseTrajectory(ctrld_vehicle, world)
-
+        # cntrld_veh_desired_traj = LaneFollowingPiecewiseTrajectory(ctrld_vehicle, world)
+        cntrld_veh_desired_traj = ctrld_vehicle.desired_traj
         x_coeff_d_ctrld[i], y_coeff_d_ctrld[i], phi_coeff_d_ctrld[i], spline_lengths_ctrld[i] = cntrld_veh_desired_traj.to_array()
-        print("cntrld coeff %d"%i)
-        print(x_coeff_d_ctrld[i], y_coeff_d_ctrld[i], phi_coeff_d_ctrld[i])
+
 
 
     precompiled_code_dir = params["precompiled_solver_dir"]
@@ -194,7 +194,7 @@ def parallel_mpc_solve_w_trajs(warmstart_traj_dict: Dict[str, Tuple[Trajectory, 
 def call_mpc_solver(
     warm_key: str,
     warm_trajectory: Trajectory,
-    desired_traj_coeff: PiecewiseDesiredTrajectory,
+    desired_traj: PiecewiseDesiredTrajectory,
     precompiled_code_dir: str,
     solver_mode: str,
     cntrld_u_warm: np.array,
@@ -229,8 +229,8 @@ def call_mpc_solver(
     dt = params["dt"]
 
 
-    x_coeff_d, y_coeff_d, phi_coeff_d, spline_lengths_d = desired_traj_coeff.to_array()
-    n_coeff_d = desired_traj_coeff.polynomial1.n_coeff
+    x_coeff_d, y_coeff_d, phi_coeff_d, spline_lengths_d = desired_traj.to_array()
+    n_coeff_d = desired_traj.polynomial1.n_coeff
 
 
 
@@ -258,7 +258,6 @@ def call_mpc_solver(
     # Try to solve the mpc
     try:
         solution = nlp_solver(x0=nlp_x0, p=nlp_p, lbg=nlp_lbg, ubg=nlp_ubg)
-        
         x_ego, u_ego, xd_ego, cntrld_vehicle_trajectories, max_slack, current_cost = get_trajectories_from_solution(
             solution, params["N"], nc, nnc)
         trajectory = Trajectory(u=u_ego, x=x_ego, xd=xd_ego)
@@ -267,10 +266,11 @@ def call_mpc_solver(
         if -0.00001 < current_cost < 0.00001:
             # For now, do not use any solutions that reached max cpu
             print("Cost = 0.000: Max CPU suspected")
-            print(x_ego)
-            print(u_ego)
-            current_cost = 1e7 #we don't know the cost yet, so we'll make it pretty high
-        return MPCSolverReturn(True, current_cost, max_slack, trajectory, warm_key, debug_list, cntrld_vehicle_trajectories)
+            last_solution = mpc.callback.last_solution
+            print("max(lam_g)", max(np.array(last_solution['lam_g']))) #
+            x_ego, u_ego, xd_ego, cntrld_vehicle_trajectories, max_slack, current_cost = get_trajectories_from_solution(last_solution, params["N"], nc, nnc)
+            current_cost += 1e3 #we don't know the cost yet, so we'll make it pretty high
+        return MPCSolverReturn(True, current_cost, max_slack, trajectory, warm_key, desired_traj, debug_list, cntrld_vehicle_trajectories)
     except Exception as e:
         print(e)
         return MPCSolverReturnException()

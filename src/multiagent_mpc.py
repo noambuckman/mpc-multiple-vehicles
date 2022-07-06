@@ -6,7 +6,7 @@ from typing import List
 from src.geometry_helper import minkowski_ellipse_collision_distance
 from src.vehicle_parameters import VehicleParameters
 from src.desired_trajectories import PiecewiseDesiredTrajectory, piecewise_function
-
+from src.callback import MyCallback
 class NonconvexOptimization(object):
     def __init__(self):
         # Inequality Constraints
@@ -16,6 +16,9 @@ class NonconvexOptimization(object):
         self._ubg_list = []
         self._x_list = []  # Decision Variables
         self._p_list = []  # Parameters
+        self.nx = 0
+        self.ng = 0
+        self.np = 0
         self.callback = IpoptCallback()
 
     def add_X(self, *x):
@@ -79,9 +82,11 @@ class NonconvexOptimization(object):
             prob = {'f': self._f, 'g': self._g_list, 'x': self._x_list}
         else:
             prob = {'f': self._f, 'g': self._g_list, 'x': self._x_list, 'p': self._p_list}
+        self.callback = MyCallback('mycallback', self.nx, self.ng, self.np)
 
-        # solver = cas.nlpsol('solver', 'ipopt', prob, {'ipopt': ipopt_params, 'iteration_callback': self.callback})
-        solver = cas.nlpsol('solver', 'ipopt', prob, {'ipopt': ipopt_params})
+        solver = cas.nlpsol('solver', 'ipopt', prob, {'ipopt': ipopt_params, 'iteration_callback': self.callback})
+        
+        # solver = cas.nlpsol('solver', 'ipopt', prob, {'ipopt': ipopt_params})
 
         solver_name_prefix = self.get_solver_name()
         return solver, solver_name_prefix

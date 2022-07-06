@@ -157,17 +157,23 @@ def run_iterative_best_response(vehicles,
                         # print("Xd", sol.trajectory.xd[0:2,:5], "...")
 
                         # Convert the units back to the world frame
-
-                        solution_traj_world = sol.trajectory.transform_to_global(fake_ego_x0_transforming)
-
+                        u_solved = sol.trajectory.u
+                        x_sim, xd_sim = response_vehinfo_egoframe.vehicle.forward_simulate_all(response_vehinfo_egoframe.x0, u_solved)
+                        solution_traj = Trajectory(u=u_solved, x=x_sim, xd=xd_sim)
+                        solution_traj_world = solution_traj.transform_to_global(fake_ego_x0_transforming)
+                        
                         # print("Saving Ego Veh Traj to Pred", solution_traj_world.x[0:2,:5], "...")
                         vehsinfo_ibr[ag_idx].update_state_from_traj(solution_traj_world)
                         vehsinfo_ibr_pred[ag_idx].update_state_from_traj(solution_traj_world)
 
                         for cntrld_i_idx, veh_id in enumerate(cntrld_i):
-                            c_veh_traj = sol.cntrld_vehicle_trajectories[cntrld_i_idx]
+                            u_ctrl = sol.cntrld_vehicle_trajectories[cntrld_i_idx].u
+                            ctrld_veh_info = ctrld_vehsinfo_egoframe[cntrld_i_idx]
+
+                            x_ctrl, xd_ctrl = ctrld_veh_info.vehicle.forward_simulate_all(ctrld_veh_info.x0, u_ctrl)
+                            c_veh_traj = Trajectory(u=u_ctrl, x=x_ctrl, xd=xd_ctrl)
+
                             c_veh_traj_world = c_veh_traj.transform_to_global(fake_ego_x0_transforming)
-                            # print("Saving Control Veh Traj to Pred", c_veh_traj.x[0:2,:5], "...")
                             vehsinfo_ibr_pred[veh_id].update_state_from_traj(c_veh_traj_world)
                         experiment.print_solved_status(ag_idx, i_mpc, i_ibr, t_start_ipopt)
                         # experiment.save_plot(sol)

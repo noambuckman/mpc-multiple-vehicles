@@ -38,7 +38,7 @@ def feasible_guess(N, vehicle, x0, params, world,
     cp_params["solver_mode"] = "regenerate"
     solver_params = generate_solver_params(params, 0, 0)
 
-    ipopt_params = {'print_level': 5}
+    ipopt_params = {'print_level': 5, 'max_cpu_time':params["max_cpu_time"]}
 
 
     # warm start with no control inputs
@@ -52,7 +52,7 @@ def feasible_guess(N, vehicle, x0, params, world,
     x_warm, _ = spatial_only_optimization(x_warm_initial, [], x_other,
                                           cp_vehicle, None, cp_other_vehicles,
                                           3 * cp_vehicle.L)
-    print("Spatial Only Optimization Solution", x_warm)
+    # print("Spatial Only Optimization Solution", x_warm)
     # warm start with feasible x (not dynamically feasible)
     cp_vehicle.update_default_desired_lane_traj(world, x0)
     warm_traj_dict = {
