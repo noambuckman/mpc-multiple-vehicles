@@ -59,6 +59,20 @@ def load_data_from_logdir(logdir: str):
 
     return params, vehicles, world, x0, x, u
 
+def load_initial_vars(logdir: str):
+    X0_PATH = os.path.join(logdir, "x0.p")
+    x0 = pickle.load(open(X0_PATH, "rb"))
+
+    vehicles_path = os.path.join(logdir, 'other_vehicles.p')
+    world_path = os.path.join(logdir, 'world.p')
+
+    vehicles = pickle.load(open(vehicles_path, 'rb'))
+    world = pickle.load(open(world_path, 'rb'))    
+
+    params = json.load(open(os.path.join(logdir, "params.json")))
+
+    return params, vehicles, world, x0    
+
 
 def get_car_colors_from_svo(vehicles):
     ''' Get car color string for each car based on the car's SVO'''
