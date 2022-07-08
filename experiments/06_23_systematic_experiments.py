@@ -117,7 +117,7 @@ def run_simulation(log_dir, params):
     #     plot_initial_positions(log_dir, world, all_other_vehicles, all_other_x0)
 
     with open(log_dir + "params.json", "w") as fp:
-        json.dump(params, fp, indent=2)
+        json.dump(params, fp, indent=2, sort_keys=True)
 
     xothers_actual, uothers_actual = run_iterative_best_response(all_other_vehicles, world, all_other_x0, params,
                                                                  log_dir)
