@@ -11,7 +11,10 @@ from src.vehicle_mpc_information import VehicleMPCInformation, Trajectory
 from src.desired_trajectories import PiecewiseDesiredTrajectory
 
 class MPCSolverReturn(object):
-    def __init__(self, solved_status:bool, current_cost:float, max_slack:float, trajectory: Trajectory, warm_key: str, desired_traj: PiecewiseDesiredTrajectory, debug_list: List, cntrld_vehicle_trajectories: List[np.array]):
+    def __init__(self, solved_status:bool, 
+                        current_cost:float, 
+                        max_slack:float, trajectory: Trajectory, warm_key: str, desired_traj: PiecewiseDesiredTrajectory, debug_list: List, cntrld_vehicle_trajectories: List[np.array], 
+                        max_cpu_limit: bool = False, g_violation: float = 0.0):
         self.solved_status = solved_status
         self.current_cost = current_cost 
         self.max_slack = max_slack
@@ -20,6 +23,8 @@ class MPCSolverReturn(object):
         self.desired_traj = desired_traj
         self.debug_list = debug_list
         self.cntrld_vehicle_trajectories = cntrld_vehicle_trajectories
+        self.max_cpu_limit = max_cpu_limit
+        self.g_violation = g_violation
 
 class MPCSolverReturnException(MPCSolverReturn):
     def __init__(self):
@@ -222,7 +227,7 @@ def call_mpc_solver(
 ) -> MPCSolverReturn:
     '''Create the iterative best response object and solve.  Assumes that it receives warm start profiles.
     This really should only require a u_warm, x_warm, x_des_warm and then one level above we generate those values'''
-    
+    start_time = time.time()
     k_slack = solver_params["k_slack"]
     k_CA = solver_params["k_CA"]
     k_CA_power = solver_params["k_CA_power"]
@@ -249,17 +254,23 @@ def call_mpc_solver(
         nlp_solver, nlp_lbg, nlp_ubg = get_compiled_solver(
             precompiled_code_dir, params["N"], nc, nnc, params["safety_constraint"])
     else:
+        mpc_call_start = time.time()
         # Generate the solver from scratch. This can take ~8s for large
         mpc = MultiMPC(params["N"], nc, nnc, n_coeff_d, params,
                        ipopt_params, safety_constraint=params["safety_constraint"])
+        mpc_duration = time.time() - mpc_call_start
         nlp_solver = load_solver_from_mpc(mpc, precompiled=False)
         nlp_lbg, nlp_ubg = get_bounds_from_mpc(mpc)
 
     # Try to solve the mpc
     try:
+        pre_call_tic = time.time()
         solution = nlp_solver(x0=nlp_x0, p=nlp_p, lbg=nlp_lbg, ubg=nlp_ubg)
+        solver_call_duration = time.time() - pre_call_tic
         x_ego, u_ego, xd_ego, cntrld_vehicle_trajectories, max_slack, current_cost = get_trajectories_from_solution(
             solution, params["N"], nc, nnc)
+        max_g = 0.0
+        max_cpu_limit = False
         trajectory = Trajectory(u=u_ego, x=x_ego, xd=xd_ego)
 
         debug_list = []
@@ -267,10 +278,20 @@ def call_mpc_solver(
             # For now, do not use any solutions that reached max cpu
             print("Cost = 0.000: Max CPU suspected")
             last_solution = mpc.callback.last_solution
-            print("max(lam_g)", max(np.array(last_solution['lam_g']))) #
+
+            g = np.array(last_solution['g'])
+            ubg, lbg = np.array(nlp_ubg), np.array(nlp_lbg)
+            ub_gap = np.clip(g - ubg, 0, np.infty)
+            lb_gap = np.clip(lbg - g, 0, np.infty)
+            gap_magnitude =  (ub_gap.T @ ub_gap + lb_gap.T @ lb_gap)
+            slack_cost = 100 * gap_magnitude
+            print("Constraint Gap %.05f"%gap_magnitude)
             x_ego, u_ego, xd_ego, cntrld_vehicle_trajectories, max_slack, current_cost = get_trajectories_from_solution(last_solution, params["N"], nc, nnc)
-            current_cost += 1e3 #we don't know the cost yet, so we'll make it pretty high
-        return MPCSolverReturn(True, current_cost, max_slack, trajectory, warm_key, desired_traj, debug_list, cntrld_vehicle_trajectories)
+            current_cost += slack_cost #we don't know the cost yet, so we'll make it pretty high
+            max_cpu_limit = True
+            max_g = gap_magnitude
+        print("MPC Duration %.03f Solver Call %.03f   Total Call %.03f"%(mpc_duration, solver_call_duration, time.time()-start_time))
+        return MPCSolverReturn(True, current_cost, max_slack, trajectory, warm_key, desired_traj, debug_list, cntrld_vehicle_trajectories, max_cpu_limit, max_g)
     except Exception as e:
         print(e)
         return MPCSolverReturnException()
