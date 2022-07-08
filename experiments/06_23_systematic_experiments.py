@@ -7,8 +7,10 @@ from src.traffic_world import TrafficWorld
 from src.ibr_nonamb import run_iterative_best_response
 import src.utils.solver_helper as helper
 import subprocess
-
+from os.path import expanduser
 def get_git_revision_hash() -> str:
+    home = expanduser("~")
+    os.chdir(os.path.join(home, "mpc-multiple-vehicles"))
     return subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('ascii').strip()
 
 
