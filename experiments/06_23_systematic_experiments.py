@@ -9,9 +9,13 @@ import src.utils.solver_helper as helper
 import subprocess
 from os.path import expanduser
 def get_git_revision_hash() -> str:
+    cwd = os.getcwd()
+
     home = expanduser("~")
     os.chdir(os.path.join(home, "mpc-multiple-vehicles"))
-    return subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('ascii').strip()
+    commit = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('ascii').strip()
+    os.chdir(cwd)
+    return commit
 
 
 def run_simulation(log_dir, params):
