@@ -6,6 +6,10 @@ from src.utils.log_management import random_date_string
 from src.traffic_world import TrafficWorld
 from src.ibr_nonamb import run_iterative_best_response
 import src.utils.solver_helper as helper
+import subprocess
+
+def get_git_revision_hash() -> str:
+    return subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('ascii').strip()
 
 
 def run_simulation(log_dir, params):
@@ -18,7 +22,7 @@ def run_simulation(log_dir, params):
     params["N"] = max(1, int(params["T"] / params["dt"]))
     params["number_ctrl_pts_executed"] = max(1, int(np.floor(params["N"] * params["p_exec"])))
     params["pid"] = os.getpid()
-
+    params["git_hash"] = get_git_revision_hash()
     # Create the world and vehicle objects
     world = TrafficWorld(params["n_lanes"], 0, 999999, lane_width = params["lane_width"])
 
