@@ -423,6 +423,11 @@ class MultiMPC(NonconvexOptimization):
         collision_cost = self.compute_collision_avoidance_costs(self.N, n_other_vehicle, n_vehs_cntrld, p_ego,
                                                                 p_other_vehicle_list, p_cntrld_list, x_ego, x_other,
                                                                 x_ctrld, params, k_ca2, k_CA_power)
+        
+        k_ttc = 1.0
+        ttc_cost_ctrl = get_ttc_cost_cum(x_ego, x_ctrld, p_ego.L, p_ego.W, parallel=True, buffer_factor=0.1)
+        ttc_cost_nc = get_ttc_cost_cum(x_ego, x_other, p_ego.L, p_ego.W, parallel=True, buffer_factor=0.1)
+        collision_cost += k_ttc * (ttc_cost_ctrl + ttc_cost_nc)
 
         total_svo_cost = (response_svo_cost + other_svo_cost + k_slack * slack_cost + k_CA * collision_cost)
         return total_svo_cost
@@ -792,6 +797,54 @@ class MultiMPC(NonconvexOptimization):
                         self.add_bounded_constraint(
                             0, delta_p_ij.T @ delta_v_ij / rel_dist_mag +
                             cas.sqrt(2 * (alpha_i + alpha_j) * (rel_dist_mag - min_buffer_distance)))
+    
+    def generate_circles_stopping_const(self,
+                                        x_ego,
+                                        x_others,
+                                        L,
+                                        W,
+                                        max_deceleration=0.01,
+                                        min_buffer_distance=0.001):
+        ''' We assume all vehicles have same length and width.'''
+        N = x_ego.shape[1]
+
+        alpha_i = max_deceleration  #we may need this to be > 0
+        alpha_j = max_deceleration
+
+        for k in range(N):
+            xi = x_ego[:, k]
+            ego_centers, ego_radius = get_vehicle_circles(xi)
+
+            v_i = cas.vertcat(xi[4] * cas.cos(xi[2]), xi[4] * cas.sin(xi[2]))
+
+            for j in range(len(x_others)):
+                xj = x_others[j][:, k]
+                ado_centers, ado_radius = get_vehicle_circles(xj)
+                v_j = cas.vertcat(xj[4] * cas.cos(xj[2]), xj[4] * cas.sin(xj[2]))
+
+                min_distance = min_buffer_distance + ego_radius + ado_radius
+                for xy_i in ego_centers:
+                    for xy_j in ado_centers:
+                        delta_p_ij = xy_i - xy_j
+                        delta_v_ij = v_i - v_j
+
+                        rel_dist_mag = cas.sqrt(delta_p_ij.T @ delta_p_ij)
+                        # added to help prevent large gradients in next constraint
+                        # self.opti.subject_to(delta_p_ij.T @ delta_p_ij >= min_distance**2)
+                        # stopping_distance = rel_dist_mag - min_distance
+                        # make sure we are always positive
+
+                        stopping_distance = cas.fmax(rel_dist_mag - min_distance, 0.00001)
+                        self.add_bounded_constraint(min_distance**2, delta_p_ij.T @ delta_p_ij, None)
+                        self.add_bounded_constraint(
+                            0, delta_p_ij.T @ delta_v_ij / rel_dist_mag + cas.sqrt(2 * (alpha_i + alpha_j) *
+                                                                                   (stopping_distance)), None)
+
+                        # self.opti.subject_to(
+                        #     delta_p_ij.T @ delta_v_ij / rel_dist_mag + cas.sqrt(2 * (alpha_i + alpha_j) *
+                        #                                                         (rel_dist_mag - min_distance)) >= 0)
+
+
 
     def generate_circles_stopping_constraint(self,
                                              x_ego,
@@ -1518,3 +1571,105 @@ def load_solver_from_mpc(mpc, precompiled: bool = True):
         solver = mpc.solver
 
     return solver
+
+def compute_time_to_collision_parallel(xy_i, xy_j, v_i, v_j, phi_i, r_i = 0.0, r_j = 0.0, buffer_factor=0.1):
+    ''' Time to collision pt to pt
+        xy_i, xy_j = 2x1 np.arrays of object i and j
+        v_i, v_j = 2x1 np.array of object i and j's velocity common (world) reference frame
+        r_i, r_j = floats of object i and object j's radius. Default = 0.0 for point mass
+    '''
+ 
+    delta_p_ij = xy_i - xy_j
+    heading_direction = cas.vertcat(cas.cos(phi_i), cas.sin(phi_i))
+
+
+    infront_dot = -delta_p_ij.T @ heading_direction
+
+    in_front = cas.fmax(infront_dot, 0.0) / infront_dot
+
+    v_j_mag = cas.sqrt(v_j.T @ v_j)
+    buffer_v = buffer_factor * v_j_mag
+    new_v_j_mag = v_j_mag + buffer_v - 2*buffer_v*in_front 
+    new_v_j = v_j * new_v_j_mag / v_j_mag
+    delta_v_ij = v_i - new_v_j
+
+
+    point_distance = cas.sqrt(delta_p_ij.T @ delta_p_ij)
+    inter_circle_distance = point_distance - r_i - r_j
+
+    delta_p_ij = delta_p_ij * inter_circle_distance / point_distance
+
+    cos_heading_delta_p_ij = (delta_p_ij.T @ heading_direction)**2/ ((delta_p_ij.T @ delta_p_ij)*(heading_direction.T @ heading_direction)) 
+
+    time_to_collision = (delta_p_ij.T @ delta_p_ij) / (delta_p_ij.T @ delta_v_ij)
+    return time_to_collision/cos_heading_delta_p_ij
+
+def compute_time_to_collision(xy_i, xy_j, v_i, v_j, r_i = 0.0, r_j = 0.0):
+    ''' Time to collision pt to pt
+        xy_i, xy_j = 2x1 np.arrays of object i and j
+        v_i, v_j = 2x1 np.array of object i and j's velocity common (world) reference frame
+        r_i, r_j = floats of object i and object j's radius. Default = 0.0 for point mass
+    '''
+    delta_p_ij = xy_i - xy_j
+    delta_v_ij = v_i - v_j
+
+    point_distance = cas.sqrt(delta_p_ij.T @ delta_p_ij)
+    inter_circle_distance = point_distance - r_i - r_j
+
+    delta_p_ij = delta_p_ij * inter_circle_distance / point_distance
+
+    time_to_collision = (delta_p_ij.T @ delta_p_ij) / (delta_p_ij.T @ delta_v_ij)
+    
+    return time_to_collision
+
+def compute_worst_case_ttc(xy_i, xy_j, v_i, v_j, r_i, r_j, accel_factor = 0.10):
+    ''' TTC < 0:  Car will collide in ttc seconds at constant velocities
+        TTC > 0:  Car will NOT collide ever at constant velocities    
+    '''
+    vj_accel = v_j * (1 + accel_factor)
+    vj_decel = v_j * (1 - accel_factor)
+    
+    speed_up_ttc = compute_time_to_collision(xy_i, xy_j, v_i, vj_accel, r_i, r_j)
+    slow_down_ttc = compute_time_to_collision(xy_i, xy_j, v_i, vj_decel, r_i, r_j)
+
+    return speed_up_ttc, slow_down_ttc
+
+
+
+def get_ttc_cost_cum(x_ego,
+                    x_others,
+                    L,
+                    W,
+                    parallel=False,
+                    buffer_factor=0.10):
+    N = x_ego.shape[1]
+
+    ego_dx, ego_radius = 1.075, 1.77
+    ado_dx, ado_radius = 1.075, 1.77
+    cost = 0
+    for k in range(N):
+        xi = x_ego[:, k]
+        ego_centers, ego_radius = get_vehicle_circles(xi, ego_dx, ego_radius)
+
+        v_i = cas.vertcat(xi[4] * cas.cos(xi[2]), xi[4] * cas.sin(xi[2]))
+
+        for j in range(len(x_others)):
+            xj = x_others[j][:, k]
+            ado_centers, ado_radius = get_vehicle_circles(xj, ado_dx, ado_radius)
+            v_j = cas.vertcat(xj[4] * cas.cos(xj[2]), xj[4] * cas.sin(xj[2]))
+        
+            for xy_i in ego_centers:
+                for xy_j in ado_centers:
+                    if parallel:
+                        phi_i = xi[2]
+                        ttc = compute_time_to_collision_parallel(xy_i, xy_j, v_i, v_j, phi_i, ego_radius, ado_radius, buffer_factor=buffer_factor)
+                    else:
+                        ttc = compute_time_to_collision(xy_i, xy_j, v_i, v_j, ego_radius, ado_radius)
+
+                    neg_ttc_only = cas.fmax(0, ttc) * (- 9999999999) + ttc  # max all positive ttc into negative infinity
+                    
+                    threshold = -10.0  #Only add when ttc > -10 (i.e. |ttc| < 10s)
+                    neg_ttc_thresh = cas.fmax(threshold, neg_ttc_only)
+                    cost += 1/neg_ttc_thresh**2
+                    
+    return cost
