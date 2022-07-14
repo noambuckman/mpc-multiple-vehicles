@@ -62,7 +62,7 @@ def run_simulation(log_dir, params):
     for vehicle in all_other_vehicles:
 
         vehicle.grass_max_y = world.get_top_grass_y()[0] - vehicle.W/2.0
-        vehicle.grass_min_y = world.get_bottom_grass_y()[1] + vehicle.W/2.0
+        vehicle.grass_min_y = world.get_bottom_grass_y()[2] + vehicle.W/2.0
 
         if params["strict_wall_constraint"]:
             vehicle.max_y = vehicle.grass_max_y
