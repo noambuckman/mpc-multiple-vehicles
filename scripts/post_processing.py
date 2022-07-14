@@ -16,7 +16,7 @@ def post_process(args):
     for logdir in args.logdir:
     
         try:
-            params, vehicles, world, x0, x, u = load_data_from_logdir(logdir)    
+            params, vehicles, world, x0, x, u = load_data_from_logdir(logdir, args.midrun)    
         except FileNotFoundError as e:
             print(e)
             continue
@@ -38,14 +38,22 @@ def post_process(args):
             analyze_costs(vehicles, x, u, world, params, post_processing_dir_path)
 
 
-def load_data_from_logdir(logdir: str):
-    ''' Loads experiment data from logdirectory string'''
+def load_data_from_logdir(logdir: str, midrun: bool = False):
+    ''' Loads experiment data from logdirectory string
+    
+        midrun: True if using trajectory information from mid-experiment running
+    
+    '''
     
     X0_PATH = os.path.join(logdir, "x0.p")
     x0 = pickle.load(open(X0_PATH, "rb"))
-
-    U_PATH = os.path.join(logdir, "controls.npy")
-    X_PATH = os.path.join(logdir, "trajectories.npy")
+    
+    if midrun:
+        U_PATH = os.path.join(logdir, "trajectories/", "controls_t.npy")
+        X_PATH = os.path.join(logdir, "trajectories/", "trajectory_t.npy")
+    else:
+        U_PATH = os.path.join(logdir, "controls.npy")
+        X_PATH = os.path.join(logdir, "trajectories.npy")        
     u = np.load(U_PATH)
     x = np.load(X_PATH)
 
@@ -145,10 +153,11 @@ def animate_cars(args, params, log_directory, trajectories, vehicles, world):
     vid_dir = os.path.join(log_directory, 'vids/')
     os.makedirs(vid_dir, exist_ok=True)
     print("Video directory", vid_dir)
+    temporary_str = "_t_" if args.midrun else ""
     if args.shape == "both" or args.shape == "image":
-        video_filename = os.path.join(vid_dir, log_string + '.mp4')
+        video_filename = os.path.join(vid_dir, log_string + temporary_str + '.mp4')
     else:
-        video_filename = os.path.join(vid_dir, log_string + 'ell.mp4')
+        video_filename = os.path.join(vid_dir, log_string + temporary_str + 'ell.mp4')
 
     if os.path.exists(video_filename):
         os.remove(video_filename)
@@ -347,6 +356,7 @@ if __name__ == '__main__':
     parser.add_argument("--analyze-controls", action="store_true", help="load controls")
     parser.add_argument("--animate", action="store_true", help="Animate simulation")
     parser.add_argument("--analyze-costs", action="store_true", help="Analyze and plot costs")
+    parser.add_argument("--midrun", action="store_true", help="Use trajectory data from midrun")
 
     parser.add_argument('--end-mpc', type=int, default=-1)
     parser.add_argument('--vehicle-id-track', type=int, default=0)
