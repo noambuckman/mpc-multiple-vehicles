@@ -105,6 +105,11 @@ def add_car(x: np.array, vehicle: Vehicle, ax: plt.matplotlib.axis = None, car_n
     return ax
 
 
+def add_ellipse(x, y, phi, vehicle, ax):
+    a, b = vehicle.ax, vehicle.by
+    ellipse_patch = patches.Ellipse((x, y), 2 * a, 2 * b, angle=np.rad2deg(phi), fill=False, color='black')
+    ax.add_patch(ellipse_patch)
+
 def plot_multiple_cars(k,
                        world: TrafficWorld,
                        vehicle: Vehicle,
@@ -143,7 +148,6 @@ def plot_multiple_cars(k,
                 for t in range(xothers_plot[vid_track].shape[1])
             ]
 
-    figwidth_in = 12.0
 
     ymax = world.y_max
     ymin = world.y_min
@@ -157,8 +161,6 @@ def plot_multiple_cars(k,
         axlim_minx = xlim[0]
         axlim_maxx = xlim[1]
     ## 1080p = 1920×1080,
-    fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx))
-
     # fig, ax = plt.subplots(figsize=(figwidth_in, fig_height), dpi=144)
     # fig, ax = plt.subplots(figsize=(200, 20), dpi=144)
     fig, ax = plt.subplots(figsize=(1920 / 144, 1080 / 144), dpi=144)
@@ -226,6 +228,8 @@ def plot_multiple_cars(k,
     fig = plt.gcf()
     ax = plt.gca()
     ax.get_yaxis().set_visible(False)
+    ax.get_xaxis().set_visible(False)
+    plt.tight_layout()
 
     if folder is not None:
         fig.savefig(folder + '{:03d}.png'.format(k))
@@ -457,7 +461,7 @@ def generate_camera_positions(xamb_plot: np.array, amb_veh: Vehicle) -> np.array
     return xc
 
 
-def add_grass(ax: plt.matplotlib.axis, world: TrafficWorld):
+def add_grass(ax: plt.matplotlib.axis, world: TrafficWorld, n_patches = 8):
     ''' 
         Generate grass in simulation
 
@@ -468,31 +472,82 @@ def add_grass(ax: plt.matplotlib.axis, world: TrafficWorld):
 
     # Get boundary of lanes from world
     axlim_minx, axlim_maxx = ax.get_xlim()
-    y_bottom_b, y_center_b, y_top_b = world.get_bottom_grass_y()
+    y_bottom_b, _, y_top_b = world.get_bottom_grass_y()
+    y_bottom_t, _, y_top_t = world.get_top_grass_y()
+
     width = axlim_maxx - axlim_minx
     left_x_grass = axlim_minx
     bottom_y_grass = y_bottom_b
-    bottom_grass = patches.Rectangle((left_x_grass, bottom_y_grass),
-                                     width,
-                                     y_top_b - y_bottom_b,
-                                     facecolor='g',
-                                     hatch='/')
-    ax.add_patch(bottom_grass)
+    # bottom_grass = patches.Rectangle((left_x_grass, y_bottom_b),
+    #                                  width,
+    #                                  y_top_b - y_bottom_b,
+    #                                  facecolor='g',
+    #                                  )
+    # ax.add_patch(bottom_grass)
 
-    left_x_grass = axlim_maxx - axlim_minx % (1.5 * width)
-    bottom_contrast_grass = patches.Rectangle((left_x_grass, bottom_y_grass),
-                                              width / 2.0,
-                                              y_top_b - y_bottom_b,
-                                              facecolor='g',
-                                              hatch='x')
-    ax.add_patch(bottom_contrast_grass)
+    # top_grass = patches.Rectangle((left_x_grass, y_bottom_t), width, y_top_t - y_bottom_t, facecolor='g', hatch='/')
+    # ax.add_patch(top_grass)
+
+
+    patterns = ["\\", 'x', None]
+    colors = ['forestgreen']
+    n_patterns = len(patterns)
+    n_colors = len(colors)
+    
+    patch_length = (axlim_maxx - axlim_minx)/float(n_patches)
+    
+    patch_idx = int(axlim_minx // patch_length)    
+    for pi in range(n_patches + 1):
+
+        left_x_grass = patch_idx * patch_length
+        if left_x_grass >= axlim_maxx:
+            break        
+        right_x_grass = (patch_idx + 1) * patch_length
+
+        pattern = patterns[patch_idx % n_patterns]
+        color = colors[patch_idx % n_colors]
+    
+        plot_left_x_grass = left_x_grass
+        plot_right_x_grass = right_x_grass
+        if right_x_grass >= axlim_maxx:
+            plot_right_x_grass = axlim_maxx 
+        if left_x_grass <= axlim_minx:
+            plot_left_x_grass = axlim_minx
+
+        width = plot_right_x_grass - plot_left_x_grass
+            # left_x_grass = axlim_maxx - axlim_minx % (1.5 * width)
+        bottom_contrast_grass = patches.Rectangle((plot_left_x_grass, bottom_y_grass),
+                                                patch_length,
+                                                y_top_b - y_bottom_b,
+                                                facecolor=color,
+                                                hatch=pattern,
+                                                edgecolor='darkgreen',
+                                                linewidth=0)
+        ax.add_patch(bottom_contrast_grass)
+
+
+        top_contrast_grass = patches.Rectangle((plot_left_x_grass, y_bottom_t),
+                                        patch_length,
+                                        y_top_t - y_bottom_t,
+                                        facecolor=color,
+                                        hatch=pattern,
+                                        edgecolor='darkgreen',
+                                        linewidth=0)
+        ax.add_patch(top_contrast_grass)        
+
+        patch_idx += 1
+
+
+
 
     # Create top grass
     y_bottom_t, y_center_t, y_top_t = world.get_top_grass_y()
     left_x_grass = axlim_minx
     bottom_y_grass = y_bottom_t
+    width = axlim_maxx - axlim_minx
+
     top_grass = patches.Rectangle((left_x_grass, bottom_y_grass), width, y_top_t - y_bottom_t, facecolor='g', hatch='/')
-    ax.add_patch(top_grass)
+    # ax.add_patch(top_grass)
 
     left_x_grass = axlim_maxx - axlim_minx % (1.5 * width)
     top_contrast_grass = patches.Rectangle((left_x_grass, bottom_y_grass),
@@ -500,7 +555,44 @@ def add_grass(ax: plt.matplotlib.axis, world: TrafficWorld):
                                            y_top_t - y_bottom_t,
                                            facecolor='g',
                                            hatch='x')
-    ax.add_patch(top_contrast_grass)
+
+    period = 2*patch_length
+    left_x_grass = (axlim_minx // period) * period   
+    for pi in range(n_patches + 3):
+
+        right_x_grass = left_x_grass + patch_length
+        if right_x_grass < axlim_minx:
+            left_x_grass += period
+            continue
+
+        plot_left_x_grass = left_x_grass
+        plot_right_x_grass = right_x_grass
+        if right_x_grass >= axlim_maxx:
+            plot_right_x_grass = axlim_maxx 
+        if left_x_grass <= axlim_minx:
+            plot_left_x_grass = axlim_minx
+
+        width = plot_right_x_grass - plot_left_x_grass
+        height = y_top_b - y_bottom_b
+            # left_x_grass = axlim_maxx - axlim_minx % (1.5 * width)
+        top_contrast_grass = patches.Rectangle((plot_left_x_grass, bottom_y_grass),
+                                        width / 2.0,
+                                        y_top_t - y_bottom_t,
+                                        facecolor='g',
+                                        hatch='x',
+                                        linewidth=0)
+        # ax.add_patch(top_contrast_grass)
+        
+        left_x_grass += period
+        if left_x_grass >= axlim_maxx:
+            break    
+    
+    
+    
+    
+    
+    
+    # ax.add_patch(top_contrast_grass)
 
 
 def add_lanes(ax: plt.matplotlib.axis, world: TrafficWorld):
