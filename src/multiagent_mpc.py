@@ -218,6 +218,9 @@ class MultiMPC(NonconvexOptimization):
         self.k_slack = cas.MX.sym('k_slack', 1, 1)
         self.k_CA = cas.MX.sym('k_CA', 1, 1)
         self.k_CA_power = cas.MX.sym('k_CA_power', 1, 1)
+        self.k_ttc = cas.MX.sym('k_ttc', 1, 1)
+        self.ttc_threshold = cas.MX.sym('k_ttc', 1, 1)
+
 
         self.n_coeff_d = n_coeff_d
         self.n_piecewise_splines = 3 # Hardcoded, number of splines allowed
@@ -234,7 +237,7 @@ class MultiMPC(NonconvexOptimization):
 
         self._p_list = mpcp_to_nlpp(self.p_dt, self.x0_ego, self.p_ego, self.p_theta_i_ego, self.p_theta_ic, self.p_theta_inc,
                                     self.x0_cntrld, self.p_cntrld_list, self.x0_allother, self.p_other_vehicle_list,
-                                    self.x_other, self.k_slack, self.k_CA, self.k_CA_power, 
+                                    self.x_other, self.k_slack, self.k_CA, self.k_CA_power, self.k_ttc, self.ttc_threshold,
                                     self.p_x_coeff_d, self.p_y_coeff_d, self.p_phi_coeff_d, self.p_spline_lengths,
                                     self.p_x_coeff_d_ctrld, self.p_y_coeff_d_ctrld, self.p_phi_coeff_d_ctrld, self.p_spline_lengths_ctrld)
 
@@ -249,7 +252,7 @@ class MultiMPC(NonconvexOptimization):
             self.p_theta_i_ego, self.x_ctrld, self.u_ctrld, self.xd_ctrld, self.p_cntrld_list, self.x_other,
             self.p_other_vehicle_list, self.slack_i_jnc, self.slack_ic_jnc, self.slack_i_jc, self.slack_ic_jc,
             self.top_wall_slack, self.bottom_wall_slack, self.top_wall_slack_c, self.bottom_wall_slack_c, self.x0_ego,
-            self.x0_cntrld, self.x0_allother, params, self.k_ca2, self.k_CA_power, self.k_slack, self.k_CA)
+            self.x0_cntrld, self.x0_allother, self.k_ca2, self.k_CA_power, self.k_slack, self.k_CA, self.k_ttc, self.ttc_threshold)
         self.set_f(self.total_svo_cost)
 
         ###########################3 CONSTRAINTS #########################################
@@ -385,8 +388,8 @@ class MultiMPC(NonconvexOptimization):
     def compute_mpc_costs(self, n_vehs_cntrld, n_other_vehicle, x_ego, u_ego, xd_ego, p_ego, p_theta_ic, p_theta_i_ego,
                           x_ctrld, u_ctrld, xd_ctrld, p_cntrld_list, x_other, p_other_vehicle_list, slack_i_jnc,
                           slack_ic_jnc, slack_i_jc, slack_ic_jc, top_wall_slack, bottom_wall_slack, top_wall_slack_c,
-                          bottom_wall_slack_c, x0_ego, x0_cntrld, x0_allother, params, k_ca2, k_CA_power, k_slack,
-                          k_CA):
+                          bottom_wall_slack_c, x0_ego, x0_cntrld, x0_allother, k_ca2, k_CA_power, k_slack,
+                          k_CA, k_ttc, ttc_threshold):
         ''' Compute the total cost for an SVO based MPC
             For each vehicle with decision variables, compute vehicle-specific costs related to speed and control
             Compute slack costs for the slack variables
@@ -422,11 +425,10 @@ class MultiMPC(NonconvexOptimization):
         # Compute Collision Avoidance ellipses using Minkowski sum
         collision_cost = self.compute_collision_avoidance_costs(self.N, n_other_vehicle, n_vehs_cntrld, p_ego,
                                                                 p_other_vehicle_list, p_cntrld_list, x_ego, x_other,
-                                                                x_ctrld, params, k_ca2, k_CA_power)
+                                                                x_ctrld, k_ca2, k_CA_power)
         
-        k_ttc = 1.0
-        ttc_cost_ctrl = get_ttc_cost_cum(x_ego, x_ctrld, p_ego.L, p_ego.W, parallel=True, buffer_factor=0.1)
-        ttc_cost_nc = get_ttc_cost_cum(x_ego, x_other, p_ego.L, p_ego.W, parallel=True, buffer_factor=0.1)
+        ttc_cost_ctrl = get_ttc_cost_cum(x_ego, x_ctrld, p_ego.L, p_ego.W, parallel=True, buffer_factor=0.1, ttc_threshold=ttc_threshold)
+        ttc_cost_nc = get_ttc_cost_cum(x_ego, x_other, p_ego.L, p_ego.W, parallel=True, buffer_factor=0.1, ttc_threshold=ttc_threshold)
         collision_cost += k_ttc * (ttc_cost_ctrl + ttc_cost_nc)
 
         total_svo_cost = (response_svo_cost + other_svo_cost + k_slack * slack_cost + k_CA * collision_cost)
@@ -690,7 +692,7 @@ class MultiMPC(NonconvexOptimization):
         return slack_cost
 
     def compute_collision_avoidance_costs(self, N, n_other_vehicle, n_vehs_cntrld, p_ego, p_other_vehicle_list,
-                                          p_cntrld_list, x_ego, x_other, x_ctrld, params, k_ca2, k_CA_power):
+                                          p_cntrld_list, x_ego, x_other, x_ctrld, k_ca2, k_CA_power):
         ''' 
             TODO:  What does this cost contain?  Does it include the wall?
                 n_other_vehicles
@@ -1226,7 +1228,7 @@ def get_vehicle_circles(x_state, dx=1.075, r=1.77):
 
 
 def mpcp_to_nlpp(p_dt, x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld, p_cntrld_list, x0_allother,
-                 p_other_vehicle_list, x_other_nc, k_slack, k_CA, k_CA_power,
+                 p_other_vehicle_list, x_other_nc, k_slack, k_CA, k_CA_power, k_ttc, ttc_threshold,
                  p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, spline_lengths,
                  p_x_coeff_d_ctrld, p_y_coeff_d_ctrld, p_phi_coeff_d_ctrld, spline_lengths_ctrld):
     ''' Converts 3 seperate parameter lists to a single long vector np X 1'''
@@ -1263,6 +1265,8 @@ def mpcp_to_nlpp(p_dt, x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, 
     long_list.append(k_slack)
     long_list.append(k_CA)
     long_list.append(k_CA_power)
+    long_list.append(k_ttc)
+    long_list.append(ttc_threshold)
 
     n_splines = p_x_coeff_d.shape[0]
     n_coeff_d = p_x_coeff_d.shape[1]
@@ -1357,6 +1361,10 @@ def nlpp_to_mpcp(nlp_p,
     idx += 1
     k_CA_power = nlp_p[idx:idx + 1]
     idx += 1
+    k_ttc = nlp_p[idx:idx + 1]
+    idx += 1
+    ttc_threshold = nlp_p[idx:idx + 1]
+    idx += 1    
 
     p_x_coeff_d = cas.reshape(nlp_p[idx : idx + n_poly_coeff*n_splines], (n_splines, n_poly_coeff))
     idx += n_poly_coeff*n_splines
@@ -1387,7 +1395,7 @@ def nlpp_to_mpcp(nlp_p,
 
                 
 
-    return p_dt, x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld_list, p_cntrld_list, x0_other_vehicle, p_other_vehicle_list, x_other_nc, k_slack, k_CA, k_CA_power, p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, p_spline_lengths, p_x_coeff_d_ctrld, p_y_coeff_d_ctrld, p_phi_coeff_d_ctrld, p_spline_lengths_ctrld
+    return p_dt, x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld_list, p_cntrld_list, x0_other_vehicle, p_other_vehicle_list, x_other_nc, k_slack, k_CA, k_CA_power, k_ttc, ttc_threshold, p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, p_spline_lengths, p_x_coeff_d_ctrld, p_y_coeff_d_ctrld, p_phi_coeff_d_ctrld, p_spline_lengths_ctrld
 
 
 def mpcx_to_nlpx(n_other: int, x_ego, u_ego, xd_ego, x_ctrl: List, u_ctrl: List, xd_ctrl: List, s_i_jnc, s_ic_jnc,
@@ -1641,7 +1649,9 @@ def get_ttc_cost_cum(x_ego,
                     L,
                     W,
                     parallel=False,
-                    buffer_factor=0.10):
+                    buffer_factor=0.10, 
+                    ttc_threshold = -10.0):
+    ''' Only add when ttc > -10 (i.e. |ttc| < 10s)'''
     N = x_ego.shape[1]
 
     ego_dx, ego_radius = 1.075, 1.77
@@ -1668,8 +1678,7 @@ def get_ttc_cost_cum(x_ego,
 
                     neg_ttc_only = cas.fmax(0, ttc) * (- 9999999999) + ttc  # max all positive ttc into negative infinity
                     
-                    threshold = -10.0  #Only add when ttc > -10 (i.e. |ttc| < 10s)
-                    neg_ttc_thresh = cas.fmax(threshold, neg_ttc_only)
+                    neg_ttc_thresh = cas.fmax(ttc_threshold, neg_ttc_only)
                     cost += 1/neg_ttc_thresh**2
                     
     return cost

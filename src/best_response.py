@@ -231,6 +231,8 @@ def call_mpc_solver(
     k_slack = solver_params["k_slack"]
     k_CA = solver_params["k_CA"]
     k_CA_power = solver_params["k_CA_power"]
+    k_ttc = params['k_ttc']
+    ttc_threshold = params['ttc_threshold']
     dt = params["dt"]
 
 
@@ -241,7 +243,7 @@ def call_mpc_solver(
 
     nlp_p = mpcp_to_nlpp(dt, response_x0, p_ego, theta_ego_i, theta_ic, theta_i_nc,
                          cntrld_x0, p_cntrld, nonresponse_x0_list, p_nc,
-                         nonresponse_x_list, k_slack, k_CA, k_CA_power, 
+                         nonresponse_x_list, k_slack, k_CA, k_CA_power, k_ttc, ttc_threshold,
                          x_coeff_d, y_coeff_d, phi_coeff_d, spline_lengths_d, 
                          x_coeff_d_ctrld, y_coeff_d_ctrld, phi_coeff_d_ctrld, spline_lengths_ctrld)
     nlp_x0 = get_warm_start_x0(nc, nnc, warm_trajectory, cntrld_x_warm,
