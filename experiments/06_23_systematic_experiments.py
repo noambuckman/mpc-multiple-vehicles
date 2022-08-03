@@ -119,6 +119,8 @@ def run_simulation(log_dir, params):
     with open(log_dir + "params.json", "w") as fp:
         json.dump(params, fp, indent=2, sort_keys=True)
 
+    if args.dry_run:
+        return None, None
     xothers_actual, uothers_actual = run_iterative_best_response(all_other_vehicles, world, all_other_x0, params,
                                                                  log_dir)
 
