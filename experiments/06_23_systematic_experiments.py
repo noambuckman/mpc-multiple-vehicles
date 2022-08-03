@@ -137,6 +137,7 @@ if __name__ == "__main__":
     parser.add_argument("--experiment-random-seed", type=int, default="0719")
     parser.add_argument("--input-params", type=str, default="experiments/experiment.json", help="Path to jason")
     parser.add_argument("--results-dir", type=str, default=None)
+    parser.add_argument("--dry-run", action='store_true')
 
     args = parser.parse_args()
     default_params = vars(args)
