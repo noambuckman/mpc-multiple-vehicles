@@ -15,25 +15,8 @@ def post_process_experiments(args):
 
     describe_experiment_params(experiment_params)
 
-    p_coop_array = np.array([all_params[exi]['p_cooperative'] for exi in range(len(all_params))])
-    distances_array = np.array([all_trajs[exi][:,0, args.n_mpc_end] - all_trajs[exi][:,0,0] for exi in range(len(all_params))])
-    p_distance_dict = {}
-    p_passing_dict = {}
-    for exi in range(distances_array.shape[0]):
-        if p_coop_array[exi] not in p_distance_dict:
-            p_distance_dict[p_coop_array[exi]] = []
-        p_distance_dict[p_coop_array[exi]] += [distances_array[exi]]
-        
-        
-    for p in p_distance_dict:
-        p_distance_dict[p] = np.array(p_distance_dict[p])
-    for p in p_passing_dict:
-        p_passing_dict[p] = np.array(p_passing_dict[p])
-        
-    p_unique = np.array(list(p_distance_dict.keys()))
-    p_unique = np.sort(p_unique)
-
     params = all_params[0]
+
     total_time = params["dt"] * args.n_mpc_end
     print("Total Sim Time", total_time)
 
@@ -79,6 +62,113 @@ def post_process_experiments(args):
 
     if args.animate_all:
         animate_by_all(experiment_params, all_dirs, all_params)
+
+    if args.analyze_speed:
+        analyze_speed(experiment_params, all_dirs, all_params, all_trajs)
+
+def analyze_speed(experiment_params, all_dirs, all_params, all_trajs, average_agent=False):
+    ''' Compute the distance traveled for each experiment '''
+
+    collision_seeds = []
+    for exp_i in range(len(all_trajs)):
+        if check_collision_experiment(all_trajs[exp_i]):
+            collision_seeds.append(all_params[exp_i]["seed"])
+    all_seeds = np.unique(np.array([all_params[exp_i]["seed"] for exp_i in range(len(all_params))]))
+    all_p = np.unique(np.array([all_params[exp_i]["p_cooperative"] for exp_i in range(len(all_params))]))
+    collision_seeds = np.unique(np.array(collision_seeds))
+    print("Seeds with Collisions", collision_seeds)
+    print("All Seeds", all_seeds)
+
+
+    p_baseline = 0.0 # we will baseline everything compared to a fully egoistic population
+
+    distances = {}
+    for exi in range(len(all_params)):
+        ds = all_trajs[exi][:,0, args.n_mpc_end] - all_trajs[exi][:,0,0]
+        
+        p = all_params[exi]['p_cooperative']
+        s = all_params[exi]["seed"]
+        
+        if average_agent:
+            d = np.sum(ds)
+            distances[(s,p)] = d
+        else:
+            for i in range(ds.shape[0]):
+                s = s + 10000*i
+                d = ds[i]
+
+                distances[(s,p)] = d
+
+    dist_baseline = {}
+    for s in all_seeds:
+        if s in collision_seeds:
+            continue
+        
+        if (s, p_baseline) not in distances:
+            print("No p=%f in Seed: %d"%(p_baseline, s))
+        else:
+            for p in all_p:
+                if (s,p) in distances:
+                    dist_baseline[(s,p)] = distances[(s,p)] / (distances[(s, p_baseline)] + 0.00000001)
+        
+
+    print(dist_baseline)
+    plt.figure()
+
+    for (s,p), d_ratio in dist_baseline.items():
+        plt.plot(p, d_ratio, 'o')
+    plt.xlabel("P_cooperative")
+    plt.ylabel("Performance  (Distance / Baseline Distance)")
+    plt.show()
+
+    plt.figure()
+    top_error = []
+    average = []
+    bottom_error = []
+
+    for p in all_p:
+        d_ratios = np.array([dist_baseline[(s,pi)] for (s,pi) in dist_baseline.keys() if pi==p])
+        d_ratios_mean = np.mean(d_ratios)
+        d_ratios_std = np.std(d_ratios)
+        d_ratios_stdE = d_ratios_std / len(d_ratios)
+
+        top_error.append(d_ratios_mean + d_ratios_stdE)
+        average.append(d_ratios_mean )
+        bottom_error.append(d_ratios_mean - d_ratios_stdE)
+
+        plt.plot([p]*len(d_ratios), d_ratios, '.', color='black')
+
+    plt.plot(all_p, average, '-o', label="Mean")
+    plt.fill_between(all_p, bottom_error, top_error, alpha=0.25)
+
+    plt.xlabel("P_cooperative")
+    plt.ylabel("Performance  (Distance / Baseline Distance)")    
+    plt.show()
+    # p_coop_array = np.array([all_params[exi]['p_cooperative'] for exi in range(len(all_params)) if all_params[exi]["seed"] not in collision_seeds])
+    # distances_array = np.array([all_trajs[exi][:,0, args.n_mpc_end] - all_trajs[exi][:,0,0] for exi in range(len(all_params)) if all_params[exi]["seed"] not in collision_seeds])
+    
+    
+        
+
+
+    # # p_distance_dict = {}
+    # # for exi in range(distances_array.shape[0]):
+    # #     if p_coop_array[exi] not in p_distance_dict:
+    # #         p_distance_dict[p_coop_array[exi]] = []
+    # #     p_distance_dict[p_coop_array[exi]] += [distances_array[exi]]
+        
+        
+    # # for p in p_distance_dict:
+    # #     p_distance_dict[p] = np.array(p_distance_dict[p])
+
+        
+    # p_unique = np.array(list(p_distance_dict.keys()))
+    # p_unique = np.sort(p_unique)
+
+    # params = all_params[0]
+
+    # print(p_distance_dict)
+    return None
 
 def describe_experiment_params(experiment_params):
     ''' Print out a description of experiment params'''
@@ -342,6 +432,7 @@ if __name__ == '__main__':
     parser.add_argument("experiment_dir", type=str, help="experiment directory to analyze")
     parser.add_argument("--n-mpc-end", type=int, default=500, help="experiment directory to analyze")
 
+    parser.add_argument("--analyze-speed", action="store_true", help="Analyze the speed of the cars")
     parser.add_argument("--analyze-collisions", action="store_true", help="Print out parameters for every simulation with collisions")
     parser.add_argument("--animate-by-density", action="store_true", help="animate videos and concatenate by SVO")
     parser.add_argument("--animate-by", type=str, default=None, help="Paramater to organize animation grid")
