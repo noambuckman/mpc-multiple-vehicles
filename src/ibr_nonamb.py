@@ -109,7 +109,7 @@ def run_iterative_best_response(vehicles,
 
 
                 obstacle_vehsinfo_egoframe = get_obstacle_vehs_closeby(response_vehinfo_egoframe, ctrld_vehsinfo_egoframe, obstacle_vehsinfo_egoframe, distance_threshold=40.0)
-                obstacle_vehsinfo_egoframe = get_closest_n_obstacle_vehs(response_vehinfo_egoframe, ctrld_vehsinfo_egoframe, obstacle_vehsinfo_egoframe, max_num_obstacles=10,
+                obstacle_vehsinfo_egoframe = get_closest_n_obstacle_vehs(response_vehinfo_egoframe, ctrld_vehsinfo_egoframe, obstacle_vehsinfo_egoframe, max_num_obstacles=params["max_num_obstacles"],
                                                                 min_num_obstacles_ego=3)
 
 
