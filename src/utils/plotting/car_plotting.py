@@ -122,7 +122,8 @@ def plot_multiple_cars(k,
                        car_colors: List[str] = None,
                        xlim=None,
                        vid_track: int = 0,
-                       all_other_vehicles: List[Vehicle] = None):
+                       all_other_vehicles: List[Vehicle] = None,
+                       frame_width: float = 100.0):
     ''' This only has info from vehicle but not any individual ones
     vehicle: [Deprecated] 
     xamb_plot:  [Deprecated]
@@ -153,9 +154,8 @@ def plot_multiple_cars(k,
     ymin = world.y_min
 
     center_frame = camera_positions[k]
-
     axlim_minx, axlim_maxx = center_frame - 20, center_frame + 60,
-    axlim_minx, axlim_maxx = center_frame - 50, center_frame + 50,
+    axlim_minx, axlim_maxx = center_frame - frame_width/2.0, center_frame + frame_width/2.0,
 
     if xlim is not None:
         axlim_minx = xlim[0]
@@ -394,7 +394,8 @@ def plot_cars(world: TrafficWorld,
               car_colors=None,
               n_processors=8,
               vid_track: int = 0,
-              all_other_vehicles: List[Vehicle] = None):
+              all_other_vehicles: List[Vehicle] = None,
+              xlim: List[float] = None):
     '''
     Note:  The vehicle should not be instantiated in a MPC Optimization or it may mess
             with the parallelization.  You can feed in a dummy vehicle Vehicle(dt) just
@@ -423,7 +424,8 @@ def plot_cars(world: TrafficWorld,
                                          car_labels=car_labels,
                                          car_colors=car_colors,
                                          vid_track=vid_track,
-                                         all_other_vehicles=all_other_vehicles)
+                                         all_other_vehicles=all_other_vehicles,
+                                         xlim=xlim)
 
         p_tqdm.p_map(plot_partial, range(N), num_cpus=n_processors)
     else:
@@ -439,7 +441,8 @@ def plot_cars(world: TrafficWorld,
                                car_labels,
                                car_colors,
                                vid_track=vid_track,
-                               all_other_vehicles=all_other_vehicles)
+                               all_other_vehicles=all_other_vehicles,
+                               xlim=xlim)
     return None
 
 
@@ -679,7 +682,7 @@ def plot_initial_positions(log_dir: str,
     vehicles_to_plot = vehicles[:number_cars_included]
     x0_to_plot = initial_positions[:number_cars_included]
     x0_to_plot_reshaped = [x0.reshape(6, 1) for x0 in x0_to_plot]
-
+    
     plot_cars(world,
               None,
               None,
@@ -687,4 +690,5 @@ def plot_initial_positions(log_dir: str,
               log_dir,
               n_processors=1,
               all_other_vehicles=vehicles_to_plot,
-              car_labels=True)
+              car_labels=True,
+              xlim=[0, 1000])
