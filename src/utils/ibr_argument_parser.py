@@ -102,6 +102,7 @@ class IBRParser(ArgumentParser):
         self.add_argument('--solver-mode', type=str, default="pickled", help="Use a pre-pickled solver for the mpc")
         self.add_argument('--precompiled-solver-dir', type=str, default="/home/nbuckman/mpc-multiple-vehicles/src/compiled_code/", help="Location of any precompiled solver")
         self.add_argument('--lane-width', type=float, default=4.0, help="Lane width")
+        self.add_argument('--max-num-obstacles', type=int, default=10, help="max num obstacles")
 
 def str2bool(v):
     if isinstance(v, bool):
