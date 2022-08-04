@@ -439,23 +439,15 @@ class MultiMPC(NonconvexOptimization):
         slack_cost = 0
 
         if n_other_vehicle > 0:
-            for j in range(slack_i_jnc.shape[0]):
-                for t in range(slack_i_jnc.shape[1]):
-                    slack_cost += slack_i_jnc[j, t]**2
+            slack_cost += cas.sumsqr(slack_i_jnc)
             for ic in range(n_vehs_cntrld):
-                for jnc in range(slack_ic_jnc[ic].shape[0]):
-                    for t in range(slack_ic_jnc[ic].shape[1]):
-                        slack_cost += slack_ic_jnc[ic][jnc, t]**2
+                slack_cost += cas.sumsqr(slack_ic_jnc[ic])
 
         if n_vehs_cntrld > 0:
-            for jc in range(slack_i_jc.shape[0]):
-                for t in range(slack_i_jc.shape[1]):
-                    slack_cost += slack_i_jc[jc, t]**2
+            slack_cost += cas.sumsqr(slack_i_jc)
 
             for ic in range(n_vehs_cntrld):
-                for jc in range(slack_ic_jc[ic].shape[0]):
-                    for t in range(slack_ic_jc[ic].shape[1]):
-                        slack_cost += slack_ic_jc[ic][jc, t]**2
+                slack_cost += cas.sumsqr(slack_ic_jc[ic])
 
         return slack_cost
 
