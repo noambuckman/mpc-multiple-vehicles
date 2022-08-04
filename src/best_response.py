@@ -1,7 +1,6 @@
 import numpy as np
 import multiprocessing, functools, time, os, pickle
 from typing import List, Tuple, Dict
-from casadi import nlpsol
 
 from src.multiagent_mpc import MultiMPC, mpcp_to_nlpp, nlpx_to_mpcx, mpcx_to_nlpx, get_pickled_solver, get_compiled_solver, load_solver_from_mpc, get_bounds_from_mpc
 from src.vehicle_parameters import VehicleParameters

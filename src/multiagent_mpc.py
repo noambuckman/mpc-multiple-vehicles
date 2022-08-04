@@ -5,7 +5,7 @@ from typing import List
 
 from src.geometry_helper import minkowski_ellipse_collision_distance
 from src.vehicle_parameters import VehicleParameters
-from src.desired_trajectories import PiecewiseDesiredTrajectory, piecewise_function
+from src.desired_trajectories import piecewise_function
 from src.callback import MyCallback
 class NonconvexOptimization(object):
     def __init__(self):

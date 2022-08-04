@@ -2,7 +2,7 @@ import numpy as np
 import casadi as cas
 import scipy.optimize as optimize
 from typing import Tuple
-from src.desired_trajectories import LaneChangeManueverPiecewise, PiecewiseDesiredTrajectory, piecewise_function
+from src.desired_trajectories import LaneChangeManueverPiecewise, piecewise_function
 
 class Vehicle(object):
     def __init__(self, dt):
@@ -53,6 +53,8 @@ class Vehicle(object):
         self.k_phi_dot = 0.0
 
         self.k_on_grass = 0.1
+
+        self.k_limit_costs = 100 # cost on going too fast or too high of an angle
         ####
 
         # Constraints
