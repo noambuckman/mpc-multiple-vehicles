@@ -279,7 +279,7 @@ class MultiMPC(NonconvexOptimization):
         # sd = cas.MX.sym('sd')
         # self.debug_fd = cas.Function('debug_fd', [sd, self._p_list], [fd(sd)])
         self.add_dynamics_constraints_g(x_ego, u_ego, xd_ego, x0_ego, f, fd, dt, x_coeff_d, y_coeff_d, phi_coeff_d, spline_lengths)
-        self.add_state_constraints_g(x_ego, u_ego, p_ego)
+        self.add_control_constraints_g(x_ego, u_ego, p_ego)
 
     def add_mpc_constraints(self, N, n_vehs_cntrld, n_other_vehicle, x_ego, u_ego, xd_ego, x0_ego, p_ego,
                             x_ctrld, u_ctrld, xd_ctrld, x0_ctrld, p_ctrld_list, x_other, p_other_vehicle_list, dt,
@@ -463,17 +463,30 @@ class MultiMPC(NonconvexOptimization):
 
         return get_solver_name(self.N, self.n_vehs_cntrld, self.n_other_vehicle, self.safety_constraint)
 
-    def add_state_constraints_g(self, X, U, ego_veh, strict_wall_y_constraint=False):
+    def add_control_constraints_g(self, X, U, ego_veh, strict_wall_y_constraint=False):
         ''' Construct vehicle specific constraints that only rely on
         the ego vehicle's own state '''
-        for k in range(X.shape[1]):
-            self.add_bounded_constraint(-np.pi / 2, X[2, k], np.pi / 2)  #no crazy angle
-            self.add_bounded_constraint(ego_veh.min_v, X[4, k], ego_veh.max_v)
 
         # constraints on the control inputs
         for k in range(U.shape[1]):
             self.add_bounded_constraint(-ego_veh.max_delta_u, U[0, k], ego_veh.max_delta_u)
             self.add_bounded_constraint(ego_veh.min_v_u, U[1, k], ego_veh.max_v_u)  # 0-60 around 4 m/s^2
+
+    def add_state_constraint_costs(self, X, U, ego_veh):
+        cost = 0.0
+
+        for k in range(X.shape[1]):
+            upper_angle_slack = cas.fmax(0.0, X[2, k] - np.pi / 2) 
+            lower_angle_slack = cas.fmax(0.0, (- np.pi / 2) - X[2, k]) 
+            cost += upper_angle_slack**2 + lower_angle_slack**2
+
+            upper_speed_slack = cas.fmax(0.0, X[4, k] - ego_veh.max_v) 
+            lower_speed_slack = cas.fmax(0.0,  ego_veh.min_v - X[4, k]) 
+            cost += upper_speed_slack**2 + lower_speed_slack**2
+        
+        return cost
+
+
 
     def add_dynamics_constraints_g(self, X, U, X_desired, x0, f, fd, dt: float, x_coeff_d, y_coeff_d, phi_coeff_d, spline_lengths):
         N = U.shape[1]
@@ -588,11 +601,14 @@ class MultiMPC(NonconvexOptimization):
         distance_above_top_grass = cas.fmax(0.0, X[1,:] - p_car.grass_max_y)
         on_grass_cost = cas.sumsqr(distance_above_top_grass) + cas.sumsqr(distance_below_bottom_grass)
 
+
+        limit_costs = self.add_state_constraint_costs(X, U, p_car)
+
         all_costs = [
             p_car.k_u_delta * u_delta_cost, p_car.k_u_v * u_v_cost, p_car.k_lat * lat_cost, p_car.k_lon * lon_cost,
             p_car.k_phi_error * phi_error_cost, p_car.k_phi_dot * phidot_cost, p_car.k_s * s_cost, p_car.k_v * v_cost,
             p_car.k_change_u_v * change_u_v, p_car.k_change_u_delta * change_u_delta, p_car.k_final * final_costs,
-            p_car.k_x * x_cost, p_car.k_on_grass * on_grass_cost, p_car.k_x_dot * x_dot_cost
+            p_car.k_x * x_cost, p_car.k_on_grass * on_grass_cost, p_car.k_x_dot * x_dot_cost, p_car.k_limit_costs * limit_costs,
         ]
         all_costs = np.array(all_costs)
         total_cost = np.sum(all_costs)
