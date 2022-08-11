@@ -114,6 +114,7 @@ def run_iterative_best_response(vehicles,
 
 
 
+
                 warmstarts_dict = generate_warmstarts(response_vehinfo_egoframe, world, vehsinfo_ibr_pred_egoframe, params, u_mpc[ag_idx],
                                                       vehsinfo_ibr_egoframe[ag_idx].u)
 
@@ -129,7 +130,7 @@ def run_iterative_best_response(vehicles,
 
                     t_start_ipopt = time.time()
                     experiment.print_mpc_ibr_round(i_mpc, i_ibr, params)
-                    experiment.print_nc_nnc(ctrld_vehsinfo_egoframe, obstacle_vehsinfo_egoframe)
+                    experiment.print_nc_nnc(ctrld_vehsinfo_egoframe, obstacle_vehsinfo_egoframe, verbose=True)
                     # print("Trying to solve...")
                     # print("X_ego", response_vehinfo_egoframe.x[0:,:], "...")
                     # print("Xd_ego", response_vehinfo_egoframe.xd[0:,:], "...")
