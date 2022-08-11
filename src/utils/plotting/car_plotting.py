@@ -395,7 +395,8 @@ def plot_cars(world: TrafficWorld,
               n_processors=8,
               vid_track: int = 0,
               all_other_vehicles: List[Vehicle] = None,
-              xlim: List[float] = None):
+              xlim: List[float] = None,
+              frame_width: float = 100.0):
     '''
     Note:  The vehicle should not be instantiated in a MPC Optimization or it may mess
             with the parallelization.  You can feed in a dummy vehicle Vehicle(dt) just
@@ -425,7 +426,8 @@ def plot_cars(world: TrafficWorld,
                                          car_colors=car_colors,
                                          vid_track=vid_track,
                                          all_other_vehicles=all_other_vehicles,
-                                         xlim=xlim)
+                                         xlim=xlim,
+                                         frame_width=frame_width)
 
         p_tqdm.p_map(plot_partial, range(N), num_cpus=n_processors)
     else:
@@ -442,7 +444,8 @@ def plot_cars(world: TrafficWorld,
                                car_colors,
                                vid_track=vid_track,
                                all_other_vehicles=all_other_vehicles,
-                               xlim=xlim)
+                               xlim=xlim,
+                               frame_width=frame_width)
     return None
 
 
@@ -672,7 +675,8 @@ def plot_initial_positions(log_dir: str,
                            world: TrafficWorld,
                            vehicles: List[Vehicle],
                            initial_positions: List[np.array],
-                           number_cars_included: int = 10):
+                           number_cars_included: int = 10,
+                           xlim = [0, 1000]):
     '''Plot and save initial conditions
     
         log_dir:  Path to log directory for experiment
@@ -691,4 +695,4 @@ def plot_initial_positions(log_dir: str,
               n_processors=1,
               all_other_vehicles=vehicles_to_plot,
               car_labels=True,
-              xlim=[0, 1000])
+              xlim=xlim)
