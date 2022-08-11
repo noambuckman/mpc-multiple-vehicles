@@ -1,3 +1,4 @@
+from cmath import exp
 import itertools, os, pickle, datetime, json, copy
 import numpy as np
 
@@ -6,8 +7,9 @@ from src.utils.log_management import random_date_string
 from src.traffic_world import TrafficWorld
 from src.ibr_nonamb import run_iterative_best_response
 import src.utils.solver_helper as helper
-import subprocess
+import subprocess, time
 from os.path import expanduser
+
 def get_git_revision_hash() -> str:
     cwd = os.getcwd()
 
@@ -147,10 +149,15 @@ if __name__ == "__main__":
     num_tasks = int(args.num_tasks)
     experiment_random_seed = args.experiment_random_seed
 
+    start_time = time.time()
+
     if args.input_params is None:
         all_params_dict = {"n_experiments": 1, "p_cooperative": [0.5]}
     else:
-        all_params_dict = json.load(open(args.input_params, 'rb'))
+        with open(args.input_params, 'rb') as fp:
+            all_params_dict = json.load(fp)
+
+
     # Add the seeds based on number of experiments
     all_params_dict["seed"] = [experiment_random_seed + ix for ix in range(all_params_dict["n_experiments"])]
 
@@ -163,14 +170,28 @@ if __name__ == "__main__":
     for experiment_pairings in itertools.product(*values):
         exp_params = dict(zip(keys, experiment_pairings))
         all_params += [exp_params]
+    
+    
+    all_params = sorted(all_params, key=lambda p: 1E6*p["seed"] + p["car_density"])
+
 
     # Select a subset of paramaters and update the params file
     my_params = all_params[my_task_id:len(all_params):num_tasks]
+    os.makedirs("machine_params", exist_ok=True)
+    with open("machine_params/param_task%02d.p"%my_task_id, 'wb') as fp:
+        pickle.dump(my_params, fp)
 
+    expanded_params = []
     for params in my_params:
         current_sim_params = copy.deepcopy(default_params)
         for param in params:
             current_sim_params[param] = params[param]
+        current_sim_params["machine_name"] = os.uname()[1]
+
+        expanded_params.append(current_sim_params)
+
+
+    for idx, params in enumerate(expanded_params):
 
         experiment_string = random_date_string()
 
@@ -178,14 +199,23 @@ if __name__ == "__main__":
             all_results_dir = os.path.expanduser("~") + "/mpc_results/" + experiment_string + "/"
         else:
             all_results_dir = args.results_dir
-        log_dir = all_results_dir + experiment_string + "/"
+        log_dir = os.path.join(all_results_dir, experiment_string) + "/"
 
+        print("==================")
+        print("Running Experiment %d/%d"%(idx, len(expanded_params)))
+        print(log_dir)
         # Run the simulation with current sim params
         all_trajectories, all_control = run_simulation(log_dir, current_sim_params)
         if all_trajectories is None:  #We got an exception
             continue
-        # Save the results within the log_dir
-        np.save(open(log_dir + "/trajectories.npy", 'wb'), all_trajectories)
-        np.save(open(log_dir + "/controls.npy", 'wb'), all_control)
+        
+        # # Save the results within the log_dir
+        with open(os.path.join(log_dir, "trajectories.npy"), 'wb') as fp:
+            np.save(fp, all_trajectories)
+        with open(os.path.join(log_dir,  "controls.npy"), 'wb') as fp:
+            np.save(fp, all_control)
 
-    print(" Done with experiments")
+    print(" ")
+    print("===============================")
+    print("Done with machine's experiments")
+    print("Duration for all experiments: %s"%(datetime.timedelta(seconds=(time.time() - start_time))))    
