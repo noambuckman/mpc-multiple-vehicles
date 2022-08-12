@@ -8,7 +8,7 @@ from src.traffic_world import TrafficWorld
 from src.vehicle import Vehicle
 from src.vehicle_mpc_information import VehicleMPCInformation, Trajectory
 from src.desired_trajectories import PiecewiseDesiredTrajectory
-
+import tqdm
 class MPCSolverReturn(object):
     def __init__(self, solved_status:bool, 
                         current_cost:float, 
@@ -82,6 +82,7 @@ class MPCSolverLogger(object):
 
 #     return parallel_mpc_solve_w_trajs(warmstart_w_traj_dict, response_veh_info, world, solver_params, params, ipopt_params, nonresponse_veh_info, cntrl_veh_info)
 
+
 def parallel_mpc_solve_w_trajs(warmstart_traj_dict: Dict[str, Tuple[Trajectory, PiecewiseDesiredTrajectory]],
                                 response_veh_info: VehicleMPCInformation,
                                 world: TrafficWorld, solver_params: dict, params: dict,
@@ -131,12 +132,17 @@ def parallel_mpc_solve_w_trajs(warmstart_traj_dict: Dict[str, Tuple[Trajectory, 
         x_coeff_d_ctrld[i], y_coeff_d_ctrld[i], phi_coeff_d_ctrld[i], spline_lengths_ctrld[i] = cntrld_veh_desired_traj.to_array()
 
 
-
+ 
     precompiled_code_dir = params["precompiled_solver_dir"]
     solver_mode = params["solver_mode"]
 
+    list_of_args = []
+    for warm_key, (warm_traj, desired_traj) in warmstart_traj_dict.items():
+        list_of_args += [(warm_key, warm_traj, desired_traj)]     
+
     call_mpc_solver_on_warm_and_desired = functools.partial(
-        call_mpc_solver,   
+        call_mpc_solver,
+        list_of_warm_trajs = list_of_args,   
         solver_mode=solver_mode,
         precompiled_code_dir=precompiled_code_dir,
         cntrld_u_warm=cntrld_u_warm,
@@ -161,31 +167,68 @@ def parallel_mpc_solve_w_trajs(warmstart_traj_dict: Dict[str, Tuple[Trajectory, 
         params=params,
         solver_params=solver_params,
         ipopt_params=ipopt_params)
+  
+    if params["n_processors"] > 1:        
+        with multiprocessing.Pool(processes=params['n_processors']) as pool:
+            
+            # solve_costs_solutions = pool.imap_unordered(call_mpc_solver_on_warm_and_desired, [i for i in range(len(list_of_args))])
 
-    if params["n_processors"] > 1:
-        pool = multiprocessing.Pool(processes=params['n_processors'])
-        list_of_args = []
-        for warm_key, (warm_traj, desired_traj) in warmstart_traj_dict.items():
-            list_of_args += [(warm_key, warm_traj, desired_traj)]
+            solve_costs_solutions = pool.map(call_mpc_solver_on_warm_and_desired,
+                                                [i for i in range(len(list_of_args))])
+            pool.close()
 
-        solve_costs_solutions = pool.starmap(call_mpc_solver_on_warm_and_desired,
-                                             list_of_args)
-        pool.terminate()
+            # below_max_slack_sols = []
+            
+            
+            
+            # below_max_slack_counter = 0
+            # for sol in tqdm.tqdm(solve_costs_solutions, total=len(list_of_args)):
+            #     if sol.max_slack <= params["k_max_slack"]:
+            #         below_max_slack_sols.append(sol)
+            #     #     if not sol.max_cpu_limit:
+            #     #         below_max_slack_counter += 1
+            #     #     elif sol.g_violation <= params["k_max_slack"]:
+            #     #         below_max_slack_counter += 1
+                
+            #     # params["number_solutions_for_early_exit"] = 10
+            #     # if below_max_slack_counter > params["number_solutions_for_early_exit"]:
+            #     #     pool.terminate()
+            #     #     print("Received 10 feasible solutions, exiting early")
+            #     #     break
+                
+            pool.terminate()
+            # pool.join()
     else:
         solve_costs_solutions = []
-        for warm_key, (warm_trajectory, desired_traj) in warmstart_traj_dict.items():
+        for idx in range(len(warmstart_traj_dict)):
             solve_costs_solutions += [
-                call_mpc_solver_on_warm_and_desired(warm_key, warm_trajectory, desired_traj)
+                call_mpc_solver_on_warm_and_desired(idx)
             ]
 
     below_max_slack_sols = [
         s for s in solve_costs_solutions if s.max_slack <= params["k_max_slack"]
     ]
 
+
+
     if len(below_max_slack_sols) > 0:
         print("# Feasible Solutions Below Max Slack: %d" %
               len(below_max_slack_sols))
-        min_cost_solution = min(below_max_slack_sols, key=lambda r: r.current_cost)
+
+        returned_before_max_cpu_sols = [s for s in below_max_slack_sols if not s.max_cpu_limit]
+        n_not_max_cpu = len(returned_before_max_cpu_sols)
+        
+        reached_max_cpu_sols = [s for s in below_max_slack_sols if s.max_cpu_limit]
+        n_max_cpu = len(reached_max_cpu_sols)
+
+        if n_not_max_cpu > 0:
+            min_cost_solution = min(returned_before_max_cpu_sols, key=lambda r: r.current_cost)
+        else:       
+            min_cost_solution = min(reached_max_cpu_sols, key=lambda r: r.current_cost)
+        
+        below_g_violation = len([s for s in reached_max_cpu_sols if s.g_violation <= 0.0001])
+        print("# Max CPU Reached (All) %d   # Max CPU Reached (Feasible) %d   # Fully Solved %d"%(n_max_cpu, below_g_violation, n_not_max_cpu))
+                    
     else:
         min_cost_solution = min(solve_costs_solutions, key=lambda r: r.current_cost)
         print(
@@ -196,9 +239,8 @@ def parallel_mpc_solve_w_trajs(warmstart_traj_dict: Dict[str, Tuple[Trajectory, 
 
 
 def call_mpc_solver(
-    warm_key: str,
-    warm_trajectory: Trajectory,
-    desired_traj: PiecewiseDesiredTrajectory,
+    traj_idx:int,
+    list_of_warm_trajs: List[Tuple[str, Trajectory, PiecewiseDesiredTrajectory]],
     precompiled_code_dir: str,
     solver_mode: str,
     cntrld_u_warm: np.array,
@@ -227,6 +269,9 @@ def call_mpc_solver(
     '''Create the iterative best response object and solve.  Assumes that it receives warm start profiles.
     This really should only require a u_warm, x_warm, x_des_warm and then one level above we generate those values'''
     start_time = time.time()
+    
+    warm_key, warm_trajectory, desired_traj = list_of_warm_trajs[traj_idx]
+    
     k_slack = solver_params["k_slack"]
     k_CA = solver_params["k_CA"]
     k_CA_power = solver_params["k_CA_power"]

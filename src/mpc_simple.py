@@ -1,12 +1,9 @@
 import numpy as np
 import casadi as cas
-import matplotlib.pyplot as plt
 from typing import List
 
 from src.traffic_world import TrafficWorld
-from src.utils.plotting.car_plotting import plot_cars
 from src.vehicle_parameters import VehicleParameters
-# from src.warm_starts import generate_warm_x, centerline_following, generate_warm_u, generate_warm_starts
 
 
 class MultiMPC(object):

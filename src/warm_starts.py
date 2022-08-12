@@ -5,7 +5,7 @@ import random
 from typing import Dict
 
 
-def generate_warm_x(vehicle, world: TrafficWorld, x0: np.array, average_v=None):
+def generate_warm_x(vehicle, N: int, world: TrafficWorld, x0: np.array, average_v=None):
     """ Warm starts that return a trajectory in x (control) -space
     N:  Number of control points
     car_mpc:  Vehicle instance
@@ -21,7 +21,6 @@ def generate_warm_x(vehicle, world: TrafficWorld, x0: np.array, average_v=None):
     """
 
     x_warm_profiles = {}
-    N = vehicle.N
     lane_width = world.lane_width
     if average_v is None:
         constant_v = vehicle.max_v
@@ -201,7 +200,7 @@ def generate_warmstarts(response_vehicle_info,
         warm_velocity = np.median([x[4] for x in other_x0])
     else:
         warm_velocity = x0[4]
-    _, x_ux_warm_profiles = generate_warm_x(vehicle, world, x0, warm_velocity)
+    _, x_ux_warm_profiles = generate_warm_x(vehicle, params["N"], world, x0, warm_velocity)
     ux_warm_profiles.update(x_ux_warm_profiles)
 
     if u_mpc_previous is not None:  # Try out the controls that were previous executed
