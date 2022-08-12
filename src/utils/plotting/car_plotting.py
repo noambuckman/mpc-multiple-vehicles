@@ -227,6 +227,9 @@ def plot_multiple_cars(k,
             ax = add_car(xamb_plot[:, k], vehicle, ax, "Amb")
     fig = plt.gcf()
     ax = plt.gca()
+    ax.set_ylim((ymin, ymax))
+    ax.set_xlim((axlim_minx, axlim_maxx)) 
+
     ax.get_yaxis().set_visible(False)
     # ax.get_xaxis().set_visible(True)
     set_xticks_world(ax, interval = 50.0)

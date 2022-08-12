@@ -1,3 +1,4 @@
+from curses.ascii import ctrl
 import numpy as np
 from src.vehicle import Vehicle
 from typing import List
@@ -190,8 +191,13 @@ class ExperimentHelper(object):
     def print_mpc_ibr_round(self, i_mpc, i_ibr, params):
         print("MPC %d, IBR %d / %d" % (i_mpc, i_ibr, params["n_ibr"] - 1))
 
-    def print_nc_nnc(self, cntrld_vehicle_info, nonresponse_veh_info):
-        print("....# Cntrld Vehicles: %d # Non-Response: %d " %
+    def print_nc_nnc(self, cntrld_vehicle_info, nonresponse_veh_info, verbose=False):
+        if verbose:
+            non_response_ids = [vi.vehicle.agent_id for vi in nonresponse_veh_info]
+            cntrl_ids = [vi.vehicle.agent_id for vi in cntrld_vehicle_info]
+            print("....Cntrld Vehicles: ", cntrl_ids, "| Non-Response:", non_response_ids)            
+        else:
+            print("....# Cntrld Vehicles: %d # Non-Response: %d " %
               (len(cntrld_vehicle_info), len(nonresponse_veh_info)))
 
     def print_solved_status(self, response_i, i_mpc, i_ibr, start_ipopt_time):
