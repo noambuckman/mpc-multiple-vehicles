@@ -134,17 +134,23 @@ def animate_cars(args, params, log_directory, trajectories, vehicles, world):
     else:
         car_colors = None
 
+    if args.add_agent_ids:
+        car_labels = ["%d"%v.agent_id for v in vehicles]
+    else:
+        car_labels = None
+
     plot_cars(world,
               None,
               None, [trajectories[i, :, :] for i in range(params["n_other"])],
               img_dir + "/",
               args.shape,
               None,
-              None,
+              car_labels,
               car_colors,
               args.n_workers,
               vid_track=args.vehicle_id_track,
-              all_other_vehicles=vehicles)
+              all_other_vehicles=vehicles,
+              frame_width=args.frame_width)
 
     # log_string = log_directory.split('/')[-2]
     log_string = log_directory
@@ -366,7 +372,8 @@ if __name__ == '__main__':
     parser.add_argument('--n-workers', type=int, default=8)
     parser.add_argument('--keep-old-vids', type=bool, default=False)
     parser.add_argument('--fps', type=int, default=16, help="Frame rate in frames per second")
-
+    parser.add_argument('--frame-width', type=float, default=100.0, help="Width of the camera")
+    parser.add_argument('--add-agent-ids', action="store_true", help="Add agent ids")
 
 
     args = parser.parse_args()

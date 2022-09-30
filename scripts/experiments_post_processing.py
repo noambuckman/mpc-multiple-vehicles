@@ -11,14 +11,15 @@ def post_process_experiments(args):
     ''' Load the directory and print the'''
     
 
-    all_params, all_trajs, all_vehicles, all_dirs, experiment_params = load_experiment_results(args.experiment_dir)
+    all_params, all_trajs, all_controls, all_vehicles, all_dirs, experiment_params = load_experiment_results(args.experiment_dir)
 
     describe_experiment_params(experiment_params)
 
     params = all_params[0]
-
+    if args.n_mpc_end is None:
+        args.n_mpc_end = all_trajs[0].shape[-1] - 1
     total_time = params["dt"] * args.n_mpc_end
-    print("Total Sim Time", total_time)
+    print("Total Sim Time %f     Rounds MPC: %d"%(total_time, args.n_mpc_end))
 
     all_seeds = [param["seed"] for param in all_params]
     all_densities = [param["car_density"] for param in all_params]
@@ -46,9 +47,30 @@ def post_process_experiments(args):
                 print("Collision Index", get_collision_index(all_trajs[exp_i]))
                 print("Seed", all_params[exp_i]["seed"])    
 
-
-        collision_params = get_collision_parameters(all_params, all_trajs)
+        
+        collision_params, collision_expi = get_collision_parameters(all_params, all_trajs)
         summarize_sim_params(collision_params, all_vehicles, "collision_params_hist.png")
+    
+    if args.analyze_crazy_driving:
+        for exp_i in range(len(all_trajs)):
+            
+            if check_out_of_y_bounds(all_trajs[exp_i], all_dirs[exp_i]):
+                print("Crazy driver", exp_i, all_dirs[exp_i])
+
+        out_of_y_bounds_params, out_of_y_bounds_expi = get_out_of_y_bounds_params(all_params, all_trajs, all_dirs)
+        summarize_sim_params(out_of_y_bounds_params, all_vehicles, "outofbounds_params_hist.png")
+        
+        if args.analyze_collisions:
+            collision_set = set(collision_expi)
+            outofbounds_set = set(out_of_y_bounds_expi)    
+            
+            both_types = collision_set & outofbounds_set
+            all_types = collision_set | outofbounds_set
+            n_all_types = len(all_types)
+            n_both = len(both_types)
+            n_collision_only = len(collision_set) - n_both
+            n_outofbounds_only = len(outofbounds_set) - n_both
+            print("#Total: %d | # Collision Only %d,  # Out of Bounds Only %d,  # Both: %d"%(n_all_types, n_collision_only, n_outofbounds_only, n_both))
 
     if args.animate_by_density:
         animate_by_density(experiment_params, all_dirs, all_params)
@@ -64,15 +86,21 @@ def post_process_experiments(args):
         animate_by_all(experiment_params, all_dirs, all_params)
 
     if args.analyze_speed:
-        analyze_speed(experiment_params, all_dirs, all_params, all_trajs)
+        analyze_speed(all_params, all_trajs, all_controls)
 
-def analyze_speed(experiment_params, all_dirs, all_params, all_trajs, average_agent=False):
+def analyze_speed(all_params, all_trajs, all_controls, average_agent=False, save_fig=True):
     ''' Compute the distance traveled for each experiment '''
+    if save_fig:
+        post_processing_fig_dir = "post_processing"
+        os.makedirs(post_processing_fig_dir, exist_ok=True)
+
 
     collision_seeds = []
+    collision_exp_i = []
     for exp_i in range(len(all_trajs)):
         if check_collision_experiment(all_trajs[exp_i]):
             collision_seeds.append(all_params[exp_i]["seed"])
+            collision_exp_i.append(exp_i)
     all_seeds = np.unique(np.array([all_params[exp_i]["seed"] for exp_i in range(len(all_params))]))
     all_p = np.unique(np.array([all_params[exp_i]["p_cooperative"] for exp_i in range(len(all_params))]))
     collision_seeds = np.unique(np.array(collision_seeds))
@@ -82,92 +110,139 @@ def analyze_speed(experiment_params, all_dirs, all_params, all_trajs, average_ag
 
     p_baseline = 0.0 # we will baseline everything compared to a fully egoistic population
 
-    distances = {}
-    for exi in range(len(all_params)):
-        ds = all_trajs[exi][:,0, args.n_mpc_end] - all_trajs[exi][:,0,0]
-        
-        p = all_params[exi]['p_cooperative']
-        s = all_params[exi]["seed"]
-        
-        if average_agent:
-            d = np.sum(ds)
-            distances[(s,p)] = d
+    for average_agent in [True, False]:
+
+
+        controls = {}
+        distances = {}
+        for exi in range(len(all_params)):
+            if exi in collision_exp_i:
+                continue
+            ds = all_trajs[exi][:,0, args.n_mpc_end] - all_trajs[exi][:,0,0]
+            ctrl_sqrd = np.sum(np.sum(all_controls[exi]**2, axis=1),axis=1)
+            
+            p = all_params[exi]['p_cooperative']
+            seed = all_params[exi]["seed"]
+            
+            if average_agent:
+                d = np.sum(ds)
+                distances[(seed,p)] = d
+
+                u = np.sum(ctrl_sqrd)
+                controls[(seed,p)] = u
+            else:
+                for i in range(ds.shape[0]):
+                    pseudoseed = seed + 10000*i
+                    d = ds[i]
+                    u = ctrl_sqrd[i]
+
+                    distances[(pseudoseed,p)] = d
+                    controls[(pseudoseed,p)] = u
+
+        print(controls)
+        dist_baseline = {}
+        controls_baseline = {}
+        for seed in all_seeds:
+            if seed in collision_seeds:
+                continue
+            
+            if (seed, p_baseline) not in distances:
+                print("No p=%f in Seed: %d"%(p_baseline, seed))
+            else:
+                for p in all_p:
+                    if (seed,p) in distances:
+                        dist_baseline[(seed,p)] = distances[(seed,p)] / (distances[(seed, p_baseline)] + 0.00000001)
+
+                    if (seed,p) in controls:
+                        controls_baseline[(seed,p)] = controls[(seed,p)] / (controls[(seed, p_baseline)] + 0.00000001)
+
+        plt.figure()
+        for (seed,p), d_ratio in dist_baseline.items():
+            plt.plot(p, d_ratio, 'o')
+        plt.xlabel("P_cooperative")
+        plt.ylabel("Performance  (Distance / Baseline Distance)")
+        if save_fig:
+            average_agent_str = "pop" if average_agent else "indiv"
+            plt.savefig(os.path.join(post_processing_fig_dir, "distance_performance_%s.png"%average_agent_str), dpi=300)
+            plt.close()
         else:
-            for i in range(ds.shape[0]):
-                s = s + 10000*i
-                d = ds[i]
+            plt.show()
 
-                distances[(s,p)] = d
+        plt.figure()
+        top_error = []
+        average = []
+        bottom_error = []
 
-    dist_baseline = {}
-    for s in all_seeds:
-        if s in collision_seeds:
-            continue
-        
-        if (s, p_baseline) not in distances:
-            print("No p=%f in Seed: %d"%(p_baseline, s))
+        for p in all_p:
+            d_ratios = np.array([dist_baseline[(s,pi)] for (s,pi) in dist_baseline.keys() if pi==p])
+            d_ratios_mean = np.mean(d_ratios)
+            d_ratios_std = np.std(d_ratios)
+            d_ratios_stdE = d_ratios_std / len(d_ratios)
+
+            top_error.append(d_ratios_mean + d_ratios_stdE)
+            average.append(d_ratios_mean )
+            bottom_error.append(d_ratios_mean - d_ratios_stdE)
+
+            plt.plot([p]*len(d_ratios), d_ratios, '.', color='black')
+
+        plt.plot(all_p, average, '-o', label="Mean")
+        plt.fill_between(all_p, bottom_error, top_error, alpha=0.25)
+
+        plt.xlabel("P_cooperative")
+        plt.ylabel("Performance  (Distance / Baseline Distance)")    
+
+        if save_fig:
+            plt.savefig(os.path.join(post_processing_fig_dir, "distance_performance_errorbars_%s.png"%average_agent_str), dpi=300)
         else:
-            for p in all_p:
-                if (s,p) in distances:
-                    dist_baseline[(s,p)] = distances[(s,p)] / (distances[(s, p_baseline)] + 0.00000001)
-        
-
-    print(dist_baseline)
-    plt.figure()
-
-    for (s,p), d_ratio in dist_baseline.items():
-        plt.plot(p, d_ratio, 'o')
-    plt.xlabel("P_cooperative")
-    plt.ylabel("Performance  (Distance / Baseline Distance)")
-    plt.show()
-
-    plt.figure()
-    top_error = []
-    average = []
-    bottom_error = []
-
-    for p in all_p:
-        d_ratios = np.array([dist_baseline[(s,pi)] for (s,pi) in dist_baseline.keys() if pi==p])
-        d_ratios_mean = np.mean(d_ratios)
-        d_ratios_std = np.std(d_ratios)
-        d_ratios_stdE = d_ratios_std / len(d_ratios)
-
-        top_error.append(d_ratios_mean + d_ratios_stdE)
-        average.append(d_ratios_mean )
-        bottom_error.append(d_ratios_mean - d_ratios_stdE)
-
-        plt.plot([p]*len(d_ratios), d_ratios, '.', color='black')
-
-    plt.plot(all_p, average, '-o', label="Mean")
-    plt.fill_between(all_p, bottom_error, top_error, alpha=0.25)
-
-    plt.xlabel("P_cooperative")
-    plt.ylabel("Performance  (Distance / Baseline Distance)")    
-    plt.show()
-    # p_coop_array = np.array([all_params[exi]['p_cooperative'] for exi in range(len(all_params)) if all_params[exi]["seed"] not in collision_seeds])
-    # distances_array = np.array([all_trajs[exi][:,0, args.n_mpc_end] - all_trajs[exi][:,0,0] for exi in range(len(all_params)) if all_params[exi]["seed"] not in collision_seeds])
-    
-    
-        
+            plt.show()
 
 
-    # # p_distance_dict = {}
-    # # for exi in range(distances_array.shape[0]):
-    # #     if p_coop_array[exi] not in p_distance_dict:
-    # #         p_distance_dict[p_coop_array[exi]] = []
-    # #     p_distance_dict[p_coop_array[exi]] += [distances_array[exi]]
-        
-        
-    # # for p in p_distance_dict:
-    # #     p_distance_dict[p] = np.array(p_distance_dict[p])
+        ####################### CONTROLS PLOT #############################33
+        plt.figure()
+        for (seed,p), d_ratio in controls_baseline.items():
+            plt.plot(p, d_ratio, 'o')
+        plt.xlabel("P_cooperative")
+        plt.ylabel("Control Effort  (u**2 / Baseline u**2)")
+        if save_fig:
+            average_agent_str = "pop" if average_agent else "indiv"
+            plt.savefig(os.path.join(post_processing_fig_dir, "controls_%s.png"%average_agent_str), dpi=300)
+            plt.close()
+        else:
+            plt.show()
 
-        
-    # p_unique = np.array(list(p_distance_dict.keys()))
-    # p_unique = np.sort(p_unique)
+        plt.figure()
+        top_error = []
+        average = []
+        bottom_error = []
 
-    # params = all_params[0]
+        for p in all_p:
+            d_ratios = np.array([controls_baseline[(s,pi)] for (s,pi) in controls_baseline.keys() if pi==p])
+            d_ratios_mean = np.mean(d_ratios)
+            d_ratios_std = np.std(d_ratios)
+            d_ratios_stdE = d_ratios_std / len(d_ratios)
 
-    # print(p_distance_dict)
+            top_error.append(d_ratios_mean + d_ratios_stdE)
+            average.append(d_ratios_mean )
+            bottom_error.append(d_ratios_mean - d_ratios_stdE)
+
+            plt.plot([p]*len(d_ratios), d_ratios, '.', color='black')
+
+        plt.plot(all_p, average, '-o', label="Mean")
+        plt.fill_between(all_p, bottom_error, top_error, alpha=0.25)
+
+        plt.xlabel("P_cooperative")
+        plt.ylabel("Controls Performance  (Controls Magnitude / Baseline Controls Magnitude)")    
+
+        if save_fig:
+            plt.savefig(os.path.join(post_processing_fig_dir, "controls_errorbars_%s.png"%average_agent_str), dpi=300)
+        else:
+            plt.show()
+
+
+
+
+
+
     return None
 
 def describe_experiment_params(experiment_params):
@@ -186,7 +261,7 @@ def describe_experiment_params(experiment_params):
 
 def load_experiment_results(experiment_dir):
     ''' Load experiment param and results'''
-    sim_dirs = glob.glob(os.path.join(experiment_dir,'results/*-*'))
+    sim_dirs = glob.glob(os.path.join(experiment_dir,'results/*-*/'))
     print("# Sim Dirs: %d"%len(sim_dirs))
 
     # experiment_params_path = glob.glob('/home/nbuckman/mpc_results/txe_0719/experiment.json')
@@ -197,10 +272,11 @@ def load_experiment_results(experiment_dir):
     all_trajs = []
     all_vehicles = []
     all_dirs = []
-
+    all_controls = []
     for sim_dir in sim_dirs:
         params_path = glob.glob(sim_dir + '/params.json')
         trajs_path = glob.glob(sim_dir + '/trajectories.npy')
+        cntrls_path = glob.glob(sim_dir + '/controls.npy')
         vehicles_path = glob.glob(sim_dir + '/other_vehicles.p')
         
         if len(trajs_path) > 0:
@@ -208,9 +284,10 @@ def load_experiment_results(experiment_dir):
             all_trajs += [np.load(trajs_path[0])]
             all_vehicles += [pickle.load(open(vehicles_path[0],'rb'))]
             all_dirs += [sim_dir]
+            all_controls += [np.load(cntrls_path[0])]
     print("# Simulations: %d"%len(all_dirs))
 
-    return all_params, all_trajs, all_vehicles, all_dirs, experiment_params
+    return all_params, all_trajs, all_controls, all_vehicles, all_dirs, experiment_params
 
 
 def animate_by_density(experiment_params, all_dirs, all_params):
@@ -313,8 +390,8 @@ def get_collision_parameters(all_params, all_trajs):
     ''' Return list of parameters corresponding to experiments with collisions'''
 
     collision_params = [all_params[exp_i] for exp_i in range(len(all_trajs)) if check_collision_experiment(all_trajs[exp_i])]    
-
-    return collision_params
+    collision_expi = [exp_i for exp_i in range(len(all_trajs)) if check_collision_experiment(all_trajs[exp_i])]    
+    return collision_params, collision_expi
     
 
 def summarize_sim_params(all_params, all_vehicles, filename="param_summary_hist.png"):
@@ -330,22 +407,27 @@ def summarize_sim_params(all_params, all_vehicles, filename="param_summary_hist.
         ax = axs[row, col]
         all_p_key = [param[param_key] for param in all_params]
         c = next(color)
-        ax.hist(all_p_key, facecolor=c)
+        if len(all_p_key) != 0:
+            ax.hist(all_p_key, facecolor=c)
         ax.set_xlabel(param_key)
         ax.set_ylabel("# Exp")
         counter+=1
         
     c = next(color)    
     all_max_speeds = [veh.max_v for vehicles in all_vehicles for veh in vehicles]
-    axs[1,1].hist(all_max_speeds)
+    if len(all_max_speeds) != 0:
+        axs[1,1].hist(all_max_speeds)
     axs[1,1].set_xlabel('Max Speed')
     axs[1,1].set_ylabel('# Vehicles')
     fig.suptitle("Experiment Settings")
 
     fig.tight_layout()
-    fig.show()
+    if filename is not None:
+        plt.savefig(filename)
+        plt.close
+    else:
+        fig.show()
 
-    plt.savefig(filename)
 
 
 def get_collision_index(traj):
@@ -363,6 +445,21 @@ def check_collision_experiment(traj):
     if np.any(np.all(traj[:,:,1:] == np.zeros((1, 6, 1)), axis=1)):
         return True
     return False
+
+def check_out_of_y_bounds(traj, dir):
+    ''' Check for very wild driving typical of solver  errors'''
+    WORLD_PATH = os.path.join(dir, "world.p")
+    world = pickle.load(open(WORLD_PATH, "rb"))    
+    
+    return np.any(traj[:,1,:] <= world.y_min) or np.any(traj[:,1,:] >= world.y_max)
+
+def get_out_of_y_bounds_params(all_params, all_trajs, all_dirs):
+
+    out_of_y_bounds_params = [all_params[exp_i] for exp_i in range(len(all_trajs)) if check_out_of_y_bounds(all_trajs[exp_i], all_dirs[exp_i])]    
+    out_of_y_bounds_expi = [exp_i for exp_i in range(len(all_trajs)) if check_out_of_y_bounds(all_trajs[exp_i], all_dirs[exp_i])]    
+
+
+    return out_of_y_bounds_params, out_of_y_bounds_expi
 
 
 def concat_vids(list_vids_to_concat, output_file, dry_run=False, n_max_vids=16, n_columns=2):
@@ -430,10 +527,12 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument("experiment_dir", type=str, help="experiment directory to analyze")
-    parser.add_argument("--n-mpc-end", type=int, default=500, help="experiment directory to analyze")
+    parser.add_argument("--n-mpc-end", type=int, default=None, help="experiment directory to analyze")
 
     parser.add_argument("--analyze-speed", action="store_true", help="Analyze the speed of the cars")
     parser.add_argument("--analyze-collisions", action="store_true", help="Print out parameters for every simulation with collisions")
+    parser.add_argument("--analyze-crazy-driving", action="store_true", help="Print out parameters for every simulation with solve errors")
+
     parser.add_argument("--animate-by-density", action="store_true", help="animate videos and concatenate by SVO")
     parser.add_argument("--animate-by", type=str, default=None, help="Paramater to organize animation grid")
     parser.add_argument("--animate-all", action="store_true", help="Animation grid by all the parameters varied")
