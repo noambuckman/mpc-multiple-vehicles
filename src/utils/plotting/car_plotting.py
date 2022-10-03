@@ -11,7 +11,7 @@ from typing import List
 
 from src.traffic_world import TrafficWorld
 from src.vehicle import Vehicle
-
+from src.best_response import MPCSolverReturn
 
 def get_car_color(i: int) -> str:
     ''' 
@@ -699,3 +699,109 @@ def plot_initial_positions(log_dir: str,
               all_other_vehicles=vehicles_to_plot,
               car_labels=True,
               xlim=xlim)
+
+def add_car_ellipse(ax, x, y, phi, vehicle, alpha=None, color=None, fill=False, agent_id=None):
+    # Plot an ellipse centered at position of vehicle
+    a, b = vehicle.ax, vehicle.by
+    ellipse_patch = patches.Ellipse((x, y),
+                                    2 * a,
+                                    2 * b,
+                                    angle=np.rad2deg(phi),
+                                    fill=fill,
+                                    color=color,
+                                    alpha=alpha)
+    ax.add_patch(ellipse_patch)
+    if agent_id is not None:
+        ax.annotate("%d"%agent_id, (x,y))
+
+def add_car_controls(ax, x, y,  delta_u, v_u, vehicle):
+    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+    axins = inset_axes(ax, width="50%", height="50%", bbox_to_anchor=(x, y, x+.5, y+1.0), loc=3)
+    # axins.add_patch(plt.Rectangle((0, 0), 0.25, u0))
+    axins.plot([0, 1, 2], [0, 4, -1])
+    max_v_u = vehicle.max_v_u
+    min_v_u = vehicle.min_v_u
+    # print("Min Vu %.2f   Max Vu %.2f   Vu %.2f"%(min_v_u, max_v_u, v_u))
+
+    max_delta_u = vehicle.max_delta_u
+    min_delta_u = -vehicle.max_delta_u
+    print("Min deltau %.2f   Max deltau %.2f   deltau %.5f"%(min_delta_u, max_delta_u, delta_u))
+
+    width_scaling = 10.0
+    v_u_percent = (v_u - 0) / (max_v_u - min_v_u) * width_scaling
+    midpoint_offset = abs(min_v_u) / (max_v_u - min_v_u) * width_scaling
+    v_left_corner = midpoint_offset
+    
+    delta_u_percent = (delta_u - 0) / (max_delta_u - min_delta_u) * width_scaling
+    midpoint_offset = abs(min_delta_u) / (max_delta_u - min_delta_u) * width_scaling
+    
+    # if delta_u_percent < 0:
+    #     u_left_corner = delta_u_percent
+    #     delta_u_percent = abs(delta_u_percent)
+    # else:
+    u_left_corner = midpoint_offset
+    print(delta_u_percent)
+    # print(u_left_corner, midpoint_offset)
+
+
+    print(u_left_corner, delta_u_percent)
+    ax.add_patch(patches.Rectangle((x+5 + u_left_corner, y+4), delta_u_percent+.05, 2, ls="--", ec="None", fc="blue"))
+    ax.add_patch(patches.Rectangle((x+5 + 0, y+4), width_scaling, 2, ls="-", ec="blue", fc="None"))
+
+    ax.annotate(r"$\Delta \delta$", (x+5, y+4+2), fontsize=5)
+
+    ax.add_patch(patches.Rectangle((x+5 + v_left_corner, y), v_u_percent + .05, 2, ls="--", ec="None", fc="black"))
+    ax.add_patch(patches.Rectangle((x+5 + 0, y), width_scaling, 2, ls="-", ec="black", fc="None"))
+    ax.annotate(r"$\Delta v$", (x+5,y+2),fontsize=5)
+
+
+
+
+def plot_solver_return(solver_return: MPCSolverReturn, ego_vehicle: Vehicle, world:TrafficWorld, xlims=None, plot_controls=False):
+
+    traj = solver_return.trajectory
+    des_traj = solver_return.desired_traj
+    ctrld_traj = solver_return.cntrld_vehicle_trajectories
+
+    figwidth_in = 4.0  #Hardcoded
+
+    ymax = world.y_max
+    ymin = world.y_min
+
+    # Initialize the plotting frame to first position of the ambulance
+    center_frame = traj.x[0,0]
+    if xlims is None:
+        axlim_minx, axlim_maxx = center_frame - 10, center_frame + 50
+    else:
+        axlim_minx, axlim_maxx = xlims[0], xlims[1]
+    N = traj.x.shape[-1]
+    fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx)) * N
+    fig, axs = plt.subplots(N, 1,figsize=(figwidth_in, fig_height))
+
+    for t in range(traj.x.shape[-1]):
+        ax = axs[t]
+        ax.axis('square')
+        ax.set_ylim((ymin, ymax))
+        ax.set_xlim((axlim_minx, axlim_maxx))
+
+        add_lanes(ax, world)
+        add_grass(ax, world)
+
+        # for t in range(traj.x.shape[-1]):
+        add_car_ellipse(ax, traj.x[0,t], traj.x[1,t], traj.x[2,t], ego_vehicle, color='red', alpha=1.0)
+        if t != traj.x.shape[-1]-1 and plot_controls:
+
+            add_car_controls(ax, traj.x[0,t], traj.x[1,t], traj.u[0,t], traj.u[1,t], ego_vehicle)
+        # ax.plot(traj.x[0,:], traj.x[1,:], 'o', label="Solver Traj")
+        ax.plot(traj.xd[0,:], traj.xd[1,:], '--', label="Des Traj")
+        
+        
+        for ctrld_idx, c_traj in enumerate(ctrld_traj):
+        # for t in range(c_traj.x.shape[-1]):
+            c_agent_id = ctrld_idx
+            add_car_ellipse(ax, c_traj.x[0,t], c_traj.x[1,t], c_traj.x[2,t], ego_vehicle, agent_id=c_agent_id, color='red', alpha=1.0)
+            # ax.plot(c_traj.x[0,:], c_traj.x[1,:], 'o', label="%d"%ctrld_idx)
+
+        # ax.text(0.75, 0.75, "Cost: %.4f"%solver_return.current_cost)
+    
+    return fig, axs
