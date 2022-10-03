@@ -125,6 +125,7 @@ def extend_last_mpc_and_follow(previous_u_mpc, number_ctrl_pts_executed, all_oth
     temp_extended_veh_info = [VehicleMPCInformation(all_other_vehicles[j], prev_trajs[j][:, -1]) for j in range(n_vehs)]
     for i in range(n_vehs):
         # Predicted portion of just lane following.  This is an estimated ctrl of ado vehicles.
+        print("Predicting future trajs for veh %d"%i)
         initial_pt = prev_trajs[i][:, -1]
 
         other_vehicle_info_subset = temp_extended_veh_info[:i] + temp_extended_veh_info[i + 1:]
