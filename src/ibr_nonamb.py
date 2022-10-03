@@ -27,6 +27,7 @@ def run_iterative_best_response(vehicles,
     """ 
         Runs iterative best response for a system of ambulance and other vehicles.
     """
+    assert params["n_other"] == len(vehicles)  
     ipopt_out_file = open(log_dir + "ipopt_out.txt", "w")
 
     experiment = ExperimentHelper(log_dir, params)
@@ -155,6 +156,7 @@ def run_iterative_best_response(vehicles,
                                                 ipopt_params,
                                                 obstacle_vehsinfo_egoframe, 
                                                 ctrld_vehsinfo_egoframe)
+                    # problem_call = None
 
                     with redirect_stdout(ipopt_out_file):
                         sol = parallel_mpc_solve_w_trajs(warmstart_w_traj_dict, response_vehinfo_egoframe, world, s_params, params, ipopt_params,
