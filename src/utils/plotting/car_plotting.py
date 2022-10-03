@@ -11,7 +11,7 @@ from typing import List
 
 from src.traffic_world import TrafficWorld
 from src.vehicle import Vehicle
-from src.best_response import MPCSolverReturn
+from src.best_response import MPCProblemCall, MPCSolverReturn
 
 def get_car_color(i: int) -> str:
     ''' 
@@ -757,7 +757,7 @@ def add_car_controls(ax, x, y,  delta_u, v_u, vehicle):
 
 
 
-def plot_solver_return(solver_return: MPCSolverReturn, ego_vehicle: Vehicle, world:TrafficWorld, xlims=None, plot_controls=False):
+def plot_solver_return(solver_return: MPCSolverReturn, ego_vehicle: Vehicle, world:TrafficWorld, xlims=None, plot_controls=False, problem_call=None):
 
     traj = solver_return.trajectory
     des_traj = solver_return.desired_traj
@@ -799,9 +799,90 @@ def plot_solver_return(solver_return: MPCSolverReturn, ego_vehicle: Vehicle, wor
         for ctrld_idx, c_traj in enumerate(ctrld_traj):
         # for t in range(c_traj.x.shape[-1]):
             c_agent_id = ctrld_idx
-            add_car_ellipse(ax, c_traj.x[0,t], c_traj.x[1,t], c_traj.x[2,t], ego_vehicle, agent_id=c_agent_id, color='red', alpha=1.0)
+            add_car_ellipse(ax, c_traj.x[0,t], c_traj.x[1,t], c_traj.x[2,t], ego_vehicle, agent_id=c_agent_id, color='green', alpha=1.0)
             # ax.plot(c_traj.x[0,:], c_traj.x[1,:], 'o', label="%d"%ctrld_idx)
+
+        if problem_call is not None:
+
+            for vehinfo in problem_call.obstacle_vehsinfo:
+                add_car_ellipse(ax, vehinfo.x[0, t], vehinfo.x[1, t], vehinfo.x[2, t], vehinfo.vehicle, agent_id=vehinfo.vehicle.agent_id, color='black', alpha=1.0)
 
         # ax.text(0.75, 0.75, "Cost: %.4f"%solver_return.current_cost)
     
     return fig, axs
+
+
+
+def plot_problem_call(problem_call: MPCProblemCall, xlims=None, plot_controls=False):
+
+
+    world = problem_call.world
+
+    x0 = problem_call.response_vehinfo.x0
+    figwidth_in = 4.0  #Hardcoded
+
+    ymax = world.y_max
+    ymin = world.y_min
+
+    # Initialize the plotting frame to first position of the ambulance
+    center_frame = x0[0]
+    if xlims is None:
+        axlim_minx, axlim_maxx = center_frame - 10, center_frame + 50
+    else:
+        axlim_minx, axlim_maxx = xlims[0], xlims[1]
+    
+    
+    ############# JUST PLOT THE INITIAL CONDITIONS
+    fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx)) * 1
+    fig1, axs1 = plt.subplots(1, 1,figsize=(figwidth_in, fig_height))
+
+    axs1.axis('square')
+    axs1.set_ylim((ymin, ymax))
+    axs1.set_xlim((axlim_minx, axlim_maxx))
+
+    add_lanes(axs1, world)
+    add_grass(axs1, world)
+
+    add_car_ellipse(axs1, x0[0], x0[1], x0[2], problem_call.response_vehinfo.vehicle, agent_id=problem_call.response_vehinfo.vehicle.agent_id, color='red', alpha=1.0)
+
+    for vehinfo in problem_call.obstacle_vehsinfo:
+        add_car_ellipse(axs1, vehinfo.x0[0], vehinfo.x0[1], vehinfo.x0[2], vehinfo.vehicle, agent_id=vehinfo.vehicle.agent_id, color='black', alpha=1.0)
+
+    for vehinfo in problem_call.ctrld_vehsinfo:
+        add_car_ellipse(axs1, vehinfo.x0[0], vehinfo.x0[1], vehinfo.x0[2], vehinfo.vehicle, agent_id=vehinfo.vehicle.agent_id, color='blue', alpha=1.0)
+
+    ########## PLOT INITIAL PREDICTIONS
+    N = problem_call.params["N"]
+    fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx)) * N
+
+    fig2, axs2 = plt.subplots(N, 1,figsize=(figwidth_in, fig_height))
+
+    if "previous_ibr" in problem_call.warmstart_dict:
+        ego_warm_traj = problem_call.warmstart_dict["previous_ibr"]
+    elif "previous_mpc_hold" in problem_call.warmstart_dict:
+        ego_warm_traj = problem_call.warmstart_dict["previous_mpc_hold"]
+    else:
+        ego_warm_traj_key = next(iter(problem_call.warmstart_dict))
+        ego_warm_traj = problem_call.warmstart_dict[ego_warm_traj_key]
+    print(ego_warm_traj)
+    ego_x = ego_warm_traj[0].x
+
+    for t in range(N):
+        ax = axs2[t]
+        ax.axis('square')
+        ax.set_ylim((ymin, ymax))
+        ax.set_xlim((axlim_minx, axlim_maxx))
+
+        add_lanes(ax, world)
+        add_grass(ax, world)
+
+        add_car_ellipse(ax, ego_x[0, t], ego_x[1, t], ego_x[2, t], problem_call.response_vehinfo.vehicle, agent_id=problem_call.response_vehinfo.vehicle.agent_id, color='red', alpha=0.5)
+
+        for vehinfo in problem_call.obstacle_vehsinfo:
+            add_car_ellipse(ax, vehinfo.x[0, t], vehinfo.x[1, t], vehinfo.x[2, t], vehinfo.vehicle, agent_id=vehinfo.vehicle.agent_id, color='black', alpha=1.0)
+
+        for vehinfo in problem_call.ctrld_vehsinfo:
+            print(vehinfo.x)
+            add_car_ellipse(ax, vehinfo.x[0, t], vehinfo.x[1, t], vehinfo.x[2, t], vehinfo.vehicle, agent_id=vehinfo.vehicle.agent_id, color='blue', alpha=0.5)
+        
+    return fig1, axs1, fig2, axs2
