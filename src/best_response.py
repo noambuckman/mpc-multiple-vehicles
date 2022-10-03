@@ -29,13 +29,28 @@ class MPCSolverReturnException(MPCSolverReturn):
     def __init__(self):
         MPCSolverReturn.__init__(self, False, np.infty, np.infty, None, None, None, [], None)
 
+class MPCProblemCall(object):
+    def __init__(self, warmstart_dict, response_vehinfo, world, solver_params, params, ipopt_params, obstacle_vehsinfo, ctrld_vehsinfo):
+        self.warmstart_dict = warmstart_dict
+        self.response_vehinfo = response_vehinfo
+        self.world = world
+        self.solver_params = solver_params
+        self.params = params
+        self.ipopt_params = ipopt_params
+        self.obstacle_vehsinfo = obstacle_vehsinfo
+        self.ctrld_vehsinfo = ctrld_vehsinfo
+
+
+
 class MPCSolverLog(object):
-    def __init__(self, solver_return:MPCSolverReturn, i_mpc:int, i_ibr:int, agent_id:int, solve_i:int):
+    def __init__(self, solver_return:MPCSolverReturn, i_mpc:int, i_ibr:int, agent_id:int, solve_i:int, problem_call:MPCProblemCall=None):
         self.solver_return = solver_return
         self.i_mpc = i_mpc
         self.i_ibr = i_ibr
         self.agent_id = agent_id
         self.solve_i = solve_i
+        self.problem_call = problem_call
+
 
 class MPCSolverLogger(object):
     def __init__(self, log_dir):
@@ -57,7 +72,7 @@ class MPCSolverLogger(object):
     
     def index_logs(self):
         for log in self.logs:
-            self.logs_indexed[(log.i_mpc, log.i_ibr, log.agent_id, log.solve_i)] = log.solver_return
+            self.logs_indexed[(log.i_mpc, log.i_ibr, log.agent_id, log.solve_i)] = (log.solver_return, log.problem_call)
     
     def get_log(self, i_mpc, i_ibr, agent_id, solve_i):
         return self.logs_indexed[(i_mpc, i_ibr, agent_id, solve_i)]

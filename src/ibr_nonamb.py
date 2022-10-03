@@ -8,14 +8,14 @@ from typing import List
 
 from src.traffic_world import TrafficWorld
 from src.warm_starts import generate_warmstarts, get_subset_warmstarts
-from src.best_response import generate_solver_params, MPCSolverReturn, MPCSolverLogger, MPCSolverLog, parallel_mpc_solve_w_trajs
+from src.best_response import generate_solver_params, MPCSolverLogger, MPCSolverLog, parallel_mpc_solve_w_trajs, MPCProblemCall
 from src.vehicle_mpc_information import Trajectory, VehicleMPCInformation
 
 from src.utils.ibr_argument_parser import IBRParser
 from src.utils.solver_helper import poission_positions, extend_last_mpc_and_follow, initialize_cars_from_positions
 from src.utils.plotting.car_plotting import plot_initial_positions
 from src.utils.sim_utils import ExperimentHelper, get_closest_n_obstacle_vehs, get_obstacle_vehs_closeby, get_max_dist_traveled, get_ibr_vehs_idxs, assign_shared_control, get_within_range_other_vehicle_idxs
-from src.desired_trajectories import LaneChangeManueverPiecewise, generate_lane_changing_desired_trajectories
+from src.desired_trajectories import generate_lane_changing_desired_trajectories
 
 def run_iterative_best_response(vehicles,
                                 world: TrafficWorld,
@@ -147,10 +147,19 @@ def run_iterative_best_response(vehicles,
                             warm_traj_key = warm_key + "%d"%traj_idx
                             warmstart_w_traj_dict[warm_traj_key] = (warm_traj, desired_trajectory)
 
+                    problem_call = MPCProblemCall(warmstart_w_traj_dict, 
+                                                response_vehinfo_egoframe, 
+                                                world, 
+                                                s_params, 
+                                                params, 
+                                                ipopt_params,
+                                                obstacle_vehsinfo_egoframe, 
+                                                ctrld_vehsinfo_egoframe)
+
                     with redirect_stdout(ipopt_out_file):
                         sol = parallel_mpc_solve_w_trajs(warmstart_w_traj_dict, response_vehinfo_egoframe, world, s_params, params, ipopt_params,
                             obstacle_vehsinfo_egoframe, ctrld_vehsinfo_egoframe)
-                        solution_logger.add_log(MPCSolverLog(sol, i_mpc, i_ibr, response_vehinfo_egoframe.vehicle.agent_id, solve_number))
+                        solution_logger.add_log(MPCSolverLog(sol, i_mpc, i_ibr, response_vehinfo_egoframe.vehicle.agent_id, solve_number, problem_call))
 
                     if sol.max_slack < min(params["k_max_slack"], np.infty):
                         # print("Local Ego Solution")
