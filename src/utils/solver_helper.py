@@ -285,7 +285,7 @@ def initialize_cars_from_positions(N, dt, world, no_grass=False, list_of_positio
         x1_MPC.theta_ij[-1] = list_of_svo[i]
 
         x1_MPC.k_change_u_v = 0.001
-        x1_MPC.max_delta_u = 50 * np.pi / 180 * x1_MPC.dt
+        x1_MPC.max_delta_u = 1000 * np.pi / 180 * x1_MPC.dt
         x1_MPC.k_u_v = 0.01
         x1_MPC.k_u_delta = .00001
         x1_MPC.k_change_u_v = 0.01
