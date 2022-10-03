@@ -602,8 +602,13 @@ class MultiMPC(NonconvexOptimization):
             p_car.k_change_u_v * change_u_v, p_car.k_change_u_delta * change_u_delta, p_car.k_final * final_costs,
             p_car.k_x * x_cost, p_car.k_on_grass * on_grass_cost, p_car.k_x_dot * x_dot_cost, p_car.k_limit_costs * limit_costs,
         ]
-        all_costs = np.array(all_costs)
-        total_cost = np.sum(all_costs)
+
+        total_cost = 0
+        for c in all_costs:
+            total_cost += c
+
+        # all_costs = np.array(all_costs)
+
         return total_cost, all_costs
 
     def F_kutta(self, f, x_k, u_k, dt: float):
@@ -621,17 +626,19 @@ class MultiMPC(NonconvexOptimization):
 
     def generate_lateral_cost(self, X, X_desired):
         ''' Lateral costs based on distance traversed along desired trajectory'''
-
-        lateral_cost = np.sum([(-cas.sin(X_desired[2, k]) * (X[0, k] - X_desired[0, k]) + cas.cos(X_desired[2, k]) *
-                                (X[1, k] - X_desired[1, k]))**2 for k in range(X.shape[1])])
+        lateral_cost = 0
+        for k in range(X.shape[1]):
+            lateral_cost += (-cas.sin(X_desired[2, k]) * (X[0, k] - X_desired[0, k]) + cas.cos(X_desired[2, k]) *
+                                (X[1, k] - X_desired[1, k]))**2
 
         return lateral_cost
 
     def generate_longitudinal_cost(self, X, X_desired):
         ''' Longitudinal costs based on distance traversed along desired trajectory'''
-
-        longitudinal_cost = np.sum([(cas.cos(X_desired[2, k]) * (X[0, k] - X_desired[0, k]) + cas.sin(X_desired[2, k]) *
-                                     (X[1, k] - X_desired[1, k]))**2 for k in range(X.shape[1])])
+        longitudinal_cost = 0
+        for k in range(X.shape[1]):
+            longitudinal_cost += (cas.cos(X_desired[2, k]) * (X[0, k] - X_desired[0, k]) + cas.sin(X_desired[2, k]) *
+                                     (X[1, k] - X_desired[1, k]))**2 
 
         return longitudinal_cost
 
