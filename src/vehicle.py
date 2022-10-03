@@ -58,8 +58,8 @@ class Vehicle(object):
         ####
 
         # Constraints
-        self.max_steering_rate = 5  # deg/sec
-        self.max_delta_u = 5 * np.pi / 180 * self.dt  # rad (change in steering angle)
+        self.max_steering_rate = 1000  # deg/sec (1000 deg / s)
+        self.max_delta_u = self.max_steering_rate * np.pi / 180 * self.dt  # rad (change in steering angle) src:  An Assessment of Human Driver Steering Capability | NHTSA
 
         self.max_acceleration = 4  #m/s^2
         self.max_v_u = self.max_acceleration * self.dt  # m/s (change in velocity)
