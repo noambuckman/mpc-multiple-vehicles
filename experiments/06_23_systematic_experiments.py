@@ -88,7 +88,7 @@ def run_simulation(log_dir, params):
         if vehicle_it in cooperative_agents:
             svo = np.pi / 4.0
         else:
-            svo = 0.00001
+            svo = 5 * np.pi / 180
 
         vehicle.theta_ij[-1] = svo
         for vehicle_j in all_other_vehicles:
