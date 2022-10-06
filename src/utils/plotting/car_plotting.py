@@ -757,13 +757,12 @@ def add_car_controls(ax, x, y,  delta_u, v_u, vehicle):
 
 
 
-def plot_solver_return(solver_return: MPCSolverReturn, ego_vehicle: Vehicle, world:TrafficWorld, xlims=None, plot_controls=False, problem_call=None):
+def plot_solver_return(solver_return: MPCSolverReturn, ego_vehicle: Vehicle, world:TrafficWorld, xlims=None, plot_controls=False, problem_call=None, save_video=False):
 
     traj = solver_return.trajectory
     des_traj = solver_return.desired_traj
     ctrld_traj = solver_return.cntrld_vehicle_trajectories
 
-    figwidth_in = 4.0  #Hardcoded
 
     ymax = world.y_max
     ymin = world.y_min
@@ -771,15 +770,27 @@ def plot_solver_return(solver_return: MPCSolverReturn, ego_vehicle: Vehicle, wor
     # Initialize the plotting frame to first position of the ambulance
     center_frame = traj.x[0,0]
     if xlims is None:
-        axlim_minx, axlim_maxx = center_frame - 10, center_frame + 50
+        axlim_minx, axlim_maxx = center_frame - 10, center_frame + 100
     else:
         axlim_minx, axlim_maxx = xlims[0], xlims[1]
     N = traj.x.shape[-1]
-    fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx)) * N
-    fig, axs = plt.subplots(N, 1,figsize=(figwidth_in, fig_height))
+
+    max_num_rows = 5
+    num_columns = int(np.ceil(N / max_num_rows))
+
+    figwidth_in = 4.0  #Hardcoded
+    fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx)) 
+
+    if not save_video:
+        fig, axs = plt.subplots(max_num_rows, num_columns, figsize=(figwidth_in*num_columns, fig_height*max_num_rows))
 
     for t in range(traj.x.shape[-1]):
-        ax = axs[t]
+        if save_video:
+            fig, ax = plt.subplots(1,1, figsize=(figwidth_in, fig_height))
+        else:
+            i_col = t//max_num_rows
+            i_row = t%max_num_rows
+            ax = axs[i_row, i_col]
         ax.axis('square')
         ax.set_ylim((ymin, ymax))
         ax.set_xlim((axlim_minx, axlim_maxx))
@@ -808,12 +819,34 @@ def plot_solver_return(solver_return: MPCSolverReturn, ego_vehicle: Vehicle, wor
                 add_car_ellipse(ax, vehinfo.x[0, t], vehinfo.x[1, t], vehinfo.x[2, t], vehinfo.vehicle, agent_id=vehinfo.vehicle.agent_id, color='black', alpha=1.0)
 
         # ax.text(0.75, 0.75, "Cost: %.4f"%solver_return.current_cost)
-    
+
+        vfolder = "temp_videos"
+
+        add_solution_stats = True
+        if add_solution_stats:
+
+            stats_str = " cost=%.03f \n max_cpu_limit=%s \n g_violation=%.02f"%(solver_return.current_cost, 
+                                                                                solver_return.max_cpu_limit,
+                                                                                solver_return.g_violation)
+            ax.text(0.7, 0.9, stats_str, ha='left', va='center', transform=ax.transAxes, fontsize=4, backgroundcolor='gray')
+            # ax.text(0.8, 0.9, 'cost=%.03f'%solver_return.current_cost, ha='center', va='center', transform=ax.transAxes)
+            # ax.text(0.8, 0.8, 'max_cpu_limit=%s'%solver_return.max_cpu_limit, ha='center', va='center', transform=ax.transAxes)
+            # ax.text(0.8, 0.7, 'g_violation=%.03f'%solver_return.g_violation, ha='center', va='center', transform=ax.transAxes)
+
+        if save_video:
+            os.makedirs(vfolder, exist_ok=True)
+            plt.savefig(os.path.join(vfolder, "%03d.png"%t), dpi=300)
+            plt.close()
+
+    if save_video:
+        vname = (solver_return.warm_key).replace(" ", "_") + ".mp4"
+        animate("temp_videos", vname, fps=2)
+        return None, None
     return fig, axs
 
 
 
-def plot_problem_call(problem_call: MPCProblemCall, xlims=None, plot_controls=False):
+def plot_problem_call(problem_call: MPCProblemCall, xlims=None):
 
 
     world = problem_call.world
@@ -827,7 +860,7 @@ def plot_problem_call(problem_call: MPCProblemCall, xlims=None, plot_controls=Fa
     # Initialize the plotting frame to first position of the ambulance
     center_frame = x0[0]
     if xlims is None:
-        axlim_minx, axlim_maxx = center_frame - 10, center_frame + 50
+        axlim_minx, axlim_maxx = center_frame - 10, center_frame + 100
     else:
         axlim_minx, axlim_maxx = xlims[0], xlims[1]
     
@@ -858,9 +891,9 @@ def plot_problem_call(problem_call: MPCProblemCall, xlims=None, plot_controls=Fa
     fig2, axs2 = plt.subplots(N, 1,figsize=(figwidth_in, fig_height))
 
     if "previous_ibr" in problem_call.warmstart_dict:
-        ego_warm_traj = problem_call.warmstart_dict["previous_ibr"]
+        ego_warm_traj = problem_call.warmstart_dict["previous_ibr0"]
     elif "previous_mpc_hold" in problem_call.warmstart_dict:
-        ego_warm_traj = problem_call.warmstart_dict["previous_mpc_hold"]
+        ego_warm_traj = problem_call.warmstart_dict["previous_mpc_hold0"]
     else:
         ego_warm_traj_key = next(iter(problem_call.warmstart_dict))
         ego_warm_traj = problem_call.warmstart_dict[ego_warm_traj_key]
@@ -886,3 +919,37 @@ def plot_problem_call(problem_call: MPCProblemCall, xlims=None, plot_controls=Fa
             add_car_ellipse(ax, vehinfo.x[0, t], vehinfo.x[1, t], vehinfo.x[2, t], vehinfo.vehicle, agent_id=vehinfo.vehicle.agent_id, color='blue', alpha=0.5)
         
     return fig1, axs1, fig2, axs2
+
+
+def grid_stack(list_of_video_files, grid_file_name, nrows, ncolumns):
+
+    num_files = nrows * ncolumns
+    vfiles = list_of_video_files[:num_files]
+    if len(vfiles) < num_files:
+        vfiles += vfiles[0:num_files-len(vfiles)]
+
+    fstring = "ffmpeg"
+    for vs in vfiles:
+         fstring += " -i %s"%vs
+    
+    fstring += ' -filter_complex'
+    filtering_command = ' "'
+    for ri in range(nrows):
+        row_vids = []
+        for ci in range(ncolumns):
+            vi = ri*ncolumns + ci
+            if vi > len(vfiles):
+                continue
+            row_vids += [vi]
+            filtering_command += '[%d:v]'%vi
+        filtering_command += 'hstack=inputs=%d[r%d];'%(len(row_vids), ri)
+    
+    for ri in range(nrows):
+        filtering_command += '[r%d]'%ri
+    filtering_command += 'vstack=inputs=%d[v]'%nrows
+
+    filtering_command += '" -map "[v]" %s'%grid_file_name
+
+    cmd = fstring + filtering_command
+    os.system(cmd)
+    print(cmd)
