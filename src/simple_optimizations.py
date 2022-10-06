@@ -65,7 +65,7 @@ def feasible_guess(N, vehicle, x0, params, world,
 
     
 
-    sol = parallel_mpc_solve_w_trajs(
+    sol, _ = parallel_mpc_solve_w_trajs(
         warm_traj_dict, response_veh_info, world, solver_params, cp_params,
         ipopt_params, cp_other_vehicle_info, [])
 
@@ -203,7 +203,7 @@ def lane_following_optimizations(N: int, vehicle, x0: np.array, params: dict,
 
     desired_traj = vehicle.piecewise_desired
     warm_start_dict = {"test": (warm_traj, desired_traj)}
-    sol = parallel_mpc_solve_w_trajs(
+    sol, _ = parallel_mpc_solve_w_trajs(
         warm_start_dict, response_veh_info, world, solver_params, params,
         ipopt_params, [], [])
 

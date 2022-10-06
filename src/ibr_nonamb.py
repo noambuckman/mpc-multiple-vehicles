@@ -159,7 +159,7 @@ def run_iterative_best_response(vehicles,
                     # problem_call = None
 
                     with redirect_stdout(ipopt_out_file):
-                        sol = parallel_mpc_solve_w_trajs(warmstart_w_traj_dict, response_vehinfo_egoframe, world, s_params, params, ipopt_params,
+                        sol, _ = parallel_mpc_solve_w_trajs(warmstart_w_traj_dict, response_vehinfo_egoframe, world, s_params, params, ipopt_params,
                             obstacle_vehsinfo_egoframe, ctrld_vehsinfo_egoframe)
                         solution_logger.add_log(MPCSolverLog(sol, i_mpc, i_ibr, response_vehinfo_egoframe.vehicle.agent_id, solve_number, problem_call))
 

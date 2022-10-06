@@ -236,21 +236,23 @@ def parallel_mpc_solve_w_trajs(warmstart_traj_dict: Dict[str, Tuple[Trajectory, 
         reached_max_cpu_sols = [s for s in below_max_slack_sols if s.max_cpu_limit]
         n_max_cpu = len(reached_max_cpu_sols)
 
-        if n_not_max_cpu > 0:
-            min_cost_solution = min(returned_before_max_cpu_sols, key=lambda r: r.current_cost)
-        else:       
-            min_cost_solution = min(reached_max_cpu_sols, key=lambda r: r.current_cost)
+        # if n_not_max_cpu > 0:
+        #     min_cost_solution = min(returned_before_max_cpu_sols, key=lambda r: r.current_cost)
+        # else:       
+        #     min_cost_solution = min(reached_max_cpu_sols, key=lambda r: r.current_cost)
         
+        min_cost_solution = min(below_max_slack_sols, key=lambda r: r.current_cost)
         below_g_violation = len([s for s in reached_max_cpu_sols if s.g_violation <= 0.0001])
         print("# Max CPU Reached (All) %d   # Max CPU Reached (Feasible) %d   # Fully Solved %d"%(n_max_cpu, below_g_violation, n_not_max_cpu))
-                    
+        return min_cost_solution, below_max_slack_sols             
     else:
         min_cost_solution = min(solve_costs_solutions, key=lambda r: r.current_cost)
         print(
             "# No Feasible Solutions Below Max Slack. Returning with Slack = %.02f"
             % min_cost_solution.max_slack)
+        return min_cost_solution, solve_costs_solutions
 
-    return min_cost_solution
+
 
 
 def call_mpc_solver(
