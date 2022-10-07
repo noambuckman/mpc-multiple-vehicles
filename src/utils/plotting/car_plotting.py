@@ -12,6 +12,7 @@ from typing import List
 from src.traffic_world import TrafficWorld
 from src.vehicle import Vehicle
 from src.best_response import MPCProblemCall, MPCSolverReturn
+from src.multiagent_mpc import get_vehicle_circles
 
 def get_car_color(i: int) -> str:
     ''' 
@@ -123,7 +124,8 @@ def plot_multiple_cars(k,
                        xlim=None,
                        vid_track: int = 0,
                        all_other_vehicles: List[Vehicle] = None,
-                       frame_width: float = 100.0):
+                       frame_width: float = 100.0,
+                       plot_ttc_circles=False):
     ''' This only has info from vehicle but not any individual ones
     vehicle: [Deprecated] 
     xamb_plot:  [Deprecated]
@@ -184,7 +186,7 @@ def plot_multiple_cars(k,
 
             if car_labels is not None:
                 ax.annotate('R', xy=(xamb_plot[0, k:k + 1], xamb_plot[1, k:k + 1]))
-
+            
         for i in range(len(xothers_plot)):
 
             x1_plot = xothers_plot[i]
@@ -210,6 +212,14 @@ def plot_multiple_cars(k,
                     ax.annotate(str(car_labels[i]), xy=(x, y))
                 elif type(car_labels) == bool:
                     ax.annotate(str(all_other_vehicles[i].agent_id), xy=(x, y))
+
+                if plot_ttc_circles:
+                    ego_centers, ego_radius = get_vehicle_circles(x1_plot)
+                    for circ_i in range(len(ego_centers)):
+                        print(ego_centers)
+                        print(ego_radius)
+                        xy = (float(ego_centers[circ_i][0]), float(ego_centers[circ_i][1]))
+                        ax.add_patch(patches.Circle(xy, float(ego_radius), fill=True, color='g'))
 
     if car_plot_shape.lower() == "image" or car_plot_shape.lower() == "both":
         for i in range(len(xothers_plot)):
