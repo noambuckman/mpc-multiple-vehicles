@@ -26,8 +26,9 @@ class MPCSolverReturn(object):
         self.g_violation = g_violation
 
 class MPCSolverReturnException(MPCSolverReturn):
-    def __init__(self):
-        MPCSolverReturn.__init__(self, False, np.infty, np.infty, None, None, None, [], None)
+    def __init__(self, warm_key, desired_traj, exception):
+        MPCSolverReturn.__init__(self, False, np.infty, np.infty, None, warm_key, desired_traj, [], None)
+        self.exception = exception
 
 class MPCProblemCall(object):
     def __init__(self, warmstart_dict, response_vehinfo, world, solver_params, params, ipopt_params, obstacle_vehsinfo, ctrld_vehsinfo):
@@ -357,7 +358,7 @@ def call_mpc_solver(
         return MPCSolverReturn(True, current_cost, max_slack, trajectory, warm_key, desired_traj, debug_list, cntrld_vehicle_trajectories, max_cpu_limit, max_g)
     except Exception as e:
         print(e)
-        return MPCSolverReturnException()
+        return MPCSolverReturnException(warm_key=warm_key, desired_traj=desired_traj, exception=e)
 
 def get_trajectories_from_solution(nlp_solution, N, nc, nnc):
     ''' Converts the returned solution from Casadi.NLPSolver object to trajectories and costs'''
