@@ -42,9 +42,9 @@ def feasible_guess(N, vehicle, x0, params, world,
 
 
     # warm start with no control inputs
-    u_warm_intial = np.zeros((2, N))
+    u_warm_initial = np.zeros((2, N))
     x_warm_initial, x_des_warm_initial = cp_vehicle.forward_simulate_all(
-        x0.reshape(6, 1), u_warm_intial)
+        x0.reshape(6, 1), u_warm_initial)
 
     # solve for a spatially feasible x that we will use as a warm start
     x_other = [v.x for v in cp_other_vehicle_info]
@@ -57,14 +57,13 @@ def feasible_guess(N, vehicle, x0, params, world,
     cp_vehicle.update_default_desired_lane_traj(world, x0)
     warm_traj_dict = {
         'mix spatial none':
-        (Trajectory(u=u_warm_intial, x=x_warm, xd=x_des_warm_initial), cp_vehicle.desired_traj)
+        (Trajectory(u=u_warm_initial, x=x_warm, xd=x_des_warm_initial), cp_vehicle.desired_traj)
     }
 
     response_veh_info = VehicleMPCInformation(cp_vehicle, x0)
     print("Solving Vehicle %d"% response_veh_info.vehicle.agent_id)
 
     
-
     sol, _ = parallel_mpc_solve_w_trajs(
         warm_traj_dict, response_veh_info, world, solver_params, cp_params,
         ipopt_params, cp_other_vehicle_info, [])
@@ -77,7 +76,7 @@ def feasible_guess(N, vehicle, x0, params, world,
     else:
         print(
             "Warning...Bad prediction of remaining MPC trajectory before IBR")
-        return u_warm_intial, x_warm_initial, x_des_warm_initial
+        return u_warm_initial, x_warm_initial, x_des_warm_initial
 
 
 # spatial free space
