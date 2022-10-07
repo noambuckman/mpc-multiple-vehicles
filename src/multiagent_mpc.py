@@ -427,8 +427,18 @@ class MultiMPC(NonconvexOptimization):
                                                                 p_other_vehicle_list, p_cntrld_list, x_ego, x_other,
                                                                 x_ctrld, k_ca2, k_CA_power)
         
-        ttc_cost_ctrl = get_ttc_cost_cum(x_ego, x_ctrld, p_ego.L, p_ego.W, parallel=True, buffer_factor=0.1, ttc_threshold=ttc_threshold)
-        ttc_cost_nc = get_ttc_cost_cum(x_ego, x_other, p_ego.L, p_ego.W, parallel=True, buffer_factor=0.1, ttc_threshold=ttc_threshold)
+
+
+        if n_vehs_cntrld > 0:
+            ttc_cost_ctrl = get_ttc_cost_cum(x_ego, x_ctrld, p_ego.L, p_ego.W, parallel=True, buffer_factor=0.1, ttc_threshold=ttc_threshold)
+        else:
+            ttc_cost_ctrl = 0.0
+        
+        if n_other_vehicle > 0:
+            ttc_cost_nc = get_ttc_cost_cum(x_ego, x_other, p_ego.L, p_ego.W, parallel=True, buffer_factor=0.1, ttc_threshold=ttc_threshold)
+        else:
+            ttc_cost_nc = 0.0
+
         collision_cost += k_ttc * (ttc_cost_ctrl + ttc_cost_nc)
 
         total_svo_cost = (response_svo_cost + other_svo_cost + k_slack * slack_cost + k_CA * collision_cost)
