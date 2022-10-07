@@ -39,7 +39,7 @@ def generate_warm_x(vehicle, N: int, world: TrafficWorld, x0: np.array, average_
     x_warm_profiles["0constant v"] = x_warm_default
     # lane change up
     y_up = y0 + lane_width
-    for percent_change in [0.00, 0.5, 0.75]:
+    for percent_change in [0.01, 0.5, 0.75]:
         key = "0up %d" % (int(100 * percent_change))
         x_up = np.copy(x_warm_default)
         ti_lane_change = int(percent_change * (N + 1))
@@ -49,7 +49,7 @@ def generate_warm_x(vehicle, N: int, world: TrafficWorld, x0: np.array, average_
         x_warm_profiles[key] = x_up
 
     y_down = y0 - lane_width
-    for percent_change in [0.00, 0.5, 0.75]:
+    for percent_change in [0.01, 0.5, 0.75]:
         key = "0down %d" % (int(100 * percent_change))
         x_up = np.copy(x_warm_default)
         ti_lane_change = int(percent_change * (N + 1))

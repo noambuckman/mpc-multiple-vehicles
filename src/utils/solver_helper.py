@@ -312,6 +312,8 @@ def initialize_cars_from_positions(N, dt, world, no_grass=False, list_of_positio
         initial_speed = 0.99 * x1_MPC.max_v
         # x1_MPC.fd = x1_MPC.gen_f_desired_lane(world, lane_number, True)
         x0 = np.array([next_x0, world.get_lane_centerline_y(lane_number), 0, 0, initial_speed, 0]).T
+        num_stabilty_noise = np.random.uniform(-0.0001, 0.0001, size=x0.shape)
+        x0 += num_stabilty_noise        
         all_other_vehicles += [x1_MPC]
         all_other_x0 += [x0]
 
@@ -343,6 +345,8 @@ def initialize_cars_from_positions(N, dt, world, no_grass=False, list_of_positio
     lane_number, next_x0 = list_of_positions[0]
     amb_MPC.fd = amb_MPC.gen_f_desired_lane(world, lane_number, True)
     x0_amb = np.array([next_x0, world.get_lane_centerline_y(lane_number), 0, 0, initial_speed, 0]).T
+    num_stabilty_noise = np.random.uniform(-0.0001, 0.0001, size=x0_amb.shape)
+    x0_amb += num_stabilty_noise
 
     return amb_MPC, x0_amb, all_other_vehicles, all_other_x0
 
