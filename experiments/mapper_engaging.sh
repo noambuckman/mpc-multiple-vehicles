@@ -13,5 +13,5 @@ INPUT_PARAMS="experiment.json"
 RESULTS_DIR="results/"
 
 
-python -u $HOME/mpc-multiple-vehicles/experiments/06_23_systematic_experiments.py $SLURM_ARRAY_TASK_ID $SLURM_ARRAY_TASK_COUNT --input-params $INPUT_PARAMS --experiment-random-seed $EXPERIMENT_RANDOM_SEED  --results-dir $RESULTS_DIR --n-processors $SLURM_CPUS_PER_TASK --dry-run
+python -u $HOME/mpc-multiple-vehicles/experiments/06_23_systematic_experiments.py $SLURM_ARRAY_TASK_ID $SLURM_ARRAY_TASK_COUNT --input-params $INPUT_PARAMS --experiment-random-seed $EXPERIMENT_RANDOM_SEED  --results-dir $RESULTS_DIR --n-processors $SLURM_CPUS_PER_TASK
 
