@@ -111,9 +111,9 @@ def run_simulation(log_dir, params):
 
     # Save the vehicles and world for this simulation
     os.makedirs(log_dir, exist_ok=True)
-    pickle.dump(all_other_vehicles, open(log_dir + "/other_vehicles.p", "wb"))
-    pickle.dump(world, open(log_dir + "/world.p", "wb"))
-    pickle.dump(all_other_x0, open(log_dir + "/x0.p", "wb"))
+    pickle.dump(all_other_vehicles, open(os.path.join(log_dir, "/other_vehicles.p"), "wb"))
+    pickle.dump(world, open(os.path.join(log_dir, "world.p"), "wb"))
+    pickle.dump(all_other_x0, open(os.path.join(log_dir + "x0.p"), "wb"))
     print("Results saved in log %s:" % log_dir)
     # if args.plot_initial_positions:
     #     plot_initial_positions(log_dir, world, all_other_vehicles, all_other_x0)
@@ -205,7 +205,7 @@ if __name__ == "__main__":
         print("Running Experiment %d/%d"%(idx, len(expanded_params)))
         print(log_dir)
         # Run the simulation with current sim params
-        all_trajectories, all_control = run_simulation(log_dir, current_sim_params)
+        all_trajectories, all_control = run_simulation(log_dir, params)
         if all_trajectories is None:  #We got an exception
             continue
         
