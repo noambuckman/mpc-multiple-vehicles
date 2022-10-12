@@ -162,6 +162,7 @@ def plot_multiple_cars(k,
     if xlim is not None:
         axlim_minx = xlim[0]
         axlim_maxx = xlim[1]
+    
     ## 1080p = 1920×1080,
     # fig, ax = plt.subplots(figsize=(figwidth_in, fig_height), dpi=144)
     # fig, ax = plt.subplots(figsize=(200, 20), dpi=144)
@@ -191,7 +192,9 @@ def plot_multiple_cars(k,
 
             x1_plot = xothers_plot[i]
             vehicle = all_other_vehicles[i]
-            if 0.9 * axlim_minx <= x1_plot[0, k] <= 1.1 * axlim_maxx:
+            w = axlim_maxx - axlim_minx
+
+            if (axlim_minx + 0.01*w) <= x1_plot[0, k] <= (axlim_maxx - 0.01*w):
                 x, y, phi = x1_plot[0, k], x1_plot[1, k], x1_plot[2, k]
                 a, b = vehicle.ax, vehicle.by
 
@@ -243,11 +246,11 @@ def plot_multiple_cars(k,
     ax.get_yaxis().set_visible(False)
     # ax.get_xaxis().set_visible(True)
     set_xticks_world(ax, interval = 50.0)
-
-    plt.tight_layout()
+    
+    plt.tight_layout(pad=0.01)
 
     if folder is not None:
-        fig.savefig(folder + '{:03d}.png'.format(k))
+        fig.savefig(os.path.join(folder, '{:03d}.png'.format(k)), pad_inches=0.01)
         plt.close(fig)
         gc.collect()
     else:
@@ -389,7 +392,7 @@ def plot_single_frame(world: TrafficWorld,
 
     fig = plt.gcf()
     if folder is not None:
-        fig.savefig(folder + '{:03d}.png'.format(k))
+        fig.savefig(os.path.join(folder, '{:03d}.png'.format(k)))
         plt.close(fig)
         gc.collect()
     else:
@@ -426,6 +429,9 @@ def plot_cars(world: TrafficWorld,
         camera_positions = generate_camera_positions(xamb_plot, vehicle)
     else:
         camera_positions = generate_camera_positions(xothers_plot[vid_track], all_other_vehicles[vid_track])
+    
+    time_steps = range(N)
+
     if n_processors > 1:
         plot_partial = functools.partial(plot_multiple_cars,
                                          world=world,
@@ -441,10 +447,9 @@ def plot_cars(world: TrafficWorld,
                                          all_other_vehicles=all_other_vehicles,
                                          xlim=xlim,
                                          frame_width=frame_width)
-
-        p_tqdm.p_map(plot_partial, range(N), num_cpus=n_processors)
+        p_tqdm.p_map(plot_partial, time_steps, num_cpus=n_processors)
     else:
-        for k in range(N):
+        for k in time_steps:
             plot_multiple_cars(k,
                                world,
                                vehicle,
