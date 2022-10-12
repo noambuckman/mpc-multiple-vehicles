@@ -111,7 +111,7 @@ def run_simulation(log_dir, params):
 
     # Save the vehicles and world for this simulation
     os.makedirs(log_dir, exist_ok=True)
-    pickle.dump(all_other_vehicles, open(os.path.join(log_dir, "/other_vehicles.p"), "wb"))
+    pickle.dump(all_other_vehicles, open(os.path.join(log_dir, "other_vehicles.p"), "wb"))
     pickle.dump(world, open(os.path.join(log_dir, "world.p"), "wb"))
     pickle.dump(all_other_x0, open(os.path.join(log_dir + "x0.p"), "wb"))
     print("Results saved in log %s:" % log_dir)
