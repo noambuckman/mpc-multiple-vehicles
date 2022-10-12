@@ -139,6 +139,10 @@ def animate_cars(args, params, log_directory, trajectories, vehicles, world):
     else:
         car_labels = None
 
+    if args.vehicle_id_track == -1:
+        vehicle_id_track = int(params["n_other"] / 2.0)
+    else:
+        vehicle_id_track = args.vehicle_id_track
     plot_cars(world,
               None,
               None, [trajectories[i, :, :] for i in range(params["n_other"])],
@@ -148,7 +152,7 @@ def animate_cars(args, params, log_directory, trajectories, vehicles, world):
               car_labels,
               car_colors,
               args.n_workers,
-              vid_track=args.vehicle_id_track,
+              vid_track=vehicle_id_track,
               all_other_vehicles=vehicles,
               frame_width=args.frame_width)
 
@@ -365,7 +369,7 @@ if __name__ == '__main__':
     parser.add_argument("--midrun", action="store_true", help="Use trajectory data from midrun")
 
     parser.add_argument('--end-mpc', type=int, default=-1)
-    parser.add_argument('--vehicle-id-track', type=int, default=0)
+    parser.add_argument('--vehicle-id-track', type=int, default=-1)
     parser.add_argument('--camera-speed', type=int, default=-1)
     parser.add_argument('--shape', type=str, default="ellipse")
     parser.add_argument('--svo-colors', type=int, default=1)
