@@ -196,9 +196,9 @@ def run_iterative_best_response(vehicles,
 
                 if solve_number == params["k_max_solve_number"]:
                     if i_ibr > 0:
-                        default_traj = warmstarts_dict['previous_ibr0']
+                        default_traj = warmstart_w_traj_dict['previous_ibr0'][0]
                     else:
-                        default_traj = warmstarts_dict['previous_mpc_hold0']
+                        default_traj = warmstart_w_traj_dict['previous_mpc_hold0'][0]
 
                     default_traj_world = default_traj.transform_to_global(fake_ego_x0_transforming)
 
