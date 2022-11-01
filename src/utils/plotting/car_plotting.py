@@ -51,8 +51,9 @@ def add_car(x: np.array, vehicle: Vehicle, ax: plt.matplotlib.axis = None, car_n
     code_path = "/home/nbuckman/mpc-multiple-vehicles/src/utils/plotting/"
     if car_name == "red":
         arr_img = plt.imread(code_path + 'images/red_car.png', format='png')
-        car_width_px = 599
-        car_height_px = 310
+        car_width_px, car_height_px = arr_img.shape[1], arr_img.shape[0]
+        # car_width_px = 599
+        # car_height_px = 310
     elif car_name == "purple":
         arr_img = plt.imread(code_path + 'images/red_car.png', format='png')
         arr_img[:, :, 2] = arr_img[:, :, 0]  #Add equal amount blue
@@ -73,6 +74,8 @@ def add_car(x: np.array, vehicle: Vehicle, ax: plt.matplotlib.axis = None, car_n
         arr_img = plt.imread(code_path + 'images/green_car.png', format='png')
         car_width_px = 599
         car_height_px = 310
+    car_width_px, car_height_px = arr_img.shape[1], arr_img.shape[0]
+
     arr_img[:, :, 3] = alpha * arr_img[:, :, 3]
 
     # Rotate + translate image to position of vehicle
@@ -86,11 +89,11 @@ def add_car(x: np.array, vehicle: Vehicle, ax: plt.matplotlib.axis = None, car_n
 
     # Hardcoded rescaling (TODO: automate this)
     dpi = fig.get_dpi()
-    if dpi > 100:
-        hard_coded_correction = 0.35
-    else:
-        hard_coded_correction = 0.75
-
+    # if dpi > 100:
+    #     hard_coded_correction = 0.35
+    # else:
+    #     hard_coded_correction = 0.75
+    hard_coded_correction = 0.29
     L = vehicle.L
     if car_name == "Amb":
         zoom_ratio = L / car_width_px * (dpi * figwidth_in) / window_width * hard_coded_correction
@@ -182,7 +185,7 @@ def plot_multiple_cars(k,
         if xamb_plot is not None:
             x, y, phi = xamb_plot[0, k], xamb_plot[1, k], xamb_plot[2, k]
             a, b = vehicle.ax, vehicle.by
-            ellipse_patch = patches.Ellipse((x, y), 2 * a, 2 * b, angle=np.rad2deg(phi), fill=False, color='black')
+            ellipse_patch = patches.Ellipse((x, y), 2 * a, 2 * b, angle=np.rad2deg(phi), fill=True, color='black')
             ax.add_patch(ellipse_patch)
 
             if car_labels is not None:
@@ -206,8 +209,8 @@ def plot_multiple_cars(k,
                                                 2 * a,
                                                 2 * b,
                                                 angle=np.rad2deg(phi),
-                                                fill=False,
-                                                edgecolor=color)
+                                                fill=True,
+                                                color=color)
                 ax.add_patch(ellipse_patch)
                 if car_labels is None:
                     pass
@@ -250,7 +253,7 @@ def plot_multiple_cars(k,
     plt.tight_layout(pad=0.01)
 
     if folder is not None:
-        fig.savefig(os.path.join(folder, '{:03d}.png'.format(k)), pad_inches=0.01)
+        fig.savefig(os.path.join(folder, '{:03d}.png'.format(k)), pad_inches=0.01, dpi=300)
         plt.close(fig)
         gc.collect()
     else:

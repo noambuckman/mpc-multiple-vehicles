@@ -96,8 +96,8 @@ def get_car_colors_from_svo(vehicles):
         if svo[i] < np.pi / 8.0:
             car_colors[i] = 'red'
         elif np.pi / 8 <= svo[i] <= 3 * np.pi / 8.0:
-            car_colors[i] = 'purple'
-        elif np.pi / 8 <= svo[i] <= np.pi / 2.0:
+            car_colors[i] = 'blue'
+        else:
             car_colors[i] = 'blue'
     
     return car_colors
