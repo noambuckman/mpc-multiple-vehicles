@@ -429,7 +429,7 @@ def poission_positions(cars_per_hour: float,
 
     initial_vehicle_positions = []
     for lane in lane_car_positions:
-        initial_vehicle_positions += [(lane, float(x)) for x in lane_car_positions[lane]]
+        initial_vehicle_positions += [(lane, float(x) + np.random.uniform(-0.25, 0.25)) for x in lane_car_positions[lane]]
 
     initial_vehicle_positions = sorted(initial_vehicle_positions, key=lambda l: l[1])
 
