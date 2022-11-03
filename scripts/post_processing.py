@@ -140,7 +140,8 @@ def animate_cars(args, params, log_directory, trajectories, vehicles, world):
         car_labels = None
 
     if args.vehicle_id_track == -1:
-        vehicle_id_track = int(params["n_other"] / 2.0)
+        # vehicle_id_track = int(params["n_other"] / 2.0)
+        vehicle_id_track = -1
     else:
         vehicle_id_track = args.vehicle_id_track
     plot_cars(world,
