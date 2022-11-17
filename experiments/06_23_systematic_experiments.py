@@ -88,7 +88,10 @@ def run_simulation(log_dir, params):
         if vehicle_it in cooperative_agents:
             svo = np.pi / 4.0
         else:
-            svo = 5 * np.pi / 180
+            if params["fully_ego"] == 1:
+                svo = 0.0
+            else:
+                svo = 5 * np.pi / 180
 
         vehicle.theta_ij[-1] = svo
         for vehicle_j in all_other_vehicles:
@@ -140,6 +143,7 @@ if __name__ == "__main__":
     parser.add_argument("--input-params", type=str, default="experiments/experiment.json", help="Path to jason")
     parser.add_argument("--results-dir", type=str, default=None)
     parser.add_argument("--dry-run", action='store_true')
+    parser.add_argument("--fully-ego", type=int, default=0, help="1: theta=0,  0: theta=5deg")
 
     args = parser.parse_args()
     default_params = vars(args)
