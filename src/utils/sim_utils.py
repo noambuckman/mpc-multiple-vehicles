@@ -124,6 +124,31 @@ class ExperimentHelper(object):
         t_actual = 0
         return x_executed, u_mpc, x_actual, u_actual, t_actual
 
+    def load_log_data_midrun(self):
+
+        xothers_actual_arr, uothers_actual_arr = self.load_trajectory() #these will be numpy arrays
+        xothers_actual = [xothers_actual_arr[i,:,:] for i in range(xothers_actual_arr.shape[0])]
+        uothers_actual = [uothers_actual_arr[i,:,:] for i in range(uothers_actual_arr.shape[0])]
+        
+
+        #TODO
+        all_other_x_executed = [None for _ in range(self.params["n_other"])]
+        all_other_u_executed = [None for _ in range(self.params["n_other"])]
+
+        actual_t = np.argwhere(np.all(xothers_actual[0] == 0, axis=0))[0] - 1
+        
+        all_other_x_executed = [xothers_actual[i][:, actual_t:actual_t +
+                              self.params["number_ctrl_pts_executed"] +
+                              1] for i in range(len(xothers_actual))] 
+        all_other_u_executed = [uothers_actual[i][:, actual_t:actual_t + self.params[
+                "number_ctrl_pts_executed"]] for i in range(len(uothers_actual))]
+
+        i_mpc = actual_t / self.params["number_ctrls_pts_executed"]
+
+
+        return all_other_x_executed, all_other_u_executed, xothers_actual, uothers_actual, actual_t
+
+
     def load_log_data(self, i_mpc_start):
         N_total = self.params["n_mpc"] * self.params["number_ctrl_pts_executed"]
         uothers_actual = [
@@ -250,6 +275,20 @@ class ExperimentHelper(object):
 
         with open(controls_path, 'wb') as fp:
             np.save(fp, controls_array)
+
+    def load_trajectory(self):
+
+        trajectory_dir_path = os.path.join(self.log_dir, "trajectories")
+        trajectory_path = os.path.join(trajectory_dir_path, "trajectory_t.npy")
+        controls_path = os.path.join(trajectory_dir_path, "controls_t.npy")
+
+        with open(trajectory_path, "rb") as fp:
+            trajectory_array = np.load(fp)
+
+        with open(controls_path, 'rb') as fp:
+            controls_array = np.load(fp)
+
+        return trajectory_array, controls_array
 
         
     
@@ -491,6 +530,19 @@ def get_obstacle_vehs_closeby(response_vehinfo,
 
     return obstacles_within_dist
 
+def remove_purely_egoistic_vehs(cntrld_idx, controlled_veh_infos):
+    ''' Remove any vehicles that are purely egoistic'''
+    new_cntrld_idx = []
+    new_cntrld_veh_infos = []    
+    for idx in range(len(controlled_veh_infos)):
+        if abs(controlled_veh_infos[idx].vehicle.theta_ij[-1]) < 1e-6:
+            continue
+        else:
+            new_cntrld_idx.append(cntrld_idx[idx])
+            new_cntrld_veh_infos.append(controlled_veh_infos[idx])
+    
+    return new_cntrld_idx, new_cntrld_veh_infos
+
 
 def assign_shared_control(params, i_rounds_ibr, idxs_in_mpc,
                           vehicles_index_best_responders, response_veh_info,
@@ -531,11 +583,13 @@ def assign_shared_control(params, i_rounds_ibr, idxs_in_mpc,
             if idx not in vehicles_index_best_responders:
                 # dont include vehs not in best responderes list
                 continue
-
+            
             sorted_candidate_idx += [idx]
 
         cntrld_idx = sorted_candidate_idx[:n_cntrld]
         cntrld_vehicle_info = [vehs_ibrinfo_pred[idx] for idx in cntrld_idx]
+
+        cntrld_idx, cntrld_vehicle_info = remove_purely_egoistic_vehs(cntrld_idx, cntrld_vehicle_info)
 
     nonresponse_veh_info = [
         vehs_ibrinfo_pred[idx] for idx in idxs_in_mpc if idx not in cntrld_idx
