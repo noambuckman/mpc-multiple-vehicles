@@ -430,6 +430,8 @@ def plot_cars(world: TrafficWorld,
 
     if xamb_plot is not None:
         camera_positions = generate_camera_positions(xamb_plot, vehicle)
+    elif vid_track == -1:
+        camera_positions = list(np.mean(np.array(xothers_plot)[:, 0, :], axis=0))
     else:
         camera_positions = generate_camera_positions(xothers_plot[vid_track], all_other_vehicles[vid_track])
     

@@ -86,10 +86,11 @@ class ExperimentHelper(object):
 
         # SAVE STATES AND PLOT
         file_name = self.log_dir + "data/" + "mpc_%03d" % (i_mpc)
-        print("Saving MPC Rd %03d / %03d to ... %s" %
-              (i_mpc, self.params["n_mpc"] - 1, file_name))
+        # 
 
         if self.params["save_state"]:
+            print("Saving MPC Rd %03d / %03d to ... %s" %
+                          (i_mpc, self.params["n_mpc"] - 1, file_name))            
             other_u_ibr_temp = [veh.u for veh in othervehs_ibr_info]
             other_xd_ibr_temp = [veh.xd for veh in othervehs_ibr_info]
 
