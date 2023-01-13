@@ -16,7 +16,7 @@ def post_process(args):
     for logdir in args.logdir:
     
         try:
-            params, vehicles, world, x0, x, u = load_data_from_logdir(logdir)    
+            params, vehicles, world, x0, x, u = load_data_from_logdir(logdir, args.midrun)    
         except FileNotFoundError as e:
             print(e)
             continue
@@ -38,14 +38,22 @@ def post_process(args):
             analyze_costs(vehicles, x, u, world, params, post_processing_dir_path)
 
 
-def load_data_from_logdir(logdir: str):
-    ''' Loads experiment data from logdirectory string'''
+def load_data_from_logdir(logdir: str, midrun: bool = False):
+    ''' Loads experiment data from logdirectory string
+    
+        midrun: True if using trajectory information from mid-experiment running
+    
+    '''
     
     X0_PATH = os.path.join(logdir, "x0.p")
     x0 = pickle.load(open(X0_PATH, "rb"))
-
-    U_PATH = os.path.join(logdir, "controls.npy")
-    X_PATH = os.path.join(logdir, "trajectories.npy")
+    
+    if midrun:
+        U_PATH = os.path.join(logdir, "trajectories/", "controls_t.npy")
+        X_PATH = os.path.join(logdir, "trajectories/", "trajectory_t.npy")
+    else:
+        U_PATH = os.path.join(logdir, "controls.npy")
+        X_PATH = os.path.join(logdir, "trajectories.npy")        
     u = np.load(U_PATH)
     x = np.load(X_PATH)
 
@@ -58,6 +66,20 @@ def load_data_from_logdir(logdir: str):
     params = json.load(open(os.path.join(logdir, "params.json")))
 
     return params, vehicles, world, x0, x, u
+
+def load_initial_vars(logdir: str):
+    X0_PATH = os.path.join(logdir, "x0.p")
+    x0 = pickle.load(open(X0_PATH, "rb"))
+
+    vehicles_path = os.path.join(logdir, 'other_vehicles.p')
+    world_path = os.path.join(logdir, 'world.p')
+
+    vehicles = pickle.load(open(vehicles_path, 'rb'))
+    world = pickle.load(open(world_path, 'rb'))    
+
+    params = json.load(open(os.path.join(logdir, "params.json")))
+
+    return params, vehicles, world, x0    
 
 
 def get_car_colors_from_svo(vehicles):
@@ -74,8 +96,8 @@ def get_car_colors_from_svo(vehicles):
         if svo[i] < np.pi / 8.0:
             car_colors[i] = 'red'
         elif np.pi / 8 <= svo[i] <= 3 * np.pi / 8.0:
-            car_colors[i] = 'purple'
-        elif np.pi / 8 <= svo[i] <= np.pi / 2.0:
+            car_colors[i] = 'blue'
+        else:
             car_colors[i] = 'blue'
     
     return car_colors
@@ -112,36 +134,51 @@ def animate_cars(args, params, log_directory, trajectories, vehicles, world):
     else:
         car_colors = None
 
+    if args.add_agent_ids:
+        car_labels = ["%d"%v.agent_id for v in vehicles]
+    else:
+        car_labels = None
+
+    if args.vehicle_id_track == -1:
+        # vehicle_id_track = int(params["n_other"] / 2.0)
+        vehicle_id_track = -1
+    else:
+        vehicle_id_track = args.vehicle_id_track
     plot_cars(world,
               None,
               None, [trajectories[i, :, :] for i in range(params["n_other"])],
               img_dir + "/",
               args.shape,
               None,
-              None,
+              car_labels,
               car_colors,
               args.n_workers,
-              vid_track=args.vehicle_id_track,
-              all_other_vehicles=vehicles)
+              vid_track=vehicle_id_track,
+              all_other_vehicles=vehicles,
+              frame_width=args.frame_width)
 
     # log_string = log_directory.split('/')[-2]
     log_string = log_directory
+    if log_string[-1] == "/":
+        log_string = log_string[:-1]
     vid_dir = os.path.join(log_directory, 'vids/')
     os.makedirs(vid_dir, exist_ok=True)
     print("Video directory", vid_dir)
+    temporary_str = "_t_" if args.midrun else ""
     if args.shape == "both" or args.shape == "image":
-        video_filename = os.path.join(vid_dir, log_string + '.mp4')
+        video_filename = os.path.join(vid_dir, log_string + temporary_str + '.mp4')
     else:
-        video_filename = os.path.join(vid_dir, log_string + 'ell.mp4')
+        video_filename = os.path.join(vid_dir, log_string + temporary_str + 'ell.mp4')
 
     if os.path.exists(video_filename):
         os.remove(video_filename)
     outfile = animate(img_dir, video_filename, args.fps)
     print("Saved video to: %s" % outfile)
     vid_directory = '/home/nbuckman/mpc-vids/'
-    cmd = 'cp %s %s' % (video_filename, vid_directory)
-    os.system(cmd)
-    print("Saved video to: %s" % vid_directory)
+    if args.backup_vids == 1:
+        cmd = 'cp %s %s' % (video_filename, vid_directory)
+        os.system(cmd)
+        print("Saved video to: %s" % vid_directory)
 
     return None
 
@@ -331,17 +368,19 @@ if __name__ == '__main__':
     parser.add_argument("--analyze-controls", action="store_true", help="load controls")
     parser.add_argument("--animate", action="store_true", help="Animate simulation")
     parser.add_argument("--analyze-costs", action="store_true", help="Analyze and plot costs")
+    parser.add_argument("--midrun", action="store_true", help="Use trajectory data from midrun")
 
     parser.add_argument('--end-mpc', type=int, default=-1)
-    parser.add_argument('--vehicle-id-track', type=int, default=0)
+    parser.add_argument('--vehicle-id-track', type=int, default=-1)
     parser.add_argument('--camera-speed', type=int, default=-1)
     parser.add_argument('--shape', type=str, default="ellipse")
     parser.add_argument('--svo-colors', type=int, default=1)
     parser.add_argument('--n-workers', type=int, default=8)
     parser.add_argument('--keep-old-vids', type=bool, default=False)
     parser.add_argument('--fps', type=int, default=16, help="Frame rate in frames per second")
-
-
+    parser.add_argument('--frame-width', type=float, default=100.0, help="Width of the camera")
+    parser.add_argument('--add-agent-ids', action="store_true", help="Add agent ids")
+    parser.add_argument("--backup-vids", type=int, default=1, help="Backup video to Dropbox. 1 (Default): Backup.  0: No backup")
 
     args = parser.parse_args()
 

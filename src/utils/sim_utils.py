@@ -1,3 +1,4 @@
+from curses.ascii import ctrl
 import numpy as np
 from src.vehicle import Vehicle
 from typing import List
@@ -7,7 +8,10 @@ from shapely.geometry import box
 from shapely.affinity import rotate
 import psutil, time, datetime
 import os, pickle
-
+try:
+    import matplotlib.pyplot as plt
+except Exception:
+    print("Warning...running on server so no plotting")
 
 class ExperimentHelper(object):
     ''' Helper for logging various things and keeping track of experiment start time'''
@@ -17,6 +21,7 @@ class ExperimentHelper(object):
         assert "k_max_slack" in params
         self.log_dir = log_dir
         self.params = params
+        self.plot_counter = 0
 
         if params["save_ibr"]:
             os.makedirs(log_dir + "data/", exist_ok=True)
@@ -81,10 +86,11 @@ class ExperimentHelper(object):
 
         # SAVE STATES AND PLOT
         file_name = self.log_dir + "data/" + "mpc_%03d" % (i_mpc)
-        print("Saving MPC Rd %03d / %03d to ... %s" %
-              (i_mpc, self.params["n_mpc"] - 1, file_name))
+        # 
 
         if self.params["save_state"]:
+            print("Saving MPC Rd %03d / %03d to ... %s" %
+                          (i_mpc, self.params["n_mpc"] - 1, file_name))            
             other_u_ibr_temp = [veh.u for veh in othervehs_ibr_info]
             other_xd_ibr_temp = [veh.xd for veh in othervehs_ibr_info]
 
@@ -118,6 +124,31 @@ class ExperimentHelper(object):
         ]
         t_actual = 0
         return x_executed, u_mpc, x_actual, u_actual, t_actual
+
+    def load_log_data_midrun(self):
+
+        xothers_actual_arr, uothers_actual_arr = self.load_trajectory() #these will be numpy arrays
+        xothers_actual = [xothers_actual_arr[i,:,:] for i in range(xothers_actual_arr.shape[0])]
+        uothers_actual = [uothers_actual_arr[i,:,:] for i in range(uothers_actual_arr.shape[0])]
+        
+
+        #TODO
+        all_other_x_executed = [None for _ in range(self.params["n_other"])]
+        all_other_u_executed = [None for _ in range(self.params["n_other"])]
+
+        actual_t = np.argwhere(np.all(xothers_actual[0] == 0, axis=0))[0] - 1
+        
+        all_other_x_executed = [xothers_actual[i][:, actual_t:actual_t +
+                              self.params["number_ctrl_pts_executed"] +
+                              1] for i in range(len(xothers_actual))] 
+        all_other_u_executed = [uothers_actual[i][:, actual_t:actual_t + self.params[
+                "number_ctrl_pts_executed"]] for i in range(len(uothers_actual))]
+
+        i_mpc = actual_t / self.params["number_ctrls_pts_executed"]
+
+
+        return all_other_x_executed, all_other_u_executed, xothers_actual, uothers_actual, actual_t
+
 
     def load_log_data(self, i_mpc_start):
         N_total = self.params["n_mpc"] * self.params["number_ctrl_pts_executed"]
@@ -170,14 +201,29 @@ class ExperimentHelper(object):
 
         return False
 
+    def save_plot(self, sol):
+        self.plot_counter += 1
+        ''' Save a quick plot'''
+        traj = sol.trajectory
+        plt.plot(traj.x[0,:], traj.x[1,:], 'o-', color='red', label="X")
+        plt.plot(traj.xd[0,:], traj.xd[1,:], 'x', color='green', label="Xd")
+        os.makedirs(os.path.join(self.log_dir, "figs/"), exist_ok=True)
+        plt.savefig(os.path.join(self.log_dir, "figs/", "debug%06d.png"%self.plot_counter))
+        plt.close()
+
     def print_vehicle_id(self, response_i):
         print("...Veh %02d Solver:" % response_i)
 
     def print_mpc_ibr_round(self, i_mpc, i_ibr, params):
         print("MPC %d, IBR %d / %d" % (i_mpc, i_ibr, params["n_ibr"] - 1))
 
-    def print_nc_nnc(self, cntrld_vehicle_info, nonresponse_veh_info):
-        print("....# Cntrld Vehicles: %d # Non-Response: %d " %
+    def print_nc_nnc(self, cntrld_vehicle_info, nonresponse_veh_info, verbose=False):
+        if verbose:
+            non_response_ids = [vi.vehicle.agent_id for vi in nonresponse_veh_info]
+            cntrl_ids = [vi.vehicle.agent_id for vi in cntrld_vehicle_info]
+            print("....Cntrld Vehicles: ", cntrl_ids, "| Non-Response:", non_response_ids)            
+        else:
+            print("....# Cntrld Vehicles: %d # Non-Response: %d " %
               (len(cntrld_vehicle_info), len(nonresponse_veh_info)))
 
     def print_solved_status(self, response_i, i_mpc, i_ibr, start_ipopt_time):
@@ -230,6 +276,20 @@ class ExperimentHelper(object):
 
         with open(controls_path, 'wb') as fp:
             np.save(fp, controls_array)
+
+    def load_trajectory(self):
+
+        trajectory_dir_path = os.path.join(self.log_dir, "trajectories")
+        trajectory_path = os.path.join(trajectory_dir_path, "trajectory_t.npy")
+        controls_path = os.path.join(trajectory_dir_path, "controls_t.npy")
+
+        with open(trajectory_path, "rb") as fp:
+            trajectory_array = np.load(fp)
+
+        with open(controls_path, 'rb') as fp:
+            controls_array = np.load(fp)
+
+        return trajectory_array, controls_array
 
         
     
@@ -471,6 +531,19 @@ def get_obstacle_vehs_closeby(response_vehinfo,
 
     return obstacles_within_dist
 
+def remove_purely_egoistic_vehs(cntrld_idx, controlled_veh_infos):
+    ''' Remove any vehicles that are purely egoistic'''
+    new_cntrld_idx = []
+    new_cntrld_veh_infos = []    
+    for idx in range(len(controlled_veh_infos)):
+        if abs(controlled_veh_infos[idx].vehicle.theta_ij[-1]) < 1e-6:
+            continue
+        else:
+            new_cntrld_idx.append(cntrld_idx[idx])
+            new_cntrld_veh_infos.append(controlled_veh_infos[idx])
+    
+    return new_cntrld_idx, new_cntrld_veh_infos
+
 
 def assign_shared_control(params, i_rounds_ibr, idxs_in_mpc,
                           vehicles_index_best_responders, response_veh_info,
@@ -511,11 +584,13 @@ def assign_shared_control(params, i_rounds_ibr, idxs_in_mpc,
             if idx not in vehicles_index_best_responders:
                 # dont include vehs not in best responderes list
                 continue
-
+            
             sorted_candidate_idx += [idx]
 
         cntrld_idx = sorted_candidate_idx[:n_cntrld]
         cntrld_vehicle_info = [vehs_ibrinfo_pred[idx] for idx in cntrld_idx]
+
+        cntrld_idx, cntrld_vehicle_info = remove_purely_egoistic_vehs(cntrld_idx, cntrld_vehicle_info)
 
     nonresponse_veh_info = [
         vehs_ibrinfo_pred[idx] for idx in idxs_in_mpc if idx not in cntrld_idx

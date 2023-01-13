@@ -125,6 +125,7 @@ def extend_last_mpc_and_follow(previous_u_mpc, number_ctrl_pts_executed, all_oth
     temp_extended_veh_info = [VehicleMPCInformation(all_other_vehicles[j], prev_trajs[j][:, -1]) for j in range(n_vehs)]
     for i in range(n_vehs):
         # Predicted portion of just lane following.  This is an estimated ctrl of ado vehicles.
+        print("Predicting future trajs for veh %d"%i)
         initial_pt = prev_trajs[i][:, -1]
 
         other_vehicle_info_subset = temp_extended_veh_info[:i] + temp_extended_veh_info[i + 1:]
@@ -229,7 +230,7 @@ def initialize_cars(n_other,
             lane_number, next_x0 = list_of_positions[i]
 
         initial_speed = 0.99 * x1_MPC.max_v
-        x1_MPC.fd = x1_MPC.gen_f_desired_lane(world, lane_number, True)
+        # x1_MPC.fd = x1_MPC.gen_f_desired_lane(world, lane_number, True)
         x0 = np.array([next_x0, world.get_lane_centerline_y(lane_number), 0, 0, initial_speed, 0]).T
         all_other_vehicles += [x1_MPC]
         all_other_x0 += [x0]
@@ -282,10 +283,9 @@ def initialize_cars_from_positions(N, dt, world, no_grass=False, list_of_positio
         x1_MPC.theta_i = 0
         # We begin by assuming theta_ij is only towards the ambulance
         x1_MPC.theta_ij[-1] = list_of_svo[i]
-        x1_MPC.N = N
 
         x1_MPC.k_change_u_v = 0.001
-        x1_MPC.max_delta_u = 50 * np.pi / 180 * x1_MPC.dt
+        x1_MPC.max_delta_u = 1000 * np.pi / 180 * x1_MPC.dt
         x1_MPC.k_u_v = 0.01
         x1_MPC.k_u_delta = .00001
         x1_MPC.k_change_u_v = 0.01
@@ -310,8 +310,10 @@ def initialize_cars_from_positions(N, dt, world, no_grass=False, list_of_positio
         lane_number, next_x0 = list_of_positions[i + 1]  #index off by one since ambulance is index 0
 
         initial_speed = 0.99 * x1_MPC.max_v
-        x1_MPC.fd = x1_MPC.gen_f_desired_lane(world, lane_number, True)
+        # x1_MPC.fd = x1_MPC.gen_f_desired_lane(world, lane_number, True)
         x0 = np.array([next_x0, world.get_lane_centerline_y(lane_number), 0, 0, initial_speed, 0]).T
+        num_stabilty_noise = np.random.uniform(-0.0001, 0.0001, size=x0.shape)
+        x0 += num_stabilty_noise        
         all_other_vehicles += [x1_MPC]
         all_other_x0 += [x0]
 
@@ -343,6 +345,8 @@ def initialize_cars_from_positions(N, dt, world, no_grass=False, list_of_positio
     lane_number, next_x0 = list_of_positions[0]
     amb_MPC.fd = amb_MPC.gen_f_desired_lane(world, lane_number, True)
     x0_amb = np.array([next_x0, world.get_lane_centerline_y(lane_number), 0, 0, initial_speed, 0]).T
+    num_stabilty_noise = np.random.uniform(-0.0001, 0.0001, size=x0_amb.shape)
+    x0_amb += num_stabilty_noise
 
     return amb_MPC, x0_amb, all_other_vehicles, all_other_x0
 
@@ -391,7 +395,7 @@ def poission_positions(cars_per_hour: float,
 
     si = 0
     while np.sum([len(lane_car_positions[lane]) for lane in lane_ids]) < total_number_cars:
-        if si >= 10 * len(n_cars_arrival_per_dt):
+        if si >= 100 * len(n_cars_arrival_per_dt):
             raise Exception("Too many vehicles in the system ??")
 
         # Add incoming cars to the system
@@ -425,7 +429,7 @@ def poission_positions(cars_per_hour: float,
 
     initial_vehicle_positions = []
     for lane in lane_car_positions:
-        initial_vehicle_positions += [(lane, float(x)) for x in lane_car_positions[lane]]
+        initial_vehicle_positions += [(lane, float(x) + np.random.uniform(-0.25, 0.25)) for x in lane_car_positions[lane]]
 
     initial_vehicle_positions = sorted(initial_vehicle_positions, key=lambda l: l[1])
 

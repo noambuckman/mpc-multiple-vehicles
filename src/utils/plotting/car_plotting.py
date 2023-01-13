@@ -11,7 +11,8 @@ from typing import List
 
 from src.traffic_world import TrafficWorld
 from src.vehicle import Vehicle
-
+from src.best_response import MPCProblemCall, MPCSolverReturn
+from src.multiagent_mpc import get_vehicle_circles
 
 def get_car_color(i: int) -> str:
     ''' 
@@ -50,8 +51,9 @@ def add_car(x: np.array, vehicle: Vehicle, ax: plt.matplotlib.axis = None, car_n
     code_path = "/home/nbuckman/mpc-multiple-vehicles/src/utils/plotting/"
     if car_name == "red":
         arr_img = plt.imread(code_path + 'images/red_car.png', format='png')
-        car_width_px = 599
-        car_height_px = 310
+        car_width_px, car_height_px = arr_img.shape[1], arr_img.shape[0]
+        # car_width_px = 599
+        # car_height_px = 310
     elif car_name == "purple":
         arr_img = plt.imread(code_path + 'images/red_car.png', format='png')
         arr_img[:, :, 2] = arr_img[:, :, 0]  #Add equal amount blue
@@ -72,6 +74,8 @@ def add_car(x: np.array, vehicle: Vehicle, ax: plt.matplotlib.axis = None, car_n
         arr_img = plt.imread(code_path + 'images/green_car.png', format='png')
         car_width_px = 599
         car_height_px = 310
+    car_width_px, car_height_px = arr_img.shape[1], arr_img.shape[0]
+
     arr_img[:, :, 3] = alpha * arr_img[:, :, 3]
 
     # Rotate + translate image to position of vehicle
@@ -85,11 +89,11 @@ def add_car(x: np.array, vehicle: Vehicle, ax: plt.matplotlib.axis = None, car_n
 
     # Hardcoded rescaling (TODO: automate this)
     dpi = fig.get_dpi()
-    if dpi > 100:
-        hard_coded_correction = 0.35
-    else:
-        hard_coded_correction = 0.75
-
+    # if dpi > 100:
+    #     hard_coded_correction = 0.35
+    # else:
+    #     hard_coded_correction = 0.75
+    hard_coded_correction = 0.29
     L = vehicle.L
     if car_name == "Amb":
         zoom_ratio = L / car_width_px * (dpi * figwidth_in) / window_width * hard_coded_correction
@@ -105,6 +109,11 @@ def add_car(x: np.array, vehicle: Vehicle, ax: plt.matplotlib.axis = None, car_n
     return ax
 
 
+def add_ellipse(x, y, phi, vehicle, ax):
+    a, b = vehicle.ax, vehicle.by
+    ellipse_patch = patches.Ellipse((x, y), 2 * a, 2 * b, angle=np.rad2deg(phi), fill=False, color='black')
+    ax.add_patch(ellipse_patch)
+
 def plot_multiple_cars(k,
                        world: TrafficWorld,
                        vehicle: Vehicle,
@@ -117,7 +126,9 @@ def plot_multiple_cars(k,
                        car_colors: List[str] = None,
                        xlim=None,
                        vid_track: int = 0,
-                       all_other_vehicles: List[Vehicle] = None):
+                       all_other_vehicles: List[Vehicle] = None,
+                       frame_width: float = 100.0,
+                       plot_ttc_circles=False):
     ''' This only has info from vehicle but not any individual ones
     vehicle: [Deprecated] 
     xamb_plot:  [Deprecated]
@@ -143,22 +154,19 @@ def plot_multiple_cars(k,
                 for t in range(xothers_plot[vid_track].shape[1])
             ]
 
-    figwidth_in = 12.0
 
     ymax = world.y_max
     ymin = world.y_min
 
     center_frame = camera_positions[k]
-
     axlim_minx, axlim_maxx = center_frame - 20, center_frame + 60,
-    axlim_minx, axlim_maxx = center_frame - 50, center_frame + 200,
+    axlim_minx, axlim_maxx = center_frame - frame_width/2.0, center_frame + frame_width/2.0,
 
     if xlim is not None:
         axlim_minx = xlim[0]
         axlim_maxx = xlim[1]
+    
     ## 1080p = 1920×1080,
-    fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx))
-
     # fig, ax = plt.subplots(figsize=(figwidth_in, fig_height), dpi=144)
     # fig, ax = plt.subplots(figsize=(200, 20), dpi=144)
     fig, ax = plt.subplots(figsize=(1920 / 144, 1080 / 144), dpi=144)
@@ -177,17 +185,19 @@ def plot_multiple_cars(k,
         if xamb_plot is not None:
             x, y, phi = xamb_plot[0, k], xamb_plot[1, k], xamb_plot[2, k]
             a, b = vehicle.ax, vehicle.by
-            ellipse_patch = patches.Ellipse((x, y), 2 * a, 2 * b, angle=np.rad2deg(phi), fill=False, color='black')
+            ellipse_patch = patches.Ellipse((x, y), 2 * a, 2 * b, angle=np.rad2deg(phi), fill=True, color='black')
             ax.add_patch(ellipse_patch)
 
             if car_labels is not None:
                 ax.annotate('R', xy=(xamb_plot[0, k:k + 1], xamb_plot[1, k:k + 1]))
-
+            
         for i in range(len(xothers_plot)):
 
             x1_plot = xothers_plot[i]
             vehicle = all_other_vehicles[i]
-            if 0.9 * axlim_minx <= x1_plot[0, k] <= 1.1 * axlim_maxx:
+            w = axlim_maxx - axlim_minx
+
+            if (axlim_minx + 0.01*w) <= x1_plot[0, k] <= (axlim_maxx - 0.01*w):
                 x, y, phi = x1_plot[0, k], x1_plot[1, k], x1_plot[2, k]
                 a, b = vehicle.ax, vehicle.by
 
@@ -199,8 +209,8 @@ def plot_multiple_cars(k,
                                                 2 * a,
                                                 2 * b,
                                                 angle=np.rad2deg(phi),
-                                                fill=False,
-                                                edgecolor=color)
+                                                fill=True,
+                                                color=color)
                 ax.add_patch(ellipse_patch)
                 if car_labels is None:
                     pass
@@ -208,6 +218,14 @@ def plot_multiple_cars(k,
                     ax.annotate(str(car_labels[i]), xy=(x, y))
                 elif type(car_labels) == bool:
                     ax.annotate(str(all_other_vehicles[i].agent_id), xy=(x, y))
+
+                if plot_ttc_circles:
+                    ego_centers, ego_radius = get_vehicle_circles(x1_plot)
+                    for circ_i in range(len(ego_centers)):
+                        print(ego_centers)
+                        print(ego_radius)
+                        xy = (float(ego_centers[circ_i][0]), float(ego_centers[circ_i][1]))
+                        ax.add_patch(patches.Circle(xy, float(ego_radius), fill=True, color='g'))
 
     if car_plot_shape.lower() == "image" or car_plot_shape.lower() == "both":
         for i in range(len(xothers_plot)):
@@ -225,16 +243,35 @@ def plot_multiple_cars(k,
             ax = add_car(xamb_plot[:, k], vehicle, ax, "Amb")
     fig = plt.gcf()
     ax = plt.gca()
+    ax.set_ylim((ymin, ymax))
+    ax.set_xlim((axlim_minx, axlim_maxx)) 
+
     ax.get_yaxis().set_visible(False)
+    # ax.get_xaxis().set_visible(True)
+    set_xticks_world(ax, interval = 50.0)
+    
+    plt.tight_layout(pad=0.01)
 
     if folder is not None:
-        fig.savefig(folder + '{:03d}.png'.format(k))
+        fig.savefig(os.path.join(folder, '{:03d}.png'.format(k)), pad_inches=0.01, dpi=300)
         plt.close(fig)
         gc.collect()
     else:
         plt.show()
         return fig, ax
 
+def set_xticks_world(ax, interval = 10.0):
+    xmin, xmax = ax.get_xlim()
+
+    imin = int(xmin//interval)
+    imax = int(xmax//interval)
+
+    visual_buffer = 10.0
+    xticks = [interval*i for i in range(imin+1, imax+1) if (xmin + visual_buffer)  <= interval*i <= (xmax - visual_buffer)]
+    xlabels = ['%d'%x for x in xticks]
+
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(xlabels)
 
 def plot_single_frame(world: TrafficWorld,
                       vehicle: Vehicle,
@@ -358,7 +395,7 @@ def plot_single_frame(world: TrafficWorld,
 
     fig = plt.gcf()
     if folder is not None:
-        fig.savefig(folder + '{:03d}.png'.format(k))
+        fig.savefig(os.path.join(folder, '{:03d}.png'.format(k)))
         plt.close(fig)
         gc.collect()
     else:
@@ -376,7 +413,9 @@ def plot_cars(world: TrafficWorld,
               car_colors=None,
               n_processors=8,
               vid_track: int = 0,
-              all_other_vehicles: List[Vehicle] = None):
+              all_other_vehicles: List[Vehicle] = None,
+              xlim: List[float] = None,
+              frame_width: float = 100.0):
     '''
     Note:  The vehicle should not be instantiated in a MPC Optimization or it may mess
             with the parallelization.  You can feed in a dummy vehicle Vehicle(dt) just
@@ -391,8 +430,13 @@ def plot_cars(world: TrafficWorld,
 
     if xamb_plot is not None:
         camera_positions = generate_camera_positions(xamb_plot, vehicle)
+    elif vid_track == -1:
+        camera_positions = list(np.mean(np.array(xothers_plot)[:, 0, :], axis=0))
     else:
         camera_positions = generate_camera_positions(xothers_plot[vid_track], all_other_vehicles[vid_track])
+    
+    time_steps = range(N)
+
     if n_processors > 1:
         plot_partial = functools.partial(plot_multiple_cars,
                                          world=world,
@@ -405,11 +449,12 @@ def plot_cars(world: TrafficWorld,
                                          car_labels=car_labels,
                                          car_colors=car_colors,
                                          vid_track=vid_track,
-                                         all_other_vehicles=all_other_vehicles)
-
-        p_tqdm.p_map(plot_partial, range(N), num_cpus=n_processors)
+                                         all_other_vehicles=all_other_vehicles,
+                                         xlim=xlim,
+                                         frame_width=frame_width)
+        p_tqdm.p_map(plot_partial, time_steps, num_cpus=n_processors)
     else:
-        for k in range(N):
+        for k in time_steps:
             plot_multiple_cars(k,
                                world,
                                vehicle,
@@ -421,7 +466,9 @@ def plot_cars(world: TrafficWorld,
                                car_labels,
                                car_colors,
                                vid_track=vid_track,
-                               all_other_vehicles=all_other_vehicles)
+                               all_other_vehicles=all_other_vehicles,
+                               xlim=xlim,
+                               frame_width=frame_width)
     return None
 
 
@@ -457,7 +504,7 @@ def generate_camera_positions(xamb_plot: np.array, amb_veh: Vehicle) -> np.array
     return xc
 
 
-def add_grass(ax: plt.matplotlib.axis, world: TrafficWorld):
+def add_grass(ax: plt.matplotlib.axis, world: TrafficWorld, n_patches = 8):
     ''' 
         Generate grass in simulation
 
@@ -468,31 +515,82 @@ def add_grass(ax: plt.matplotlib.axis, world: TrafficWorld):
 
     # Get boundary of lanes from world
     axlim_minx, axlim_maxx = ax.get_xlim()
-    y_bottom_b, y_center_b, y_top_b = world.get_bottom_grass_y()
+    y_bottom_b, _, y_top_b = world.get_bottom_grass_y()
+    y_bottom_t, _, y_top_t = world.get_top_grass_y()
+
     width = axlim_maxx - axlim_minx
     left_x_grass = axlim_minx
     bottom_y_grass = y_bottom_b
-    bottom_grass = patches.Rectangle((left_x_grass, bottom_y_grass),
-                                     width,
-                                     y_top_b - y_bottom_b,
-                                     facecolor='g',
-                                     hatch='/')
-    ax.add_patch(bottom_grass)
+    # bottom_grass = patches.Rectangle((left_x_grass, y_bottom_b),
+    #                                  width,
+    #                                  y_top_b - y_bottom_b,
+    #                                  facecolor='g',
+    #                                  )
+    # ax.add_patch(bottom_grass)
 
-    left_x_grass = axlim_maxx - axlim_minx % (1.5 * width)
-    bottom_contrast_grass = patches.Rectangle((left_x_grass, bottom_y_grass),
-                                              width / 2.0,
-                                              y_top_b - y_bottom_b,
-                                              facecolor='g',
-                                              hatch='x')
-    ax.add_patch(bottom_contrast_grass)
+    # top_grass = patches.Rectangle((left_x_grass, y_bottom_t), width, y_top_t - y_bottom_t, facecolor='g', hatch='/')
+    # ax.add_patch(top_grass)
+
+
+    patterns = ["\\", 'x', None]
+    colors = ['forestgreen']
+    n_patterns = len(patterns)
+    n_colors = len(colors)
+    
+    patch_length = (axlim_maxx - axlim_minx)/float(n_patches)
+    
+    patch_idx = int(axlim_minx // patch_length)    
+    for pi in range(n_patches + 1):
+
+        left_x_grass = patch_idx * patch_length
+        if left_x_grass >= axlim_maxx:
+            break        
+        right_x_grass = (patch_idx + 1) * patch_length
+
+        pattern = patterns[patch_idx % n_patterns]
+        color = colors[patch_idx % n_colors]
+    
+        plot_left_x_grass = left_x_grass
+        plot_right_x_grass = right_x_grass
+        if right_x_grass >= axlim_maxx:
+            plot_right_x_grass = axlim_maxx 
+        if left_x_grass <= axlim_minx:
+            plot_left_x_grass = axlim_minx
+
+        width = plot_right_x_grass - plot_left_x_grass
+            # left_x_grass = axlim_maxx - axlim_minx % (1.5 * width)
+        bottom_contrast_grass = patches.Rectangle((plot_left_x_grass, bottom_y_grass),
+                                                patch_length,
+                                                y_top_b - y_bottom_b,
+                                                facecolor=color,
+                                                hatch=pattern,
+                                                edgecolor='darkgreen',
+                                                linewidth=0)
+        ax.add_patch(bottom_contrast_grass)
+
+
+        top_contrast_grass = patches.Rectangle((plot_left_x_grass, y_bottom_t),
+                                        patch_length,
+                                        y_top_t - y_bottom_t,
+                                        facecolor=color,
+                                        hatch=pattern,
+                                        edgecolor='darkgreen',
+                                        linewidth=0)
+        ax.add_patch(top_contrast_grass)        
+
+        patch_idx += 1
+
+
+
 
     # Create top grass
     y_bottom_t, y_center_t, y_top_t = world.get_top_grass_y()
     left_x_grass = axlim_minx
     bottom_y_grass = y_bottom_t
+    width = axlim_maxx - axlim_minx
+
     top_grass = patches.Rectangle((left_x_grass, bottom_y_grass), width, y_top_t - y_bottom_t, facecolor='g', hatch='/')
-    ax.add_patch(top_grass)
+    # ax.add_patch(top_grass)
 
     left_x_grass = axlim_maxx - axlim_minx % (1.5 * width)
     top_contrast_grass = patches.Rectangle((left_x_grass, bottom_y_grass),
@@ -500,7 +598,44 @@ def add_grass(ax: plt.matplotlib.axis, world: TrafficWorld):
                                            y_top_t - y_bottom_t,
                                            facecolor='g',
                                            hatch='x')
-    ax.add_patch(top_contrast_grass)
+
+    period = 2*patch_length
+    left_x_grass = (axlim_minx // period) * period   
+    for pi in range(n_patches + 3):
+
+        right_x_grass = left_x_grass + patch_length
+        if right_x_grass < axlim_minx:
+            left_x_grass += period
+            continue
+
+        plot_left_x_grass = left_x_grass
+        plot_right_x_grass = right_x_grass
+        if right_x_grass >= axlim_maxx:
+            plot_right_x_grass = axlim_maxx 
+        if left_x_grass <= axlim_minx:
+            plot_left_x_grass = axlim_minx
+
+        width = plot_right_x_grass - plot_left_x_grass
+        height = y_top_b - y_bottom_b
+            # left_x_grass = axlim_maxx - axlim_minx % (1.5 * width)
+        top_contrast_grass = patches.Rectangle((plot_left_x_grass, bottom_y_grass),
+                                        width / 2.0,
+                                        y_top_t - y_bottom_t,
+                                        facecolor='g',
+                                        hatch='x',
+                                        linewidth=0)
+        # ax.add_patch(top_contrast_grass)
+        
+        left_x_grass += period
+        if left_x_grass >= axlim_maxx:
+            break    
+    
+    
+    
+    
+    
+    
+    # ax.add_patch(top_contrast_grass)
 
 
 def add_lanes(ax: plt.matplotlib.axis, world: TrafficWorld):
@@ -563,7 +698,8 @@ def plot_initial_positions(log_dir: str,
                            world: TrafficWorld,
                            vehicles: List[Vehicle],
                            initial_positions: List[np.array],
-                           number_cars_included: int = 10):
+                           number_cars_included: int = 10,
+                           xlim = [0, 1000]):
     '''Plot and save initial conditions
     
         log_dir:  Path to log directory for experiment
@@ -573,7 +709,7 @@ def plot_initial_positions(log_dir: str,
     vehicles_to_plot = vehicles[:number_cars_included]
     x0_to_plot = initial_positions[:number_cars_included]
     x0_to_plot_reshaped = [x0.reshape(6, 1) for x0 in x0_to_plot]
-
+    
     plot_cars(world,
               None,
               None,
@@ -581,4 +717,259 @@ def plot_initial_positions(log_dir: str,
               log_dir,
               n_processors=1,
               all_other_vehicles=vehicles_to_plot,
-              car_labels=True)
+              car_labels=True,
+              xlim=xlim)
+
+def add_car_ellipse(ax, x, y, phi, vehicle, alpha=None, color=None, fill=False, agent_id=None):
+    # Plot an ellipse centered at position of vehicle
+    a, b = vehicle.ax, vehicle.by
+    ellipse_patch = patches.Ellipse((x, y),
+                                    2 * a,
+                                    2 * b,
+                                    angle=np.rad2deg(phi),
+                                    fill=fill,
+                                    color=color,
+                                    alpha=alpha)
+    ax.add_patch(ellipse_patch)
+    if agent_id is not None:
+        ax.annotate("%d"%agent_id, (x,y))
+
+def add_car_controls(ax, x, y,  delta_u, v_u, vehicle):
+    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+    axins = inset_axes(ax, width="50%", height="50%", bbox_to_anchor=(x, y, x+.5, y+1.0), loc=3)
+    # axins.add_patch(plt.Rectangle((0, 0), 0.25, u0))
+    axins.plot([0, 1, 2], [0, 4, -1])
+    max_v_u = vehicle.max_v_u
+    min_v_u = vehicle.min_v_u
+    # print("Min Vu %.2f   Max Vu %.2f   Vu %.2f"%(min_v_u, max_v_u, v_u))
+
+    max_delta_u = vehicle.max_delta_u
+    min_delta_u = -vehicle.max_delta_u
+    print("Min deltau %.2f   Max deltau %.2f   deltau %.5f"%(min_delta_u, max_delta_u, delta_u))
+
+    width_scaling = 10.0
+    v_u_percent = (v_u - 0) / (max_v_u - min_v_u) * width_scaling
+    midpoint_offset = abs(min_v_u) / (max_v_u - min_v_u) * width_scaling
+    v_left_corner = midpoint_offset
+    
+    delta_u_percent = (delta_u - 0) / (max_delta_u - min_delta_u) * width_scaling
+    midpoint_offset = abs(min_delta_u) / (max_delta_u - min_delta_u) * width_scaling
+    
+    # if delta_u_percent < 0:
+    #     u_left_corner = delta_u_percent
+    #     delta_u_percent = abs(delta_u_percent)
+    # else:
+    u_left_corner = midpoint_offset
+    print(delta_u_percent)
+    # print(u_left_corner, midpoint_offset)
+
+
+    print(u_left_corner, delta_u_percent)
+    ax.add_patch(patches.Rectangle((x+5 + u_left_corner, y+4), delta_u_percent+.05, 2, ls="--", ec="None", fc="blue"))
+    ax.add_patch(patches.Rectangle((x+5 + 0, y+4), width_scaling, 2, ls="-", ec="blue", fc="None"))
+
+    ax.annotate(r"$\Delta \delta$", (x+5, y+4+2), fontsize=5)
+
+    ax.add_patch(patches.Rectangle((x+5 + v_left_corner, y), v_u_percent + .05, 2, ls="--", ec="None", fc="black"))
+    ax.add_patch(patches.Rectangle((x+5 + 0, y), width_scaling, 2, ls="-", ec="black", fc="None"))
+    ax.annotate(r"$\Delta v$", (x+5,y+2),fontsize=5)
+
+
+
+
+def plot_solver_return(solver_return: MPCSolverReturn, ego_vehicle: Vehicle, world:TrafficWorld, xlims=None, plot_controls=False, problem_call=None, save_video=False):
+
+    traj = solver_return.trajectory
+    des_traj = solver_return.desired_traj
+    ctrld_traj = solver_return.cntrld_vehicle_trajectories
+
+
+    ymax = world.y_max
+    ymin = world.y_min
+
+    # Initialize the plotting frame to first position of the ambulance
+    center_frame = traj.x[0,0]
+    if xlims is None:
+        axlim_minx, axlim_maxx = center_frame - 10, center_frame + 100
+    else:
+        axlim_minx, axlim_maxx = xlims[0], xlims[1]
+    N = traj.x.shape[-1]
+
+    max_num_rows = 5
+    num_columns = int(np.ceil(N / max_num_rows))
+
+    figwidth_in = 4.0  #Hardcoded
+    fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx)) 
+
+    if not save_video:
+        fig, axs = plt.subplots(max_num_rows, num_columns, figsize=(figwidth_in*num_columns, fig_height*max_num_rows))
+
+    for t in range(traj.x.shape[-1]):
+        if save_video:
+            fig, ax = plt.subplots(1,1, figsize=(figwidth_in, fig_height))
+        else:
+            i_col = t//max_num_rows
+            i_row = t%max_num_rows
+            ax = axs[i_row, i_col]
+        ax.axis('square')
+        ax.set_ylim((ymin, ymax))
+        ax.set_xlim((axlim_minx, axlim_maxx))
+
+        add_lanes(ax, world)
+        add_grass(ax, world)
+
+        # for t in range(traj.x.shape[-1]):
+        add_car_ellipse(ax, traj.x[0,t], traj.x[1,t], traj.x[2,t], ego_vehicle, color='red', alpha=1.0)
+        if t != traj.x.shape[-1]-1 and plot_controls:
+
+            add_car_controls(ax, traj.x[0,t], traj.x[1,t], traj.u[0,t], traj.u[1,t], ego_vehicle)
+        # ax.plot(traj.x[0,:], traj.x[1,:], 'o', label="Solver Traj")
+        ax.plot(traj.xd[0,:], traj.xd[1,:], '--', label="Des Traj")
+        
+        
+        for ctrld_idx, c_traj in enumerate(ctrld_traj):
+        # for t in range(c_traj.x.shape[-1]):
+            c_agent_id = ctrld_idx
+            add_car_ellipse(ax, c_traj.x[0,t], c_traj.x[1,t], c_traj.x[2,t], ego_vehicle, agent_id=c_agent_id, color='green', alpha=1.0)
+            # ax.plot(c_traj.x[0,:], c_traj.x[1,:], 'o', label="%d"%ctrld_idx)
+
+        if problem_call is not None:
+
+            for vehinfo in problem_call.obstacle_vehsinfo:
+                add_car_ellipse(ax, vehinfo.x[0, t], vehinfo.x[1, t], vehinfo.x[2, t], vehinfo.vehicle, agent_id=vehinfo.vehicle.agent_id, color='black', alpha=1.0)
+
+        # ax.text(0.75, 0.75, "Cost: %.4f"%solver_return.current_cost)
+
+        vfolder = "temp_videos"
+
+        add_solution_stats = True
+        if add_solution_stats:
+
+            stats_str = " cost=%.03f \n max_cpu_limit=%s \n g_violation=%.02f"%(solver_return.current_cost, 
+                                                                                solver_return.max_cpu_limit,
+                                                                                solver_return.g_violation)
+            ax.text(0.7, 0.9, stats_str, ha='left', va='center', transform=ax.transAxes, fontsize=4, backgroundcolor='gray')
+            # ax.text(0.8, 0.9, 'cost=%.03f'%solver_return.current_cost, ha='center', va='center', transform=ax.transAxes)
+            # ax.text(0.8, 0.8, 'max_cpu_limit=%s'%solver_return.max_cpu_limit, ha='center', va='center', transform=ax.transAxes)
+            # ax.text(0.8, 0.7, 'g_violation=%.03f'%solver_return.g_violation, ha='center', va='center', transform=ax.transAxes)
+
+        if save_video:
+            os.makedirs(vfolder, exist_ok=True)
+            plt.savefig(os.path.join(vfolder, "%03d.png"%t), dpi=300)
+            plt.close()
+
+    if save_video:
+        vname = (solver_return.warm_key).replace(" ", "_") + ".mp4"
+        animate("temp_videos", vname, fps=2)
+        return None, None
+    return fig, axs
+
+
+
+def plot_problem_call(problem_call: MPCProblemCall, xlims=None):
+
+
+    world = problem_call.world
+
+    x0 = problem_call.response_vehinfo.x0
+    figwidth_in = 4.0  #Hardcoded
+
+    ymax = world.y_max
+    ymin = world.y_min
+
+    # Initialize the plotting frame to first position of the ambulance
+    center_frame = x0[0]
+    if xlims is None:
+        axlim_minx, axlim_maxx = center_frame - 10, center_frame + 100
+    else:
+        axlim_minx, axlim_maxx = xlims[0], xlims[1]
+    
+    
+    ############# JUST PLOT THE INITIAL CONDITIONS
+    fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx)) * 1
+    fig1, axs1 = plt.subplots(1, 1,figsize=(figwidth_in, fig_height))
+
+    axs1.axis('square')
+    axs1.set_ylim((ymin, ymax))
+    axs1.set_xlim((axlim_minx, axlim_maxx))
+
+    add_lanes(axs1, world)
+    add_grass(axs1, world)
+
+    add_car_ellipse(axs1, x0[0], x0[1], x0[2], problem_call.response_vehinfo.vehicle, agent_id=problem_call.response_vehinfo.vehicle.agent_id, color='red', alpha=1.0)
+
+    for vehinfo in problem_call.obstacle_vehsinfo:
+        add_car_ellipse(axs1, vehinfo.x0[0], vehinfo.x0[1], vehinfo.x0[2], vehinfo.vehicle, agent_id=vehinfo.vehicle.agent_id, color='black', alpha=1.0)
+
+    for vehinfo in problem_call.ctrld_vehsinfo:
+        add_car_ellipse(axs1, vehinfo.x0[0], vehinfo.x0[1], vehinfo.x0[2], vehinfo.vehicle, agent_id=vehinfo.vehicle.agent_id, color='blue', alpha=1.0)
+
+    ########## PLOT INITIAL PREDICTIONS
+    N = problem_call.params["N"]
+    fig_height = np.ceil(1.1 * figwidth_in * (ymax - ymin) / (axlim_maxx - axlim_minx)) * N
+
+    fig2, axs2 = plt.subplots(N, 1,figsize=(figwidth_in, fig_height))
+
+    if "previous_ibr" in problem_call.warmstart_dict:
+        ego_warm_traj = problem_call.warmstart_dict["previous_ibr0"]
+    elif "previous_mpc_hold" in problem_call.warmstart_dict:
+        ego_warm_traj = problem_call.warmstart_dict["previous_mpc_hold0"]
+    else:
+        ego_warm_traj_key = next(iter(problem_call.warmstart_dict))
+        ego_warm_traj = problem_call.warmstart_dict[ego_warm_traj_key]
+    print(ego_warm_traj)
+    ego_x = ego_warm_traj[0].x
+
+    for t in range(N):
+        ax = axs2[t]
+        ax.axis('square')
+        ax.set_ylim((ymin, ymax))
+        ax.set_xlim((axlim_minx, axlim_maxx))
+
+        add_lanes(ax, world)
+        add_grass(ax, world)
+
+        add_car_ellipse(ax, ego_x[0, t], ego_x[1, t], ego_x[2, t], problem_call.response_vehinfo.vehicle, agent_id=problem_call.response_vehinfo.vehicle.agent_id, color='red', alpha=0.5)
+
+        for vehinfo in problem_call.obstacle_vehsinfo:
+            add_car_ellipse(ax, vehinfo.x[0, t], vehinfo.x[1, t], vehinfo.x[2, t], vehinfo.vehicle, agent_id=vehinfo.vehicle.agent_id, color='black', alpha=1.0)
+
+        for vehinfo in problem_call.ctrld_vehsinfo:
+            print(vehinfo.x)
+            add_car_ellipse(ax, vehinfo.x[0, t], vehinfo.x[1, t], vehinfo.x[2, t], vehinfo.vehicle, agent_id=vehinfo.vehicle.agent_id, color='blue', alpha=0.5)
+        
+    return fig1, axs1, fig2, axs2
+
+
+def grid_stack(list_of_video_files, grid_file_name, nrows, ncolumns):
+
+    num_files = nrows * ncolumns
+    vfiles = list_of_video_files[:num_files]
+    if len(vfiles) < num_files:
+        vfiles += vfiles[0:num_files-len(vfiles)]
+
+    fstring = "ffmpeg"
+    for vs in vfiles:
+         fstring += " -i %s"%vs
+    
+    fstring += ' -filter_complex'
+    filtering_command = ' "'
+    for ri in range(nrows):
+        row_vids = []
+        for ci in range(ncolumns):
+            vi = ri*ncolumns + ci
+            if vi > len(vfiles):
+                continue
+            row_vids += [vi]
+            filtering_command += '[%d:v]'%vi
+        filtering_command += 'hstack=inputs=%d[r%d];'%(len(row_vids), ri)
+    
+    for ri in range(nrows):
+        filtering_command += '[r%d]'%ri
+    filtering_command += 'vstack=inputs=%d[v]'%nrows
+
+    filtering_command += '" -map "[v]" %s'%grid_file_name
+
+    cmd = fstring + filtering_command
+    os.system(cmd)
+    print(cmd)

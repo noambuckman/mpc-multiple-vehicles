@@ -9,7 +9,7 @@ class TrafficWorld():
         self.n_lanes_left = n_lanes_left
         self.n_lanes = self.n_lanes_left + self.n_lanes_right
 
-        self.grass_width = self.lane_width / 2.0
+        self.grass_width = self.lane_width 
 
         self.total_height = self.get_window_height()
 

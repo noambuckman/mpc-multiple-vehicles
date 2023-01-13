@@ -5,8 +5,8 @@ from typing import List
 
 from src.geometry_helper import minkowski_ellipse_collision_distance
 from src.vehicle_parameters import VehicleParameters
-
-
+from src.desired_trajectories import piecewise_function
+from src.callback import MyCallback
 class NonconvexOptimization(object):
     def __init__(self):
         # Inequality Constraints
@@ -16,6 +16,9 @@ class NonconvexOptimization(object):
         self._ubg_list = []
         self._x_list = []  # Decision Variables
         self._p_list = []  # Parameters
+        self.nx = 0
+        self.ng = 0
+        self.np = 0
         self.callback = IpoptCallback()
 
     def add_X(self, *x):
@@ -79,9 +82,11 @@ class NonconvexOptimization(object):
             prob = {'f': self._f, 'g': self._g_list, 'x': self._x_list}
         else:
             prob = {'f': self._f, 'g': self._g_list, 'x': self._x_list, 'p': self._p_list}
+        self.callback = MyCallback('mycallback', self.nx, self.ng, self.np)
 
-        # solver = cas.nlpsol('solver', 'ipopt', prob, {'ipopt': ipopt_params, 'iteration_callback': self.callback})
-        solver = cas.nlpsol('solver', 'ipopt', prob, {'ipopt': ipopt_params})
+        solver = cas.nlpsol('solver', 'ipopt', prob, {'ipopt': ipopt_params, 'iteration_callback': self.callback})
+        
+        # solver = cas.nlpsol('solver', 'ipopt', prob, {'ipopt': ipopt_params})
 
         solver_name_prefix = self.get_solver_name()
         return solver, solver_name_prefix
@@ -213,21 +218,28 @@ class MultiMPC(NonconvexOptimization):
         self.k_slack = cas.MX.sym('k_slack', 1, 1)
         self.k_CA = cas.MX.sym('k_CA', 1, 1)
         self.k_CA_power = cas.MX.sym('k_CA_power', 1, 1)
+        self.k_ttc = cas.MX.sym('k_ttc', 1, 1)
+        self.ttc_threshold = cas.MX.sym('k_ttc', 1, 1)
+
 
         self.n_coeff_d = n_coeff_d
-        self.p_x_coeff_d = cas.MX.sym('xd_coeff', self.n_coeff_d, 1)
-        self.p_y_coeff_d = cas.MX.sym('yd_coeff', self.n_coeff_d, 1)
-        self.p_phi_coeff_d = cas.MX.sym('phid_coeff', self.n_coeff_d, 1)
-        self.p_x_coeff_d_ctrld = [cas.MX.sym('xd_coeff%02d', self.n_coeff_d, 1) for i in range(self.n_vehs_cntrld)]
-        self.p_y_coeff_d_ctrld = [cas.MX.sym('yd_coeff%02d', self.n_coeff_d, 1) for i in range(self.n_vehs_cntrld)]
-        self.p_phi_coeff_d_ctrld = [cas.MX.sym('phid_coeff%02d', self.n_coeff_d, 1) for i in range(self.n_vehs_cntrld)]
+        self.n_piecewise_splines = 3 # Hardcoded, number of splines allowed
+        self.p_x_coeff_d = cas.MX.sym('xd_coeff', self.n_piecewise_splines, self.n_coeff_d)
+        self.p_y_coeff_d = cas.MX.sym('yd_coeff', self.n_piecewise_splines, self.n_coeff_d)
+        self.p_phi_coeff_d = cas.MX.sym('phid_coeff', self.n_piecewise_splines, self.n_coeff_d)
+        self.p_spline_lengths = cas.MX.sym('spline_lengths', self.n_piecewise_splines, 1)
 
+        self.p_x_coeff_d_ctrld = [cas.MX.sym('xd_coeff%02d'%i, self.n_piecewise_splines, self.n_coeff_d) for i in range(self.n_vehs_cntrld)]
+        self.p_y_coeff_d_ctrld = [cas.MX.sym('yd_coeff%02d'%i, self.n_piecewise_splines, self.n_coeff_d) for i in range(self.n_vehs_cntrld)]
+        self.p_phi_coeff_d_ctrld = [cas.MX.sym('phid_coeff%02d'%i, self.n_piecewise_splines, self.n_coeff_d) for i in range(self.n_vehs_cntrld)]
+        self.p_spline_lengths_ctrld = [cas.MX.sym('spline_lengths%02d'%i, self.n_piecewise_splines, 1) for i in range(self.n_vehs_cntrld)]
+        self.fd_temp = None
 
         self._p_list = mpcp_to_nlpp(self.p_dt, self.x0_ego, self.p_ego, self.p_theta_i_ego, self.p_theta_ic, self.p_theta_inc,
                                     self.x0_cntrld, self.p_cntrld_list, self.x0_allother, self.p_other_vehicle_list,
-                                    self.x_other, self.k_slack, self.k_CA, self.k_CA_power, 
-                                    self.p_x_coeff_d, self.p_y_coeff_d, self.p_phi_coeff_d, 
-                                    self.p_x_coeff_d_ctrld, self.p_y_coeff_d_ctrld, self.p_phi_coeff_d_ctrld)
+                                    self.x_other, self.k_slack, self.k_CA, self.k_CA_power, self.k_ttc, self.ttc_threshold,
+                                    self.p_x_coeff_d, self.p_y_coeff_d, self.p_phi_coeff_d, self.p_spline_lengths,
+                                    self.p_x_coeff_d_ctrld, self.p_y_coeff_d_ctrld, self.p_phi_coeff_d_ctrld, self.p_spline_lengths_ctrld)
 
         if params is None:
             params = {}
@@ -240,7 +252,7 @@ class MultiMPC(NonconvexOptimization):
             self.p_theta_i_ego, self.x_ctrld, self.u_ctrld, self.xd_ctrld, self.p_cntrld_list, self.x_other,
             self.p_other_vehicle_list, self.slack_i_jnc, self.slack_ic_jnc, self.slack_i_jc, self.slack_ic_jc,
             self.top_wall_slack, self.bottom_wall_slack, self.top_wall_slack_c, self.bottom_wall_slack_c, self.x0_ego,
-            self.x0_cntrld, self.x0_allother, params, self.k_ca2, self.k_CA_power, self.k_slack, self.k_CA)
+            self.x0_cntrld, self.x0_allother, self.k_ca2, self.k_CA_power, self.k_slack, self.k_CA, self.k_ttc, self.ttc_threshold)
         self.set_f(self.total_svo_cost)
 
         ###########################3 CONSTRAINTS #########################################
@@ -250,33 +262,41 @@ class MultiMPC(NonconvexOptimization):
                                  self.slack_i_jnc, self.slack_ic_jnc, self.slack_i_jc, self.slack_ic_jc,
                                  self.top_wall_slack, self.bottom_wall_slack, self.top_wall_slack_c,
                                  self.bottom_wall_slack_c, 
-                                 self.p_x_coeff_d, self.p_y_coeff_d, self.p_phi_coeff_d, self.p_x_coeff_d_ctrld, self.p_y_coeff_d_ctrld, self.p_phi_coeff_d_ctrld)
+                                 self.p_x_coeff_d, self.p_y_coeff_d, self.p_phi_coeff_d, self.p_spline_lengths,
+                                 self.p_x_coeff_d_ctrld, self.p_y_coeff_d_ctrld, self.p_phi_coeff_d_ctrld, self.p_spline_lengths_ctrld)
         # Total optimization costs
         self.solver, self.solver_prefix = self.get_nlpsol(ipopt_params)
 
-    def add_vehicle_constraints(self, p_ego, x_ego, u_ego, xd_ego, x0_ego, x_coeff_d, y_coeff_d, phi_coeff_d, dt):
-        ego_lane_number = p_ego.desired_lane
+    def add_vehicle_constraints(self, p_ego, x_ego, u_ego, xd_ego, x0_ego, x_coeff_d, y_coeff_d, phi_coeff_d, spline_lengths, dt):
+        # ego_lane_number = p_ego.desired_lane
         # fd = self.gen_f_desired_lane(world, ego_lane_number, right_direction=True)  # TODO:  This could mess things up
-        fd = self.gen_f_desired_lane_poly(x_coeff_d, y_coeff_d, phi_coeff_d)
+
+        # self.desired_traj = PiecewiseDesiredTrajectory().from_array(x_coeff_d, y_coeff_d, phi_coeff_d, spline_lengths)
+        fd = piecewise_function(self.n_piecewise_splines, self.n_coeff_d)
+
+        # fd = gen_f_desired_3piecewise_coeff(x_coeff_d, y_coeff_d, phi_coeff_d, spline_lengths)
         f = self.gen_f_vehicle_dynamics(p_ego, model="kinematic_bicycle")
-        self.add_dynamics_constraints_g(x_ego, u_ego, xd_ego, x0_ego, f, fd, dt)
-        self.add_state_constraints_g(x_ego, u_ego, p_ego)
+        # sd = cas.MX.sym('sd')
+        # self.debug_fd = cas.Function('debug_fd', [sd, self._p_list], [fd(sd)])
+        self.add_dynamics_constraints_g(x_ego, u_ego, xd_ego, x0_ego, f, fd, dt, x_coeff_d, y_coeff_d, phi_coeff_d, spline_lengths)
+        self.add_control_constraints_g(x_ego, u_ego, p_ego)
 
     def add_mpc_constraints(self, N, n_vehs_cntrld, n_other_vehicle, x_ego, u_ego, xd_ego, x0_ego, p_ego,
                             x_ctrld, u_ctrld, xd_ctrld, x0_ctrld, p_ctrld_list, x_other, p_other_vehicle_list, dt,
                             slack_i_jnc, slack_ic_jnc, slack_i_jc, slack_ic_jc, top_wall_slack, bottom_wall_slack,
                             top_wall_slack_c, bottom_wall_slack_c, 
-                            p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, p_x_coeff_d_ctrld, p_y_coeff_d_ctrld, p_phi_coeff_d_ctrld):
+                            p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, p_spline_lengths,
+                            p_x_coeff_d_ctrld, p_y_coeff_d_ctrld, p_phi_coeff_d_ctrld, p_spline_lengths_ctrld):
         ''' Add all the constraints the MPC
             1) vehicle constraints related to their state and dynamics
             2) positive constraints on the slack variables
             3) collision avoidance and velocity safety constraints 
         
         '''
-        self.add_vehicle_constraints(p_ego, x_ego, u_ego, xd_ego, x0_ego,  p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, dt)
+        self.add_vehicle_constraints(p_ego, x_ego, u_ego, xd_ego, x0_ego,  p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, p_spline_lengths, dt)
 
         for j in range(n_vehs_cntrld):
-            self.add_vehicle_constraints(p_ctrld_list[j], x_ctrld[j], u_ctrld[j], xd_ctrld[j], x0_ctrld[j], p_x_coeff_d_ctrld[j], p_y_coeff_d_ctrld[j], p_phi_coeff_d_ctrld[j], dt)
+            self.add_vehicle_constraints(p_ctrld_list[j], x_ctrld[j], u_ctrld[j], xd_ctrld[j], x0_ctrld[j], p_x_coeff_d_ctrld[j], p_y_coeff_d_ctrld[j], p_phi_coeff_d_ctrld[j], p_spline_lengths_ctrld[j], dt)
 
         self.constrain_slack_positive(n_vehs_cntrld, n_other_vehicle, slack_i_jc, slack_i_jnc, slack_ic_jc,
                                       slack_ic_jnc, top_wall_slack, bottom_wall_slack, top_wall_slack_c,
@@ -368,8 +388,8 @@ class MultiMPC(NonconvexOptimization):
     def compute_mpc_costs(self, n_vehs_cntrld, n_other_vehicle, x_ego, u_ego, xd_ego, p_ego, p_theta_ic, p_theta_i_ego,
                           x_ctrld, u_ctrld, xd_ctrld, p_cntrld_list, x_other, p_other_vehicle_list, slack_i_jnc,
                           slack_ic_jnc, slack_i_jc, slack_ic_jc, top_wall_slack, bottom_wall_slack, top_wall_slack_c,
-                          bottom_wall_slack_c, x0_ego, x0_cntrld, x0_allother, params, k_ca2, k_CA_power, k_slack,
-                          k_CA):
+                          bottom_wall_slack_c, x0_ego, x0_cntrld, x0_allother, k_ca2, k_CA_power, k_slack,
+                          k_CA, k_ttc, ttc_threshold):
         ''' Compute the total cost for an SVO based MPC
             For each vehicle with decision variables, compute vehicle-specific costs related to speed and control
             Compute slack costs for the slack variables
@@ -405,7 +425,21 @@ class MultiMPC(NonconvexOptimization):
         # Compute Collision Avoidance ellipses using Minkowski sum
         collision_cost = self.compute_collision_avoidance_costs(self.N, n_other_vehicle, n_vehs_cntrld, p_ego,
                                                                 p_other_vehicle_list, p_cntrld_list, x_ego, x_other,
-                                                                x_ctrld, params, k_ca2, k_CA_power)
+                                                                x_ctrld, k_ca2, k_CA_power)
+        
+
+
+        if n_vehs_cntrld > 0:
+            ttc_cost_ctrl = get_ttc_cost_cum(x_ego, x_ctrld, p_ego.L, p_ego.W, parallel=True, buffer_factor=0.1, ttc_threshold=ttc_threshold)
+        else:
+            ttc_cost_ctrl = 0.0
+        
+        if n_other_vehicle > 0:
+            ttc_cost_nc = get_ttc_cost_cum(x_ego, x_other, p_ego.L, p_ego.W, parallel=True, buffer_factor=0.1, ttc_threshold=ttc_threshold)
+        else:
+            ttc_cost_nc = 0.0
+
+        collision_cost += k_ttc * (ttc_cost_ctrl + ttc_cost_nc)
 
         total_svo_cost = (response_svo_cost + other_svo_cost + k_slack * slack_cost + k_CA * collision_cost)
         return total_svo_cost
@@ -415,23 +449,15 @@ class MultiMPC(NonconvexOptimization):
         slack_cost = 0
 
         if n_other_vehicle > 0:
-            for j in range(slack_i_jnc.shape[0]):
-                for t in range(slack_i_jnc.shape[1]):
-                    slack_cost += slack_i_jnc[j, t]**2
+            slack_cost += cas.sumsqr(slack_i_jnc)
             for ic in range(n_vehs_cntrld):
-                for jnc in range(slack_ic_jnc[ic].shape[0]):
-                    for t in range(slack_ic_jnc[ic].shape[1]):
-                        slack_cost += slack_ic_jnc[ic][jnc, t]**2
+                slack_cost += cas.sumsqr(slack_ic_jnc[ic])
 
         if n_vehs_cntrld > 0:
-            for jc in range(slack_i_jc.shape[0]):
-                for t in range(slack_i_jc.shape[1]):
-                    slack_cost += slack_i_jc[jc, t]**2
+            slack_cost += cas.sumsqr(slack_i_jc)
 
             for ic in range(n_vehs_cntrld):
-                for jc in range(slack_ic_jc[ic].shape[0]):
-                    for t in range(slack_ic_jc[ic].shape[1]):
-                        slack_cost += slack_ic_jc[ic][jc, t]**2
+                slack_cost += cas.sumsqr(slack_ic_jc[ic])
 
         return slack_cost
 
@@ -439,25 +465,38 @@ class MultiMPC(NonconvexOptimization):
 
         return get_solver_name(self.N, self.n_vehs_cntrld, self.n_other_vehicle, self.safety_constraint)
 
-    def add_state_constraints_g(self, X, U, ego_veh, strict_wall_y_constraint=False):
+    def add_control_constraints_g(self, X, U, ego_veh, strict_wall_y_constraint=False):
         ''' Construct vehicle specific constraints that only rely on
         the ego vehicle's own state '''
-        for k in range(X.shape[1]):
-            self.add_bounded_constraint(-np.pi / 2, X[2, k], np.pi / 2)  #no crazy angle
-            self.add_bounded_constraint(ego_veh.min_v, X[4, k], ego_veh.max_v)
 
         # constraints on the control inputs
         for k in range(U.shape[1]):
             self.add_bounded_constraint(-ego_veh.max_delta_u, U[0, k], ego_veh.max_delta_u)
             self.add_bounded_constraint(ego_veh.min_v_u, U[1, k], ego_veh.max_v_u)  # 0-60 around 4 m/s^2
 
-    def add_dynamics_constraints_g(self, X, U, X_desired, x0, f, fd, dt: float):
+    def add_state_constraint_costs(self, X, U, ego_veh):
+        cost = 0.0
+
+        for k in range(X.shape[1]):
+            upper_angle_slack = cas.fmax(0.0, X[2, k] - np.pi / 2) 
+            lower_angle_slack = cas.fmax(0.0, (- np.pi / 2) - X[2, k]) 
+            cost += upper_angle_slack**2 + lower_angle_slack**2
+
+            upper_speed_slack = cas.fmax(0.0, X[4, k] - ego_veh.max_v) 
+            lower_speed_slack = cas.fmax(0.0,  ego_veh.min_v - X[4, k]) 
+            cost += upper_speed_slack**2 + lower_speed_slack**2
+        
+        return cost
+
+
+
+    def add_dynamics_constraints_g(self, X, U, X_desired, x0, f, fd, dt: float, x_coeff_d, y_coeff_d, phi_coeff_d, spline_lengths):
         N = U.shape[1]
         for k in range(N):
             self.add_equal_constraint(X[:, k + 1], self.F_kutta(f, X[:, k], U[:, k], dt))
 
         for k in range(N + 1):
-            self.add_equal_constraint(X_desired[:, k], fd(X[-1, k]))
+            self.add_equal_constraint(X_desired[:, k], fd(X[-1, k], x_coeff_d, y_coeff_d, phi_coeff_d, spline_lengths) + x0[0:3])
 
         self.add_equal_constraint(X[:, 0], x0)
 
@@ -498,6 +537,16 @@ class MultiMPC(NonconvexOptimization):
         fd = cas.Function('fd', [s], [des_traj], ['s'], ['des_traj'])
         return fd
 
+
+    def gen_f_desired_3piecewise_poly(self, poly1, poly2, poly3, L1, L2, L3):
+        ''' Generate a piecewise function consisting of polynomials'''
+
+        
+        s = cas.MX.sym('s')
+
+        fd_piecewise = poly1 * cas.fmax(cas.fmin(s - 0, L1), 0)  + poly2 * cas.fmax(cas.fmin(s - L1, L2), 0) + poly3 * cas.fmax(cas.fmin(s - L1 - L2, L3), 0)
+
+        return cas.Function('fd', [s], [fd_piecewise], ['s'], ['des_traj'])
 
 
     def gen_f_vehicle_dynamics(self, p_veh, model: str = "kinematic_bicycle"):
@@ -554,14 +603,22 @@ class MultiMPC(NonconvexOptimization):
         distance_above_top_grass = cas.fmax(0.0, X[1,:] - p_car.grass_max_y)
         on_grass_cost = cas.sumsqr(distance_above_top_grass) + cas.sumsqr(distance_below_bottom_grass)
 
+
+        limit_costs = self.add_state_constraint_costs(X, U, p_car)
+
         all_costs = [
             p_car.k_u_delta * u_delta_cost, p_car.k_u_v * u_v_cost, p_car.k_lat * lat_cost, p_car.k_lon * lon_cost,
             p_car.k_phi_error * phi_error_cost, p_car.k_phi_dot * phidot_cost, p_car.k_s * s_cost, p_car.k_v * v_cost,
             p_car.k_change_u_v * change_u_v, p_car.k_change_u_delta * change_u_delta, p_car.k_final * final_costs,
-            p_car.k_x * x_cost, p_car.k_on_grass * on_grass_cost, p_car.k_x_dot * x_dot_cost
+            p_car.k_x * x_cost, p_car.k_on_grass * on_grass_cost, p_car.k_x_dot * x_dot_cost, p_car.k_limit_costs * limit_costs,
         ]
-        all_costs = np.array(all_costs)
-        total_cost = np.sum(all_costs)
+
+        total_cost = 0
+        for c in all_costs:
+            total_cost += c
+
+        # all_costs = np.array(all_costs)
+
         return total_cost, all_costs
 
     def F_kutta(self, f, x_k, u_k, dt: float):
@@ -579,17 +636,19 @@ class MultiMPC(NonconvexOptimization):
 
     def generate_lateral_cost(self, X, X_desired):
         ''' Lateral costs based on distance traversed along desired trajectory'''
-
-        lateral_cost = np.sum([(-cas.sin(X_desired[2, k]) * (X[0, k] - X_desired[0, k]) + cas.cos(X_desired[2, k]) *
-                                (X[1, k] - X_desired[1, k]))**2 for k in range(X.shape[1])])
+        lateral_cost = 0
+        for k in range(X.shape[1]):
+            lateral_cost += (-cas.sin(X_desired[2, k]) * (X[0, k] - X_desired[0, k]) + cas.cos(X_desired[2, k]) *
+                                (X[1, k] - X_desired[1, k]))**2
 
         return lateral_cost
 
     def generate_longitudinal_cost(self, X, X_desired):
         ''' Longitudinal costs based on distance traversed along desired trajectory'''
-
-        longitudinal_cost = np.sum([(cas.cos(X_desired[2, k]) * (X[0, k] - X_desired[0, k]) + cas.sin(X_desired[2, k]) *
-                                     (X[1, k] - X_desired[1, k]))**2 for k in range(X.shape[1])])
+        longitudinal_cost = 0
+        for k in range(X.shape[1]):
+            longitudinal_cost += (cas.cos(X_desired[2, k]) * (X[0, k] - X_desired[0, k]) + cas.sin(X_desired[2, k]) *
+                                     (X[1, k] - X_desired[1, k]))**2 
 
         return longitudinal_cost
 
@@ -658,7 +717,7 @@ class MultiMPC(NonconvexOptimization):
         return slack_cost
 
     def compute_collision_avoidance_costs(self, N, n_other_vehicle, n_vehs_cntrld, p_ego, p_other_vehicle_list,
-                                          p_cntrld_list, x_ego, x_other, x_ctrld, params, k_ca2, k_CA_power):
+                                          p_cntrld_list, x_ego, x_other, x_ctrld, k_ca2, k_CA_power):
         ''' 
             TODO:  What does this cost contain?  Does it include the wall?
                 n_other_vehicles
@@ -765,6 +824,54 @@ class MultiMPC(NonconvexOptimization):
                         self.add_bounded_constraint(
                             0, delta_p_ij.T @ delta_v_ij / rel_dist_mag +
                             cas.sqrt(2 * (alpha_i + alpha_j) * (rel_dist_mag - min_buffer_distance)))
+    
+    def generate_circles_stopping_const(self,
+                                        x_ego,
+                                        x_others,
+                                        L,
+                                        W,
+                                        max_deceleration=0.01,
+                                        min_buffer_distance=0.001):
+        ''' We assume all vehicles have same length and width.'''
+        N = x_ego.shape[1]
+
+        alpha_i = max_deceleration  #we may need this to be > 0
+        alpha_j = max_deceleration
+
+        for k in range(N):
+            xi = x_ego[:, k]
+            ego_centers, ego_radius = get_vehicle_circles(xi)
+
+            v_i = cas.vertcat(xi[4] * cas.cos(xi[2]), xi[4] * cas.sin(xi[2]))
+
+            for j in range(len(x_others)):
+                xj = x_others[j][:, k]
+                ado_centers, ado_radius = get_vehicle_circles(xj)
+                v_j = cas.vertcat(xj[4] * cas.cos(xj[2]), xj[4] * cas.sin(xj[2]))
+
+                min_distance = min_buffer_distance + ego_radius + ado_radius
+                for xy_i in ego_centers:
+                    for xy_j in ado_centers:
+                        delta_p_ij = xy_i - xy_j
+                        delta_v_ij = v_i - v_j
+
+                        rel_dist_mag = cas.sqrt(delta_p_ij.T @ delta_p_ij)
+                        # added to help prevent large gradients in next constraint
+                        # self.opti.subject_to(delta_p_ij.T @ delta_p_ij >= min_distance**2)
+                        # stopping_distance = rel_dist_mag - min_distance
+                        # make sure we are always positive
+
+                        stopping_distance = cas.fmax(rel_dist_mag - min_distance, 0.00001)
+                        self.add_bounded_constraint(min_distance**2, delta_p_ij.T @ delta_p_ij, None)
+                        self.add_bounded_constraint(
+                            0, delta_p_ij.T @ delta_v_ij / rel_dist_mag + cas.sqrt(2 * (alpha_i + alpha_j) *
+                                                                                   (stopping_distance)), None)
+
+                        # self.opti.subject_to(
+                        #     delta_p_ij.T @ delta_v_ij / rel_dist_mag + cas.sqrt(2 * (alpha_i + alpha_j) *
+                        #                                                         (rel_dist_mag - min_distance)) >= 0)
+
+
 
     def generate_circles_stopping_constraint(self,
                                              x_ego,
@@ -1146,8 +1253,9 @@ def get_vehicle_circles(x_state, dx=1.075, r=1.77):
 
 
 def mpcp_to_nlpp(p_dt, x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld, p_cntrld_list, x0_allother,
-                 p_other_vehicle_list, x_other_nc, k_slack, k_CA, k_CA_power,
-                 p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, p_x_coeff_d_ctrld, p_y_coeff_d_ctrld, p_phi_coeff_d_ctrld):
+                 p_other_vehicle_list, x_other_nc, k_slack, k_CA, k_CA_power, k_ttc, ttc_threshold,
+                 p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, spline_lengths,
+                 p_x_coeff_d_ctrld, p_y_coeff_d_ctrld, p_phi_coeff_d_ctrld, spline_lengths_ctrld):
     ''' Converts 3 seperate parameter lists to a single long vector np X 1'''
     # Add ego parameters
     long_list = []
@@ -1182,15 +1290,22 @@ def mpcp_to_nlpp(p_dt, x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, 
     long_list.append(k_slack)
     long_list.append(k_CA)
     long_list.append(k_CA_power)
+    long_list.append(k_ttc)
+    long_list.append(ttc_threshold)
 
-    long_list.append(p_x_coeff_d)
-    long_list.append(p_y_coeff_d) 
-    long_list.append(p_phi_coeff_d)
+    n_splines = p_x_coeff_d.shape[0]
+    n_coeff_d = p_x_coeff_d.shape[1]
+
+    long_list.append(cas.reshape(p_x_coeff_d, (n_coeff_d * n_splines, 1)))
+    long_list.append(cas.reshape(p_y_coeff_d, (n_coeff_d * n_splines, 1)))
+    long_list.append(cas.reshape(p_phi_coeff_d, (n_coeff_d * n_splines, 1)))
+    long_list.append(spline_lengths)
 
     for i in range(len(x0_cntrld)):
-        long_list.append(p_x_coeff_d_ctrld[i]) 
-        long_list.append(p_y_coeff_d_ctrld[i]) 
-        long_list.append(p_phi_coeff_d_ctrld[i])
+        long_list.append(cas.reshape(p_x_coeff_d_ctrld[i], (n_coeff_d * n_splines, 1)))
+        long_list.append(cas.reshape(p_y_coeff_d_ctrld[i], (n_coeff_d * n_splines, 1)))
+        long_list.append(cas.reshape(p_phi_coeff_d_ctrld[i], (n_coeff_d * n_splines, 1)))
+        long_list.append(spline_lengths_ctrld[i])
 
     nlp_p = cas.vcat(long_list)
     return nlp_p
@@ -1205,7 +1320,8 @@ def nlpp_to_mpcp(nlp_p,
                  n_state=6,
                  n_ctrl=2,
                  n_desired=3,
-                 n_poly_coeff=4):
+                 n_poly_coeff=4,
+                 n_splines=3):
     ''' Convert from tall np X 1 vector of all parameters to split up by individual agents '''
     if p_size is None:
         raise Exception("Parameter list size not inputed as argument. Make sure to provide p_size")
@@ -1270,28 +1386,41 @@ def nlpp_to_mpcp(nlp_p,
     idx += 1
     k_CA_power = nlp_p[idx:idx + 1]
     idx += 1
+    k_ttc = nlp_p[idx:idx + 1]
+    idx += 1
+    ttc_threshold = nlp_p[idx:idx + 1]
+    idx += 1    
 
-    p_x_coeff_d = nlp_p[idx: idx + n_poly_coeff]
-    idx += n_poly_coeff
-    p_y_coeff_d = nlp_p[idx: idx + n_poly_coeff]
-    idx += n_poly_coeff 
-    p_phi_coeff_d = nlp_p[idx: idx + n_poly_coeff]
-    idx += n_poly_coeff
+    p_x_coeff_d = cas.reshape(nlp_p[idx : idx + n_poly_coeff*n_splines], (n_splines, n_poly_coeff))
+    idx += n_poly_coeff*n_splines
+    p_y_coeff_d = cas.reshape(nlp_p[idx : idx + n_poly_coeff*n_splines], (n_splines, n_poly_coeff))
+    idx += n_poly_coeff*n_splines 
+    p_phi_coeff_d = cas.reshape(nlp_p[idx : idx + n_poly_coeff*n_splines], (n_splines, n_poly_coeff))
+    idx += n_poly_coeff*n_splines
+    p_spline_lengths = nlp_p[idx: idx + n_splines]
+    idx += n_splines
+
 
     p_x_coeff_d_ctrld = []
     p_y_coeff_d_ctrld = []
     p_phi_coeff_d_ctrld = []
+    p_spline_lengths_ctrld = []
     for i in range(n_cntrld_vehicles):
-        p_x_coeff_d_ctrld[i] = nlp_p[idx : idx + n_poly_coeff] 
-        idx += n_poly_coeff
+        p_x_coeff_d_ctrld.append(cas.reshape(nlp_p[idx : idx + n_poly_coeff*n_splines], (n_splines, n_poly_coeff)))
+        idx += n_poly_coeff*n_splines
 
-        p_y_coeff_d_ctrld[i] = nlp_p[idx : idx + n_poly_coeff]
-        idx += n_poly_coeff 
+        p_y_coeff_d_ctrld.append(cas.reshape(nlp_p[idx : idx + n_poly_coeff*n_splines], (n_splines, n_poly_coeff)))
+        idx += n_poly_coeff*n_splines 
 
-        p_phi_coeff_d_ctrld[i] = nlp_p[idx : idx + n_poly_coeff]
-        idx += n_poly_coeff        
+        p_phi_coeff_d_ctrld.append(cas.reshape(nlp_p[idx : idx + n_poly_coeff*n_splines], (n_splines, n_poly_coeff)))
+        idx += n_poly_coeff*n_splines
 
-    return p_dt, x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld_list, p_cntrld_list, x0_other_vehicle, p_other_vehicle_list, x_other_nc, k_slack, k_CA, k_CA_power, p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, p_x_coeff_d_ctrld, p_y_coeff_d_ctrld, p_phi_coeff_d_ctrld
+        p_spline_lengths_ctrld.append(nlp_p[idx: idx + n_splines])
+        idx += n_splines
+
+                
+
+    return p_dt, x0_ego, p_ego, p_theta_i_ego, p_theta_i_c, p_theta_i_nc, x0_cntrld_list, p_cntrld_list, x0_other_vehicle, p_other_vehicle_list, x_other_nc, k_slack, k_CA, k_CA_power, k_ttc, ttc_threshold, p_x_coeff_d, p_y_coeff_d, p_phi_coeff_d, p_spline_lengths, p_x_coeff_d_ctrld, p_y_coeff_d_ctrld, p_phi_coeff_d_ctrld, p_spline_lengths_ctrld
 
 
 def mpcx_to_nlpx(n_other: int, x_ego, u_ego, xd_ego, x_ctrl: List, u_ctrl: List, xd_ctrl: List, s_i_jnc, s_ic_jnc,
@@ -1475,3 +1604,106 @@ def load_solver_from_mpc(mpc, precompiled: bool = True):
         solver = mpc.solver
 
     return solver
+
+def compute_time_to_collision_parallel(xy_i, xy_j, v_i, v_j, phi_i, r_i = 0.0, r_j = 0.0, buffer_factor=0.1):
+    ''' Time to collision pt to pt
+        xy_i, xy_j = 2x1 np.arrays of object i and j
+        v_i, v_j = 2x1 np.array of object i and j's velocity common (world) reference frame
+        r_i, r_j = floats of object i and object j's radius. Default = 0.0 for point mass
+    '''
+ 
+    delta_p_ij = xy_i - xy_j
+    heading_direction = cas.vertcat(cas.cos(phi_i), cas.sin(phi_i))
+
+
+    infront_dot = -delta_p_ij.T @ heading_direction
+
+    in_front = cas.fmax(infront_dot, 0.0) / infront_dot
+
+    v_j_mag = cas.sqrt(v_j.T @ v_j)
+    buffer_v = buffer_factor * v_j_mag
+    new_v_j_mag = v_j_mag + buffer_v - 2*buffer_v*in_front 
+    new_v_j = v_j * new_v_j_mag / v_j_mag
+    delta_v_ij = v_i - new_v_j
+
+
+    point_distance = cas.sqrt(delta_p_ij.T @ delta_p_ij)
+    inter_circle_distance = point_distance - r_i - r_j
+
+    delta_p_ij = delta_p_ij * inter_circle_distance / point_distance
+
+    cos_heading_delta_p_ij = (delta_p_ij.T @ heading_direction)**2/ ((delta_p_ij.T @ delta_p_ij)*(heading_direction.T @ heading_direction)) 
+
+    time_to_collision = (delta_p_ij.T @ delta_p_ij) / (delta_p_ij.T @ delta_v_ij)
+    return time_to_collision/cos_heading_delta_p_ij
+
+def compute_time_to_collision(xy_i, xy_j, v_i, v_j, r_i = 0.0, r_j = 0.0):
+    ''' Time to collision pt to pt
+        xy_i, xy_j = 2x1 np.arrays of object i and j
+        v_i, v_j = 2x1 np.array of object i and j's velocity common (world) reference frame
+        r_i, r_j = floats of object i and object j's radius. Default = 0.0 for point mass
+    '''
+    delta_p_ij = xy_i - xy_j
+    delta_v_ij = v_i - v_j
+
+    point_distance = cas.sqrt(delta_p_ij.T @ delta_p_ij)
+    inter_circle_distance = point_distance - r_i - r_j
+
+    delta_p_ij = delta_p_ij * inter_circle_distance / point_distance
+
+    time_to_collision = (delta_p_ij.T @ delta_p_ij) / (delta_p_ij.T @ delta_v_ij)
+    
+    return time_to_collision
+
+def compute_worst_case_ttc(xy_i, xy_j, v_i, v_j, r_i, r_j, accel_factor = 0.10):
+    ''' TTC < 0:  Car will collide in ttc seconds at constant velocities
+        TTC > 0:  Car will NOT collide ever at constant velocities    
+    '''
+    vj_accel = v_j * (1 + accel_factor)
+    vj_decel = v_j * (1 - accel_factor)
+    
+    speed_up_ttc = compute_time_to_collision(xy_i, xy_j, v_i, vj_accel, r_i, r_j)
+    slow_down_ttc = compute_time_to_collision(xy_i, xy_j, v_i, vj_decel, r_i, r_j)
+
+    return speed_up_ttc, slow_down_ttc
+
+
+
+def get_ttc_cost_cum(x_ego,
+                    x_others,
+                    L,
+                    W,
+                    parallel=False,
+                    buffer_factor=0.10, 
+                    ttc_threshold = -10.0):
+    ''' Only add when ttc > -10 (i.e. |ttc| < 10s)'''
+    N = x_ego.shape[1]
+
+    ego_dx, ego_radius = 1.075, 1.77
+    ado_dx, ado_radius = 1.075, 1.77
+    cost = 0
+    for k in range(N):
+        xi = x_ego[:, k]
+        ego_centers, ego_radius = get_vehicle_circles(xi, ego_dx, ego_radius)
+
+        v_i = cas.vertcat(xi[4] * cas.cos(xi[2]), xi[4] * cas.sin(xi[2]))
+
+        for j in range(len(x_others)):
+            xj = x_others[j][:, k]
+            ado_centers, ado_radius = get_vehicle_circles(xj, ado_dx, ado_radius)
+            v_j = cas.vertcat(xj[4] * cas.cos(xj[2]), xj[4] * cas.sin(xj[2]))
+        
+            for xy_i in ego_centers:
+                for xy_j in ado_centers:
+                    if parallel:
+                        phi_i = xi[2]
+                        ttc = compute_time_to_collision_parallel(xy_i, xy_j, v_i, v_j, phi_i, ego_radius, ado_radius, buffer_factor=buffer_factor)
+                    else:
+                        ttc = compute_time_to_collision(xy_i, xy_j, v_i, v_j, ego_radius, ado_radius)
+
+                    neg_ttc_only = cas.fmax(0, ttc) * (- 9999999999) + ttc  # max all positive ttc into negative infinity
+                    
+                    neg_ttc_thresh = cas.fmax(ttc_threshold, neg_ttc_only)
+                    cost += 1/neg_ttc_thresh**2
+                    
+    return cost

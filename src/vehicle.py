@@ -2,7 +2,7 @@ import numpy as np
 import casadi as cas
 import scipy.optimize as optimize
 from typing import Tuple
-
+from src.desired_trajectories import LaneChangeManueverPiecewise, piecewise_function
 
 class Vehicle(object):
     def __init__(self, dt):
@@ -53,11 +53,13 @@ class Vehicle(object):
         self.k_phi_dot = 0.0
 
         self.k_on_grass = 0.1
+
+        self.k_limit_costs = 100 # cost on going too fast or too high of an angle
         ####
 
         # Constraints
-        self.max_steering_rate = 5  # deg/sec
-        self.max_delta_u = 5 * np.pi / 180 * self.dt  # rad (change in steering angle)
+        self.max_steering_rate = 1000  # deg/sec (1000 deg / s)
+        self.max_delta_u = self.max_steering_rate * np.pi / 180 * self.dt  # rad (change in steering angle) src:  An Assessment of Human Driver Steering Capability | NHTSA
 
         self.max_acceleration = 4  #m/s^2
         self.max_v_u = self.max_acceleration * self.dt  # m/s (change in velocity)
@@ -82,7 +84,8 @@ class Vehicle(object):
         # Initialize vehicle dynamics
         self.f = self.gen_f_vehicle_dynamics()
         self.fd = None
-
+        self.fd = self.create_fd_function()
+        self.desired_traj = None
         # Distance used for collision avoidance
         self.circle_radius = np.sqrt(2) * self.W / 2.0
         self.min_dist = 2 * self.circle_radius  # 2 times the radius of 1.5
@@ -224,7 +227,7 @@ class Vehicle(object):
 
         return x_next
 
-    def forward_simulate_all(self, x_0: np.array, u_all: np.array) -> Tuple[np.array, np.array]:
+    def forward_simulate_all(self, x_0: np.array, u_all: np.array, ) -> Tuple[np.array, np.array]:
         ''' Take an an initial state (x_0) and control inputs
         u_all (of shape 2, N) and compute the state trajectory
         
@@ -243,8 +246,13 @@ class Vehicle(object):
             x[:, k + 1:k + 2] = x_knext
 
         x_des = np.zeros(shape=(3, N + 1))
+
         for k in range(N + 1):
-            x_des[:, k:k + 1] = self.fd(x[-1, k])
+            x_des[:, k:k + 1] = self.fd(x[-1, k], 
+                                self.desired_traj.x_coeff_array, 
+                                self.desired_traj.y_coeff_array, 
+                                self.desired_traj.phi_coeff_array, 
+                                self.desired_traj.lengths_array) + x_0[0:3]
 
         return x, x_des
 
@@ -286,9 +294,26 @@ class Vehicle(object):
 
         return fd
 
-    def update_desired_lane_from_x0(self, world, x0, right_direction=True):
+    # def update_desired_lane_from_x0(self, world, x0, right_direction=True):
+    #     new_lane_number = world.get_lane_from_x0(x0)
+    #     self.fd = self.gen_f_desired_lane(world, new_lane_number, right_direction)
+
+
+    def update_default_desired_lane_traj(self, world, x0):
+        ''' '''
         new_lane_number = world.get_lane_from_x0(x0)
-        self.fd = self.gen_f_desired_lane(world, new_lane_number, right_direction)
+        desired_y = world.get_lane_centerline_y(new_lane_number, right_direction=True)
+        delta_y = desired_y - x0[1]
+        delta_phi = 0.0 - x0[2]
+        self.desired_traj = LaneChangeManueverPiecewise(5.0, 5.0, 9999999, delta_y, delta_phi)
+
+       
+
+    def create_fd_function(self):
+        n_piecewise_splines = 3
+        n_coeff_d = 4
+
+        return piecewise_function(n_piecewise_splines, n_coeff_d)
 
 
     def get_ellipse(self, L, W):
@@ -345,8 +370,8 @@ class Vehicle(object):
         else:
             return self.theta_i
 
-    def update_desired_lane(self, world, lane_number, right_direction=True):
-        self.fd = self.gen_f_desired_lane(world, lane_number, right_direction)
+    # def update_desired_lane(self, world, lane_number, right_direction=True):
+    #     self.fd = self.gen_f_desired_lane(world, lane_number, right_direction)
 
     # Old code:  used to use when we modeled cars as circles
     def get_car_circles(self, X):

@@ -2,7 +2,7 @@ import numpy as np
 import casadi as cas
 import copy as cp
 from src.multiagent_mpc import NonconvexOptimization
-from src.best_response import parallel_mpc_solve, generate_solver_params
+from src.best_response import parallel_mpc_solve_w_trajs, generate_solver_params
 from src.vehicle_mpc_information import Trajectory, VehicleMPCInformation
 from src.traffic_world import TrafficWorld
 from typing import List
@@ -38,13 +38,13 @@ def feasible_guess(N, vehicle, x0, params, world,
     cp_params["solver_mode"] = "regenerate"
     solver_params = generate_solver_params(params, 0, 0)
 
-    ipopt_params = {'print_level': 5, 'max_cpu_time': 20}
+    ipopt_params = {'print_level': 5, 'max_cpu_time':params["max_cpu_time"]}
 
 
     # warm start with no control inputs
-    u_warm_intial = np.zeros((2, N))
+    u_warm_initial = np.zeros((2, N))
     x_warm_initial, x_des_warm_initial = cp_vehicle.forward_simulate_all(
-        x0.reshape(6, 1), u_warm_intial)
+        x0.reshape(6, 1), u_warm_initial)
 
     # solve for a spatially feasible x that we will use as a warm start
     x_other = [v.x for v in cp_other_vehicle_info]
@@ -52,17 +52,19 @@ def feasible_guess(N, vehicle, x0, params, world,
     x_warm, _ = spatial_only_optimization(x_warm_initial, [], x_other,
                                           cp_vehicle, None, cp_other_vehicles,
                                           3 * cp_vehicle.L)
-
+    # print("Spatial Only Optimization Solution", x_warm)
     # warm start with feasible x (not dynamically feasible)
+    cp_vehicle.update_default_desired_lane_traj(world, x0)
     warm_traj_dict = {
         'mix spatial none':
-        Trajectory(u=u_warm_intial, x=x_warm, xd=x_des_warm_initial)
+        (Trajectory(u=u_warm_initial, x=x_warm, xd=x_des_warm_initial), cp_vehicle.desired_traj)
     }
 
     response_veh_info = VehicleMPCInformation(cp_vehicle, x0)
     print("Solving Vehicle %d"% response_veh_info.vehicle.agent_id)
 
-    sol = parallel_mpc_solve(
+    
+    sol, _ = parallel_mpc_solve_w_trajs(
         warm_traj_dict, response_veh_info, world, solver_params, cp_params,
         ipopt_params, cp_other_vehicle_info, [])
 
@@ -70,11 +72,11 @@ def feasible_guess(N, vehicle, x0, params, world,
     del cp_other_vehicle_info, cp_other_vehicles
 
     if sol.max_slack < np.infty:
-        return sol.u_ego, sol.x_ego, sol.xd_ego
+        return sol.trajectory.u, sol.trajectory.x, sol.trajectory.xd
     else:
         print(
             "Warning...Bad prediction of remaining MPC trajectory before IBR")
-        return u_warm_intial, x_warm_initial, x_des_warm_initial
+        return u_warm_initial, x_warm_initial, x_des_warm_initial
 
 
 # spatial free space
@@ -105,8 +107,11 @@ def spatial_only_optimization(x_initial: np.array,
     opt._x_list = cas.vcat(x_list)
 
     # Collision Avoidance
-    initial_close_vehs = vehicles_close([x_initial] + cntrld_x_initial,
-                                        non_response_x, distance_threshold)
+    if len(non_response_x)>0:
+        initial_close_vehs = vehicles_close([x_initial] + cntrld_x_initial,
+                                            non_response_x, distance_threshold)
+    else:
+        initial_close_vehs = []
 
     # Optimize for minimum deviations from initial trajectories
     cost = cas.sumsqr(x - x_initial)
@@ -195,15 +200,16 @@ def lane_following_optimizations(N: int, vehicle, x0: np.array, params: dict,
     response_veh_info = VehicleMPCInformation(cp_vehicle, x0)
     warm_traj = Trajectory(u=u_warm, x=x_warm, xd=x_des_warm)
 
-    warm_start_dict = {"test": warm_traj}
-    sol = parallel_mpc_solve(
+    desired_traj = vehicle.piecewise_desired
+    warm_start_dict = {"test": (warm_traj, desired_traj)}
+    sol, _ = parallel_mpc_solve_w_trajs(
         warm_start_dict, response_veh_info, world, solver_params, params,
         ipopt_params, [], [])
 
     del response_veh_info, cp_vehicle
 
     if sol.max_slack < np.infty:
-        return sol.u_ego, sol.x_ego, sol.xd_ego
+        return sol.trajectory.u, sol.trajectory.x, sol.trajectory.xd
     else:
         return u_warm, x_warm, x_des_warm
 

@@ -87,6 +87,8 @@ class IBRParser(ArgumentParser):
 
         self.add_argument('--k-slack-d', type=float, default=1000, help="Default constant for slack collision costs")
         self.add_argument('--k-CA-d', type=float, default=0.05, help="Default collision avoidance cost")
+        self.add_argument('--k-ttc', type=float, default=0.00, help="Default weight on the intervehicle time-to-collision cost")       
+        self.add_argument('--ttc-threshold', type=float, default=-10.0, help="Cost is only activated for TTC<ttc-cutoff") 
         self.add_argument('--k-CA-power', type=float, default=1.0, help="Default collision avoidance power")
         self.add_argument('--wall-CA', type=str2bool, default=True, help="Add collision avoidance cost for approaching walls")
         self.add_argument('--print-level', type=int, default=0, help="Print level for IPOPT solver")
@@ -96,10 +98,11 @@ class IBRParser(ArgumentParser):
         self.add_argument('--strict-wall-constraint', type=str2bool, default=False, help="Turn on a strict grass constraint")
         self.add_argument('--safety-constraint', type=str2bool, default=False, help="Stopping constraint")
         self.add_argument('--plot-initial-positions', type=str2bool, default=True, help="Plot & save initial conditions")
-        self.add_argument('--max-cpu-time', type=float, default=10.0, help="Maximum solve time for IPOPT")
+        self.add_argument('--max-cpu-time', type=float, default=99999999.0, help="Maximum solve time for IPOPT")
         self.add_argument('--solver-mode', type=str, default="pickled", help="Use a pre-pickled solver for the mpc")
         self.add_argument('--precompiled-solver-dir', type=str, default="/home/nbuckman/mpc-multiple-vehicles/src/compiled_code/", help="Location of any precompiled solver")
         self.add_argument('--lane-width', type=float, default=4.0, help="Lane width")
+        self.add_argument('--max-num-obstacles', type=int, default=10, help="max num obstacles")
 
 def str2bool(v):
     if isinstance(v, bool):
