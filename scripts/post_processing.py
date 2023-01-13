@@ -175,9 +175,10 @@ def animate_cars(args, params, log_directory, trajectories, vehicles, world):
     outfile = animate(img_dir, video_filename, args.fps)
     print("Saved video to: %s" % outfile)
     vid_directory = '/home/nbuckman/mpc-vids/'
-    cmd = 'cp %s %s' % (video_filename, vid_directory)
-    os.system(cmd)
-    print("Saved video to: %s" % vid_directory)
+    if args.backup_vids == 1:
+        cmd = 'cp %s %s' % (video_filename, vid_directory)
+        os.system(cmd)
+        print("Saved video to: %s" % vid_directory)
 
     return None
 
@@ -379,7 +380,7 @@ if __name__ == '__main__':
     parser.add_argument('--fps', type=int, default=16, help="Frame rate in frames per second")
     parser.add_argument('--frame-width', type=float, default=100.0, help="Width of the camera")
     parser.add_argument('--add-agent-ids', action="store_true", help="Add agent ids")
-
+    parser.add_argument("--backup-vids", type=int, default=1, help="Backup video to Dropbox. 1 (Default): Backup.  0: No backup")
 
     args = parser.parse_args()
 

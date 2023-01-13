@@ -21,11 +21,10 @@ def post_process_experiments(args):
     total_time = params["dt"] * args.n_mpc_end
     print("Total Sim Time %f     Rounds MPC: %d"%(total_time, args.n_mpc_end))
 
-    all_seeds = [param["seed"] for param in all_params]
-    all_densities = [param["car_density"] for param in all_params]
-    all_p_cooperative = [param["p_cooperative"] for param in all_params]
-
     summarize_sim_params(all_params, all_vehicles)
+    summarize_sim_speeds(all_params, all_vehicles, "speed_summary_hist.png")
+    # summarize_sim_params(all_params, all_vehicles, "speed_summary_hist.png")
+
     fixed_params, varying_params = describe_experiment_params(experiment_params)
     print("Fixed Params")
     print(fixed_params)
@@ -86,14 +85,20 @@ def post_process_experiments(args):
         animate_by_all(experiment_params, all_dirs, all_params)
 
     if args.analyze_speed:
-        analyze_speed(all_params, all_trajs, all_controls)
+        analyze_speed(all_params, all_trajs, all_controls, all_dirs, args.aggregator)
 
-def analyze_speed(all_params, all_trajs, all_controls, average_agent=False, save_fig=True):
+def analyze_speed(all_params, all_trajs, all_controls, all_dirs, aggregator="both", save_fig=True, p_baseline=0.0):
     ''' Compute the distance traveled for each experiment '''
     if save_fig:
         post_processing_fig_dir = "post_processing"
         os.makedirs(post_processing_fig_dir, exist_ok=True)
 
+    if aggregator.lower() in ["all", "both", "median/mean"]:
+        aggregators = ["mean", "median"]
+    elif aggregator.lower() in ["median", "mean", "average", "avg", "med"]:
+        aggregators = [aggregator]
+    else:
+        raise Exception("Invalid aggregator %s"%aggregator)
 
     collision_seeds = []
     collision_exp_i = []
@@ -101,6 +106,9 @@ def analyze_speed(all_params, all_trajs, all_controls, average_agent=False, save
         if check_collision_experiment(all_trajs[exp_i]):
             collision_seeds.append(all_params[exp_i]["seed"])
             collision_exp_i.append(exp_i)
+        if check_out_of_y_bounds(all_trajs[exp_i], all_dirs[exp_i]):
+            collision_exp_i.append(exp_i)
+
     all_seeds = np.unique(np.array([all_params[exp_i]["seed"] for exp_i in range(len(all_params))]))
     all_p = np.unique(np.array([all_params[exp_i]["p_cooperative"] for exp_i in range(len(all_params))]))
     collision_seeds = np.unique(np.array(collision_seeds))
@@ -108,139 +116,189 @@ def analyze_speed(all_params, all_trajs, all_controls, average_agent=False, save
     print("All Seeds", all_seeds)
 
 
-    p_baseline = 0.0 # we will baseline everything compared to a fully egoistic population
-
+    dt = all_params[0]["dt"]
     for average_agent in [True, False]:
+        for aggregator in aggregators:
+
+            controls = {}
+            distances = {}
+            total_time = dt * args.n_mpc_end
+ 
+            for exi in range(len(all_params)):
+                if exi in collision_exp_i:
+                    continue
+                ds = (all_trajs[exi][:,0, args.n_mpc_end] - all_trajs[exi][:,0,0]) / total_time
+                ctrl_sqrd = np.sum(np.sum(all_controls[exi]**2, axis=1),axis=1)
+                
+                p = all_params[exi]['p_cooperative']
+                seed = all_params[exi]["seed"]
 
 
-        controls = {}
-        distances = {}
-        for exi in range(len(all_params)):
-            if exi in collision_exp_i:
-                continue
-            ds = all_trajs[exi][:,0, args.n_mpc_end] - all_trajs[exi][:,0,0]
-            ctrl_sqrd = np.sum(np.sum(all_controls[exi]**2, axis=1),axis=1)
+                if average_agent:
+                    d = np.sum(ds) / ds.shape[0]
+                    distances[(seed,p)] = d 
+
+                    u = np.sum(ctrl_sqrd) / ctrl_sqrd.shape[0]
+                    controls[(seed,p)] = u
+                else:
+                    for i in range(ds.shape[0]):
+                        pseudoseed = seed + 1e9*i
+                        d = ds[i]
+                        u = ctrl_sqrd[i]
+
+                        distances[(pseudoseed,p)] = d
+                        controls[(pseudoseed,p)] = u
+
             
-            p = all_params[exi]['p_cooperative']
-            seed = all_params[exi]["seed"]
-            
-            if average_agent:
-                d = np.sum(ds)
-                distances[(seed,p)] = d
+            # No Baseline Comparison
+            fig, ax = plt.subplots(1,1)
+            p_populations = np.unique([k[1] for k in distances.keys()])
+            average_distance_p = [np.mean([distances[k] for k in distances.keys() if k[1] == p]) for p in p_populations]
+            std_error_distance_p = [1.96*np.std([distances[k] for k in distances.keys() if k[1] == p])/np.sqrt(len([distances[k] for k in distances.keys() if k[1] == p])) for p in p_populations]
+                # plt.plot([p for _ in distances_p], [avg_d for avg_d in distances_p], '.')
+            bottom_error = [average_distance_p[i] - std_error_distance_p[i] for i in range(len(average_distance_p))]
+            top_error = [average_distance_p[i] + std_error_distance_p[i] for i in range(len(average_distance_p))]
 
-                u = np.sum(ctrl_sqrd)
-                controls[(seed,p)] = u
+            plt.fill_between(p_populations, bottom_error, top_error, alpha=0.25, color=args.plot_color, label="95%% CI")
+            plt.plot(p_populations, average_distance_p, '-o', color=args.plot_color, label="Mean Speed")
+            plt.ylabel("Avg. Speed")
+            plt.xlabel("% Cooperative")
+            perc_ticks = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+            plt.xticks(perc_ticks, ["%d%%"%(100*p) for p in perc_ticks])
+            plt.legend()
+            if save_fig:
+                average_agent_str = "pop" if average_agent else "indiv"
+                plt.savefig(os.path.join(post_processing_fig_dir, "distance_notbaselined_%s_%s.png"%(average_agent_str, aggregator)), dpi=300, bbox_inches='tight')
+                plt.close()
             else:
-                for i in range(ds.shape[0]):
-                    pseudoseed = seed + 10000*i
-                    d = ds[i]
-                    u = ctrl_sqrd[i]
+                plt.show()
 
-                    distances[(pseudoseed,p)] = d
-                    controls[(pseudoseed,p)] = u
+            dist_baseline = {}
+            controls_baseline = {}
+            for seed in all_seeds:
+                # if seed in collision_seeds:
+                #     continue
 
-        print(controls)
-        dist_baseline = {}
-        controls_baseline = {}
-        for seed in all_seeds:
-            if seed in collision_seeds:
-                continue
-            
-            if (seed, p_baseline) not in distances:
-                print("No p=%f in Seed: %d"%(p_baseline, seed))
+                if (seed, p_baseline) not in distances:
+                    print("No p=%f in Seed: %d"%(p_baseline, seed))
+                else:
+                    for p in all_p:
+                        if (seed,p) in distances:
+                            dist_baseline[(seed,p)] = distances[(seed,p)] / (distances[(seed, p_baseline)] + 0.00000001)
+
+                        if (seed,p) in controls:
+                            controls_baseline[(seed,p)] = controls[(seed,p)] / (controls[(seed, p_baseline)] + 0.00000001)
+
+            plt.figure()
+            for (seed,p), d_ratio in dist_baseline.items():
+                plt.plot(p, d_ratio, 'o')
+            plt.xlabel(r"$P_{cooperative}$")
+            plt.ylabel("Speed Improvement")    
+            if save_fig:
+                average_agent_str = "pop" if average_agent else "indiv"
+                plt.savefig(os.path.join(post_processing_fig_dir, "distance_performance_%s_%s.png"%(average_agent_str, aggregator)), dpi=300)
+                plt.close()
             else:
-                for p in all_p:
-                    if (seed,p) in distances:
-                        dist_baseline[(seed,p)] = distances[(seed,p)] / (distances[(seed, p_baseline)] + 0.00000001)
+                plt.show()
 
-                    if (seed,p) in controls:
-                        controls_baseline[(seed,p)] = controls[(seed,p)] / (controls[(seed, p_baseline)] + 0.00000001)
+            plt.figure()
+            top_error = []
+            average = []
+            bottom_error = []
 
-        plt.figure()
-        for (seed,p), d_ratio in dist_baseline.items():
-            plt.plot(p, d_ratio, 'o')
-        plt.xlabel("P_cooperative")
-        plt.ylabel("Performance  (Distance / Baseline Distance)")
-        if save_fig:
-            average_agent_str = "pop" if average_agent else "indiv"
-            plt.savefig(os.path.join(post_processing_fig_dir, "distance_performance_%s.png"%average_agent_str), dpi=300)
-            plt.close()
-        else:
-            plt.show()
-
-        plt.figure()
-        top_error = []
-        average = []
-        bottom_error = []
-
-        for p in all_p:
-            d_ratios = np.array([dist_baseline[(s,pi)] for (s,pi) in dist_baseline.keys() if pi==p])
-            d_ratios_mean = np.mean(d_ratios)
-            d_ratios_std = np.std(d_ratios)
-            d_ratios_stdE = d_ratios_std / len(d_ratios)
-
-            top_error.append(d_ratios_mean + d_ratios_stdE)
-            average.append(d_ratios_mean )
-            bottom_error.append(d_ratios_mean - d_ratios_stdE)
-
-            plt.plot([p]*len(d_ratios), d_ratios, '.', color='black')
-
-        plt.plot(all_p, average, '-o', label="Mean")
-        plt.fill_between(all_p, bottom_error, top_error, alpha=0.25)
-
-        plt.xlabel("P_cooperative")
-        plt.ylabel("Performance  (Distance / Baseline Distance)")    
-
-        if save_fig:
-            plt.savefig(os.path.join(post_processing_fig_dir, "distance_performance_errorbars_%s.png"%average_agent_str), dpi=300)
-        else:
-            plt.show()
+            for p in all_p:
+                d_ratios = np.array([dist_baseline[(s,pi)] for (s,pi) in dist_baseline.keys() if pi==p])
+                print(p, d_ratios.shape)
+                if aggregator.lower() in ["mean", "avg", "average"]:
+                    d_ratios_mean = np.mean(d_ratios)
+                    d_ratios_std = np.std(d_ratios)
+                    d_ratios_stdE = 1.96 * d_ratios_std / np.sqrt(len(d_ratios))
+                elif aggregator.lower() in ["median", "med"]:
+                    d_ratios_mean = np.median(d_ratios)
+                    iqr = np.subtract(*np.percentile(d_ratios, [75, 25]))
+                    d_ratios_std = iqr
+                    d_ratios_stdE = 1.96*d_ratios_std / np.sqrt(len(d_ratios))                    
+                else:
+                    raise Exception("Not valid aggregator %s"%aggregator)
 
 
-        ####################### CONTROLS PLOT #############################33
-        plt.figure()
-        for (seed,p), d_ratio in controls_baseline.items():
-            plt.plot(p, d_ratio, 'o')
-        plt.xlabel("P_cooperative")
-        plt.ylabel("Control Effort  (u**2 / Baseline u**2)")
-        if save_fig:
-            average_agent_str = "pop" if average_agent else "indiv"
-            plt.savefig(os.path.join(post_processing_fig_dir, "controls_%s.png"%average_agent_str), dpi=300)
-            plt.close()
-        else:
-            plt.show()
+                top_error.append(d_ratios_mean + d_ratios_stdE)
+                average.append(d_ratios_mean )
+                bottom_error.append(d_ratios_mean - d_ratios_stdE)
 
-        plt.figure()
-        top_error = []
-        average = []
-        bottom_error = []
+                plt.plot([p]*len(d_ratios), d_ratios, '.', color='black')
 
-        for p in all_p:
-            d_ratios = np.array([controls_baseline[(s,pi)] for (s,pi) in controls_baseline.keys() if pi==p])
-            d_ratios_mean = np.mean(d_ratios)
-            d_ratios_std = np.std(d_ratios)
-            d_ratios_stdE = d_ratios_std / len(d_ratios)
+            plt.plot(all_p, average, '-o', label="Mean", color=args.plot_color)
+            plt.fill_between(all_p, bottom_error, top_error, alpha=0.25, label="95%% CI", color=args.plot_color)
+            plt.ylabel("Speed Improvement")    
+            plt.xlabel("% Cooperative")
+            plt.ylim([0.98, 1.02])
+            perc_ticks = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+            plt.hlines(0, perc_ticks[0], perc_ticks[-1], linestyle='--', color='black')
+            plt.xticks(perc_ticks, ["%d%%"%(100*p) for p in perc_ticks])
+            plt.legend()            
+            print("%s %s"%(average_agent_str, aggregator), average)
 
-            top_error.append(d_ratios_mean + d_ratios_stdE)
-            average.append(d_ratios_mean )
-            bottom_error.append(d_ratios_mean - d_ratios_stdE)
+            if save_fig:
+                plt.savefig(os.path.join(post_processing_fig_dir, "distance_performance_errorbars_%s_%s.png"%(average_agent_str, aggregator)), dpi=300)
+                plt.close()
+            else:
+                plt.show()
 
-            plt.plot([p]*len(d_ratios), d_ratios, '.', color='black')
+            
 
-        plt.plot(all_p, average, '-o', label="Mean")
-        plt.fill_between(all_p, bottom_error, top_error, alpha=0.25)
+            ####################### CONTROLS PLOT #############################33
+            plt.figure()
+            for (seed,p), d_ratio in controls_baseline.items():
+                plt.plot(p, d_ratio, 'o')
+            plt.xlabel(r"$P_cooperative$")
+            plt.ylabel("Control Effort  (u**2 / Baseline u**2)")
+            if save_fig:
+                average_agent_str = "pop" if average_agent else "indiv"
+                plt.savefig(os.path.join(post_processing_fig_dir, "controls_%s_%s.png"%(average_agent_str, aggregator)), dpi=300)
+                plt.close()
+            else:
+                plt.show()
 
-        plt.xlabel("P_cooperative")
-        plt.ylabel("Controls Performance  (Controls Magnitude / Baseline Controls Magnitude)")    
+            plt.figure()
+            top_error = []
+            average = []
+            bottom_error = []
 
-        if save_fig:
-            plt.savefig(os.path.join(post_processing_fig_dir, "controls_errorbars_%s.png"%average_agent_str), dpi=300)
-        else:
-            plt.show()
+            for p in all_p:
+                d_ratios = np.array([controls_baseline[(s,pi)] for (s,pi) in controls_baseline.keys() if pi==p])
+                
+                if aggregator.lower() in ["mean", "avg", "average"]:
+                    d_ratios_mean = np.mean(d_ratios)
+                    d_ratios_std = np.std(d_ratios)
+                    d_ratios_stdE = d_ratios_std / len(d_ratios)
+                elif aggregator.lower() in ["median", "med"]:
+                    d_ratios_mean = np.median(d_ratios)
+                    iqr = np.subtract(*np.percentile(d_ratios, [75, 25]))
+                    d_ratios_std = iqr
+                    d_ratios_stdE = d_ratios_std / len(d_ratios)                    
+                else:
+                    raise Exception("Not valid aggregator %s"%aggregator)
 
+                top_error.append(d_ratios_mean + d_ratios_stdE)
+                average.append(d_ratios_mean )
+                bottom_error.append(d_ratios_mean - d_ratios_stdE)
 
+                plt.plot([p]*len(d_ratios), d_ratios, '.', color='black')
 
+            plt.plot(all_p, average, '-o', label="Mean")
+            plt.fill_between(all_p, bottom_error, top_error, alpha=0.25)
 
+            plt.xlabel(r"$P_{cooperative}$")
+            plt.ylabel("Controls Performance  (Controls Magnitude / Baseline Controls Magnitude)")    
+
+            if save_fig:
+                plt.savefig(os.path.join(post_processing_fig_dir, "controls_errorbars_%s_%s.png"%(average_agent_str,aggregator)), dpi=300)
+                plt.close()
+            else:
+                plt.show()
+
+            
 
 
     return None
@@ -394,6 +452,23 @@ def get_collision_parameters(all_params, all_trajs):
     return collision_params, collision_expi
     
 
+def summarize_sim_speeds(all_params, all_vehicles, filename="speed_summary_hist.png"):
+    ''' Create a histogram of vehicle speeds'''
+    fig, ax = plt.subplots(1,1)
+    all_max_speeds = [veh.max_v for vehicles in all_vehicles for veh in vehicles]
+    if len(all_max_speeds) != 0:
+        ax.hist(all_max_speeds)
+    ax.set_xlabel('Max Speed')
+    ax.set_ylabel('# Vehicles')
+    # fig.suptitle("Experiment Settings")
+
+    # fig.tight_layout()
+    if filename is not None:
+        plt.savefig(filename, bbox_inches="tight", dpi=300)
+        plt.close
+    else:
+        fig.show()
+
 def summarize_sim_params(all_params, all_vehicles, filename="param_summary_hist.png"):
     ''' Create a histogram of all the params'''
     
@@ -536,6 +611,9 @@ if __name__ == '__main__':
     parser.add_argument("--animate-by-density", action="store_true", help="animate videos and concatenate by SVO")
     parser.add_argument("--animate-by", type=str, default=None, help="Paramater to organize animation grid")
     parser.add_argument("--animate-all", action="store_true", help="Animation grid by all the parameters varied")
+
+    parser.add_argument("--aggregator", type=str, default="both", help="Compute median vs mean")
+    parser.add_argument("--plot-color", type=str, default=None, help="Color for plot")
     args = parser.parse_args()
 
     if args.experiment_dir == ".":
