@@ -22,12 +22,15 @@ def rerun(log_dir: str):
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("--log_dir", type=str, help="Add the log_dir you want to rerun")
+    # parser.add_argument("--log_dir", type=str, help="Add the log_dir you want to rerun")
     
     args = parser.parse_args()
 
-    print("Rerunning %s"%args.log_dir)
+    # print("Rerunning %s"%args.log_dir)
+
+    args.log_dir = "/home/nbuckman/mpc_results/supercloud/100622c_allowmaxcpu/results/eeea-8532-20221006-131518"
     # args.log_dir = "/home/nbuckman/mpc_results/supercloud/070322_multiple_trajs/results/6fdf-g115-20220703-122228_rerun2"
+    # args.log_dir = "/home/nbuckman/mpc_results/febf-cfgh-20220721-171649_justInitial"
     rerun(args.log_dir)
 
 
