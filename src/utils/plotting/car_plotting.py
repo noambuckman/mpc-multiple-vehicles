@@ -248,7 +248,7 @@ def plot_multiple_cars(k,
 
     ax.get_yaxis().set_visible(False)
     # ax.get_xaxis().set_visible(True)
-    set_xticks_world(ax, interval = 50.0)
+    set_xticks_world(ax, interval = 50)
     
     plt.tight_layout(pad=0.01)
 
@@ -261,17 +261,20 @@ def plot_multiple_cars(k,
         return fig, ax
 
 def set_xticks_world(ax, interval = 10.0):
-    xmin, xmax = ax.get_xlim()
+    if interval is None:
+        ax.set_xticks([])
+    else:
+        xmin, xmax = ax.get_xlim()
 
-    imin = int(xmin//interval)
-    imax = int(xmax//interval)
+        imin = int(xmin//interval)
+        imax = int(xmax//interval)
 
-    visual_buffer = 10.0
-    xticks = [interval*i for i in range(imin+1, imax+1) if (xmin + visual_buffer)  <= interval*i <= (xmax - visual_buffer)]
-    xlabels = ['%d'%x for x in xticks]
-
-    ax.set_xticks(xticks)
-    ax.set_xticklabels(xlabels)
+        visual_buffer = 10.0
+        xticks = [interval*i for i in range(imin+1, imax+1) if (xmin + visual_buffer)  <= interval*i <= (xmax - visual_buffer)]
+        xlabels = ['%d'%x for x in xticks]
+        ax.set_xticks(xticks)
+        ax.set_xticklabels(xlabels)  
+    
 
 def plot_single_frame(world: TrafficWorld,
                       vehicle: Vehicle,
