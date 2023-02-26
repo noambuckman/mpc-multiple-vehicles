@@ -1,0 +1,22 @@
+{
+    "n_other": 10,
+    "n_experiments": 20,
+    "p_cooperative": [
+        0.0,
+        0.1,
+        0.2,
+        0.3,
+        0.4,
+        0.5,
+        0.6,
+        0.7,
+        0.8,
+        0.9,
+        1.0
+    ],
+    "n_mpc": 3,
+    "n_lanes": 2,
+    "car_density": 3000,
+    "random_svo": "False",
+    "n_cntrld": 2
+}

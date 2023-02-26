@@ -1,8 +1,11 @@
 import numpy as np
 from src.traffic_world import TrafficWorld
+from src.vehicle_mpc_information import Trajectory
+import random
+from typing import Dict
 
 
-def generate_warm_x(car_mpc, world: TrafficWorld, x0: np.array, average_v=None):
+def generate_warm_x(vehicle, N: int, world: TrafficWorld, x0: np.array, average_v=None):
     """ Warm starts that return a trajectory in x (control) -space
     N:  Number of control points
     car_mpc:  Vehicle instance
@@ -18,13 +21,12 @@ def generate_warm_x(car_mpc, world: TrafficWorld, x0: np.array, average_v=None):
     """
 
     x_warm_profiles = {}
-    N = car_mpc.N
     lane_width = world.lane_width
     if average_v is None:
-        constant_v = car_mpc.max_v
+        constant_v = vehicle.max_v
     else:
         constant_v = average_v
-    t_array = np.arange(0, car_mpc.dt * (N + 1) - 0.000001, car_mpc.dt)
+    t_array = np.arange(0, vehicle.dt * (N + 1) - 0.000001, vehicle.dt)
     x = x0[0] + t_array * constant_v
     y0 = x0[1]
     x_warm_default = np.repeat(x0.reshape(6, 1), N + 1, 1)
@@ -37,7 +39,7 @@ def generate_warm_x(car_mpc, world: TrafficWorld, x0: np.array, average_v=None):
     x_warm_profiles["0constant v"] = x_warm_default
     # lane change up
     y_up = y0 + lane_width
-    for percent_change in [0.00, 0.5, 0.75]:
+    for percent_change in [0.01, 0.5, 0.75]:
         key = "0up %d" % (int(100 * percent_change))
         x_up = np.copy(x_warm_default)
         ti_lane_change = int(percent_change * (N + 1))
@@ -47,7 +49,7 @@ def generate_warm_x(car_mpc, world: TrafficWorld, x0: np.array, average_v=None):
         x_warm_profiles[key] = x_up
 
     y_down = y0 - lane_width
-    for percent_change in [0.00, 0.5, 0.75]:
+    for percent_change in [0.01, 0.5, 0.75]:
         key = "0down %d" % (int(100 * percent_change))
         x_up = np.copy(x_warm_default)
         ti_lane_change = int(percent_change * (N + 1))
@@ -62,13 +64,17 @@ def generate_warm_x(car_mpc, world: TrafficWorld, x0: np.array, average_v=None):
         x_warm = x_warm_profiles[k_warm]
         x_des_warm = np.zeros(shape=(3, N + 1))
         for k in range(N + 1):
-            x_des_warm[:, k:k + 1] = car_mpc.fd(x_warm[-1, k])
+            x_des_warm[:, k:k + 1] = vehicle.fd(x_warm[-1, k], 
+                                                vehicle.desired_traj.x_coeff_array,
+                                                vehicle.desired_traj.y_coeff_array,
+                                                vehicle.desired_traj.phi_coeff_array,
+                                                vehicle.desired_traj.lengths_array)
         ux_warm_profiles[k_warm] = [u_warm, x_warm, x_des_warm]
 
     return x_warm_profiles, ux_warm_profiles
 
 
-def centerline_following(N: int, car_mpc, car_x0):
+def centerline_following(N: int, vehicle, car_x0):
     y_follow = car_x0[1]
 
     u_warm = np.zeros((2, N))
@@ -79,15 +85,19 @@ def centerline_following(N: int, car_mpc, car_x0):
     for k in range(N):
         k_u = 0.1
         u_turn = -k_u * (x[1, k] - y_follow)
-        u_turn = np.clip(u_turn, -car_mpc.max_delta_u, car_mpc.max_delta_u)
+        u_turn = np.clip(u_turn, -vehicle.max_delta_u, vehicle.max_delta_u)
         x_k = x[:, k]
         u_warm[0, k:k + 1] = u_turn
-        x_knext = car_mpc.F_kutta(car_mpc.f, x_k, u_warm[:, k])
+        x_knext = vehicle.F_kutta(vehicle.f, x_k, u_warm[:, k])
         x[:, k + 1:k + 2] = x_knext
 
     x_des = np.zeros(shape=(3, N + 1))
     for k in range(N + 1):
-        x_des[:, k:k + 1] = car_mpc.fd(x[-1, k])
+        x_des[:, k:k + 1] = vehicle.fd(x[-1, k],
+                                        vehicle.desired_traj.x_coeff_array,
+                                        vehicle.desired_traj.y_coeff_array,
+                                        vehicle.desired_traj.phi_coeff_array,
+                                        vehicle.desired_traj.lengths_array)        
 
     return [u_warm, x, x_des]
 
@@ -169,17 +179,19 @@ def generate_warm_u(N: int, car_mpc, car_x0):
     return u_warm_profiles, ux_warm_profiles
 
 
-def generate_warm_starts(vehicle,
+def generate_warmstarts(response_vehicle_info,
                          world: TrafficWorld,
-                         x0: np.array,
                          other_veh_info,
                          params: dict,
-                         u_mpc_previous=None,
-                         u_ibr_previous=None):
+                         u_mpc_previous: np.array =None,
+                         u_ibr_previous: np.array=None):
     """ Generate a dictionary of warm starts for the solver.  
     
         Returns:  Dictionary with warm_start_name: (state, control, desired_state)
     """
+    vehicle = response_vehicle_info.vehicle
+    x0 = response_vehicle_info.x0
+
     other_x0 = [veh_info.x0 for veh_info in other_veh_info]
 
     u_warm_profiles, ux_warm_profiles = generate_warm_u(params["N"], vehicle, x0)
@@ -188,25 +200,39 @@ def generate_warm_starts(vehicle,
         warm_velocity = np.median([x[4] for x in other_x0])
     else:
         warm_velocity = x0[4]
-    _, x_ux_warm_profiles = generate_warm_x(vehicle, world, x0, warm_velocity)
+    _, x_ux_warm_profiles = generate_warm_x(vehicle, params["N"], world, x0, warm_velocity)
     ux_warm_profiles.update(x_ux_warm_profiles)
 
-    if (u_mpc_previous is not None):  # TODO: Try out the controls that were previous executed
-        u_warm_profiles["previous_mpc"] = np.concatenate(
+    if u_mpc_previous is not None:  # Try out the controls that were previous executed
+        u_warm_profiles["previous_mpc_hold"] = np.concatenate(
             (
                 u_mpc_previous[:, params["number_ctrl_pts_executed"]:],
                 np.tile(u_mpc_previous[:, -1:], (1, params["number_ctrl_pts_executed"])),
             ),
             axis=1,
         )
-        x_warm, x_des_warm = vehicle.forward_simulate_all(x0.reshape(6, 1), u_warm_profiles["previous_mpc"])
-        ux_warm_profiles["previous_mpc"] = [
-            u_warm_profiles["previous_mpc"],
+        x_warm, x_des_warm = vehicle.forward_simulate_all(x0.reshape(6, 1), u_warm_profiles["previous_mpc_hold"])
+        ux_warm_profiles["previous_mpc_hold"] = [
+            u_warm_profiles["previous_mpc_hold"],
             x_warm,
             x_des_warm,
         ]
 
-    if (u_ibr_previous is not None):  # Try out the controller from the previous round of IBR
+        u_warm_profiles["previous_mpc_none"] = np.concatenate(
+            (
+                u_mpc_previous[:, params["number_ctrl_pts_executed"]:],
+                np.tile(np.zeros((2, 1)), (1, params["number_ctrl_pts_executed"])),
+            ),
+            axis=1,
+        )
+        x_warm, x_des_warm = vehicle.forward_simulate_all(x0.reshape(6, 1), u_warm_profiles["previous_mpc_none"])
+        ux_warm_profiles["previous_mpc_none"] = [
+            u_warm_profiles["previous_mpc_none"],
+            x_warm,
+            x_des_warm,
+        ]
+
+    if u_ibr_previous is not None:  # Try out the controller from the previous round of IBR
         u_warm_profiles["previous_ibr"] = u_ibr_previous
         x_warm, x_des_warm = vehicle.forward_simulate_all(x0.reshape(6, 1), u_warm_profiles["previous_ibr"])
         ux_warm_profiles["previous_ibr"] = [
@@ -215,4 +241,28 @@ def generate_warm_starts(vehicle,
             x_des_warm,
         ]
 
-    return ux_warm_profiles
+    warm_start_trajectories = {}
+    for key, (u, x, xd) in ux_warm_profiles.items():
+
+        warm_start_trajectories[key] = Trajectory(u=u, x=x, xd=xd)
+
+    return warm_start_trajectories
+
+
+def get_subset_warmstarts(n_warm_keys: int, ux_warm_profiles: Dict[str, Trajectory]):
+    '''choose randomly n_warm_keys keys from ux_warm_profiles and return the subset'''
+
+    priority_warm_keys = []
+    if n_warm_keys >= 1 and "previous_mpc_hold" in ux_warm_profiles:
+        priority_warm_keys += ["previous_mpc_hold"]
+    if n_warm_keys >= 2 and "previous_ibr" in ux_warm_profiles:
+        priority_warm_keys += ["previous_ibr"]
+    remaining_n_keys = n_warm_keys - len(priority_warm_keys)
+    remaining_keys = [k for k in ux_warm_profiles.keys() if k not in priority_warm_keys]
+    random.shuffle(remaining_keys)
+
+    warm_subset_keys = priority_warm_keys + remaining_keys[:remaining_n_keys]
+
+    ux_warm_profiles_subset = dict((k, ux_warm_profiles[k]) for k in warm_subset_keys)
+
+    return ux_warm_profiles_subset

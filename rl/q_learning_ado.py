@@ -53,6 +53,8 @@ if __name__ == "__main__":
         dataset = ConcatDataset(datasets)
     elif params["log_directories"]:
         dataset = SVODatasetFromLog(params["log_directories"], params["n_timesteps"])
+    elif params["dataset"]:
+        dataset = torch.load(params["dataset"])
     else:
         raise Exception("No simulations were provided")
 

@@ -5,11 +5,12 @@ from contextlib import redirect_stdout
 
 from src.traffic_world import TrafficWorld
 from src.multiagent_mpc import load_state, save_state
-from src.warm_starts import generate_warm_starts
+from src.warm_starts import generate_warmstarts
 
 from src.utils.ibr_argument_parser import IBRParser
 import src.utils.solver_helper as helper
 from src.utils.solver_helper import warm_profiles_subset
+from typing import List
 
 
 def convert_to_global_units(ambulance_x0_global, x):
@@ -37,8 +38,15 @@ class VehicleMPCInformation:
         self.xd = xd
 
 
-def run_iterative_best_response(params, log_dir, load_log_dir, i_mpc_start, amb_x0, other_x0, ambulance, other_vehicles,
-                                world):
+def run_iterative_best_response(ambulance,
+                                other_vehicles,
+                                world: TrafficWorld,
+                                amb_x0: np.array,
+                                other_x0: List[np.array],
+                                params: dict,
+                                log_dir: str = None,
+                                load_log_dir: bool = False,
+                                i_mpc_start: int = 0):
     """ 
         Runs iterative best response for a system of ambulance and other vehicles.
         TODO:  Add something that checks required params.  Or has default params somewhere.
@@ -146,7 +154,7 @@ def run_iterative_best_response(params, log_dir, load_log_dir, i_mpc_start, amb_
             nonresponse_veh_info = [othervehs_ibr_info[i] for i in veh_idxs_in_amb_mpc]
 
             # Generate the warm starts
-            warm_starts = generate_warm_starts(response_veh_info.vehicle, world, response_veh_info.x0,
+            warm_starts = generate_warmstarts(response_veh_info.vehicle, world, response_veh_info.x0,
                                                othervehs_ibr_info, params, uamb_mpc, response_veh_info.u)
 
             # Initialize parameters relevant to solving the mpc
@@ -257,7 +265,7 @@ def run_iterative_best_response(params, log_dir, load_log_dir, i_mpc_start, amb_
                 if len(cntrld_vehicle_info) == 0:
                     nonresponse_veh_info += [amb_ibr_info]
 
-                warm_starts = generate_warm_starts(response_veh_info.vehicle, world, response_veh_info.x0,
+                warm_starts = generate_warmstarts(response_veh_info.vehicle, world, response_veh_info.x0,
                                                    othervehs_ibr_info, params, all_other_u_mpc[response_i],
                                                    othervehs_ibr_info[response_i].u)
 
@@ -421,12 +429,12 @@ if __name__ == "__main__":
         time_duration_s = (params["n_other"] * 3600.0 /
                            params["car_density"]) * 10  # amount of time to generate traffic
         initial_vehicle_positions = helper.poission_positions(params["car_density"],
-                                                              int(time_duration_s),
+                                                              params["n_other"] + 1,
                                                               params["n_lanes"],
                                                               MAX_VELOCITY,
                                                               VEHICLE_LENGTH,
                                                               position_random_seed=params["seed"])
-        position_list = initial_vehicle_positions[:params["n_other"]]
+        position_list = initial_vehicle_positions[:params["n_other"] + 1]
 
         # Create the SVOs for each vehicle
         if params["random_svo"] == 1:
@@ -470,8 +478,9 @@ if __name__ == "__main__":
     with open(log_dir + "params.json", "w") as fp:
         json.dump(params, fp, indent=2)
 
-    xamb_actual, xothers_actual = run_iterative_best_response(params, log_dir, args.load_log_dir, i_mpc_start, amb_x0,
-                                                              all_other_x0, ambulance, all_other_vehicles, world)
+    xamb_actual, xothers_actual = run_iterative_best_response(ambulance, all_other_vehicles, world, amb_x0,
+                                                              all_other_x0, params, log_dir, args.load_log_dir,
+                                                              i_mpc_start)
     all_trajectories = [xamb_actual] + xothers_actual
     all_trajectories = np.array(all_trajectories)
     np.save(open(log_dir + "/trajectories.npy", 'wb'), all_trajectories)
